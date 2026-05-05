@@ -1,0 +1,26 @@
+{
+  "name": "tgmusicbot",
+  "version": "1.0.0",
+  "description": "Telegram music bot rewritten in JavaScript with the same queue and command flow.",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "node --test"
+  },
+  "keywords": [
+    "telegram",
+    "music",
+    "bot",
+    "javascript"
+  ],
+  "license": "GPL-3.0-only",
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "grammy": "^1.34.0",
+    "mongodb": "^6.12.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
