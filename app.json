@@ -1,13 +1,13 @@
 {
   "name": "TgMusicBot",
-  "description": "A Telegram music bot.",
+  "description": "A Telegram music bot rewritten in JavaScript.",
   "repository": "https://github.com/AshokShau/TgMusicBot",
   "logo": "https://raw.githubusercontent.com/AshokShau/TgMusicBot/master/docs/logo.jpeg",
   "keywords": [
     "telegram",
     "music",
     "bot",
-    "go"
+    "javascript"
   ],
   "stack": "container",
   "env": {
@@ -136,6 +136,11 @@
     "DEVS": {
       "description": "A space-separated list of developer user IDs.",
       "required": false
+    },
+    "NODE_ENV": {
+      "description": "Node.js environment.",
+      "required": false,
+      "value": "production"
     }
   },
   "formation": {
