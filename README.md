@@ -9,6 +9,7 @@ TgMusicBot is now a JavaScript/Node.js Telegram music bot that keeps the origina
 - Node.js 20 or newer
 - MongoDB
 - `yt-dlp` and `ffmpeg` available on `PATH` (the Dockerfile installs both)
+- `ytmusic-api` is used for YouTube Music search metadata before falling back to `yt-dlp`
 - Telegram bot token from BotFather
 
 ## Quick start
@@ -18,6 +19,8 @@ cp sample.env .env
 npm install
 npm start
 ```
+
+If YouTube asks yt-dlp to sign in, export browser cookies to a Netscape-format file and set `COOKIES_PATH=/absolute/path/to/cookies.txt` in `.env`. You can also set `COOKIES_URL` to a hosted cookies file URL.
 
 ## Main commands
 

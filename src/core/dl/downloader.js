@@ -1,10 +1,40 @@
 import { spawn } from 'node:child_process';
+import fs from 'node:fs/promises';
 import path from 'node:path';
 import { config } from '../../config/index.js';
 import { isUrl } from '../../utils/telegram.js';
 import { parseDuration } from '../../utils/duration.js';
+import { searchYouTubeMusic } from './ytmusic.js';
 
 const SUPPORTED_HOSTS = ['youtube.com', 'youtu.be', 'open.spotify.com', 'saavn', 'jiosaavn.com', 'music.apple.com', 'soundcloud.com'];
+const MAX_ERROR_LENGTH = 700;
+
+function shortenError(message) {
+  const text = String(message ?? '').replace(/\s+/g, ' ').trim();
+  if (text.includes("Sign in to confirm you're not a bot")) {
+    return 'YouTube meminta login/cookies. Isi COOKIES_PATH dengan file cookies YouTube yang valid, lalu coba lagi.';
+  }
+  if (text.includes('No supported JavaScript runtime could be found')) {
+    return 'yt-dlp butuh JavaScript runtime untuk extractor YouTube. Install deno/node runtime yang didukung atau update yt-dlp.';
+  }
+  return text.length > MAX_ERROR_LENGTH ? `${text.slice(0, MAX_ERROR_LENGTH)}…` : text;
+}
+
+async function cookieArgs() {
+  if (config.cookiesPath.length > 0) return ['--cookies', config.cookiesPath[0]];
+  if (config.cookiesUrl.length === 0) return [];
+
+  const cookieUrl = config.cookiesUrl[0];
+  const cookieFile = path.join(config.downloadsDir, 'yt-dlp-cookies.txt');
+  const response = await fetch(cookieUrl);
+  if (!response.ok) throw new Error(`Failed to fetch cookies: ${response.status} ${response.statusText}`);
+  await fs.writeFile(cookieFile, await response.text(), { mode: 0o600 });
+  return ['--cookies', cookieFile];
+}
+
+async function ytDlpBaseArgs() {
+  return ['--no-playlist', '--js-runtimes', 'node', ...(await cookieArgs())];
+}
 
 function run(command, args) {
   return new Promise((resolve, reject) => {
@@ -16,7 +46,7 @@ function run(command, args) {
     child.on('error', reject);
     child.on('close', (code) => {
       if (code === 0) resolve(stdout);
-      else reject(new Error(stderr || `${command} exited with code ${code}`));
+      else reject(new Error(shortenError(stderr || `${command} exited with code ${code}`)));
     });
   });
 }
@@ -37,8 +67,17 @@ export class Downloader {
   }
 
   async getInfo() {
+    if (!this.isUrl() && config.defaultService.toLowerCase().includes('youtube')) {
+      try {
+        const results = await searchYouTubeMusic(this.input);
+        if (results.length > 0) return { platform: 'YouTube Music', results };
+      } catch (error) {
+        console.warn('YouTube Music search failed, falling back to yt-dlp:', error.message);
+      }
+    }
+
     const query = this.isUrl() ? this.input : `ytsearch10:${this.input}`;
-    const output = await run('yt-dlp', ['--dump-single-json', '--no-playlist', query]);
+    const output = await run('yt-dlp', ['--dump-single-json', ...(await ytDlpBaseArgs()), query]);
     const parsed = JSON.parse(output);
     const entries = parsed.entries ?? [parsed];
     return {
@@ -50,7 +89,7 @@ export class Downloader {
   async download(track, isVideo = false) {
     const outputTemplate = path.join(config.downloadsDir, '%(id)s.%(ext)s');
     const args = [
-      '--no-playlist',
+      ...(await ytDlpBaseArgs()),
       '-o', outputTemplate,
       '--print', 'after_move:filepath',
     ];
