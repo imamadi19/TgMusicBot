@@ -12,6 +12,12 @@ import { controlKeyboard, supportKeyboard } from './keyboards.js';
 import { playMode } from './filters.js';
 
 const MAX_QUEUE = 10;
+const ASSISTANT_INVITE_EXPIRE_SECONDS = 60 * 60;
+
+function appendUniqueInviteLink(links, link) {
+  const value = String(link ?? '').trim();
+  if (value && !links.includes(value)) links.push(value);
+}
 
 async function ensureDownloaded(track, isVideo) {
   if (track.filePath) return track.filePath;
@@ -20,24 +26,34 @@ async function ensureDownloaded(track, isVideo) {
   return track.filePath;
 }
 
-async function createAssistantInvite(ctx) {
+export async function createAssistantInviteLinks(ctx) {
+  const links = [];
+
   try {
-    const expireDate = Math.floor(Date.now() / 1000) + 10 * 60;
+    const expireDate = Math.floor(Date.now() / 1000) + ASSISTANT_INVITE_EXPIRE_SECONDS;
     const invite = await ctx.api.createChatInviteLink(ctx.chat.id, {
       name: 'TgMusicBot assistant auto-join',
       expire_date: expireDate,
-      member_limit: 1,
     });
-    return invite.invite_link ?? '';
+    appendUniqueInviteLink(links, invite.invite_link);
   } catch (error) {
     console.warn(`Failed to create assistant invite link for chat ${ctx.chat?.id}`, error);
-    return '';
   }
+
+  try {
+    const chat = await ctx.api.getChat(ctx.chat.id);
+    appendUniqueInviteLink(links, chat?.invite_link);
+    if (chat?.username) appendUniqueInviteLink(links, `https://t.me/${chat.username}`);
+  } catch (error) {
+    console.warn(`Failed to fetch fallback group invite link for chat ${ctx.chat?.id}`, error);
+  }
+
+  return links;
 }
 
 async function startQueuedTrack(ctx, track, isVideo) {
   await ensureDownloaded(track, isVideo);
-  return voicePlayer.play(ctx.chat.id, track, { inviteLink: await createAssistantInvite(ctx) });
+  return voicePlayer.play(ctx.chat.id, track, { inviteLinks: await createAssistantInviteLinks(ctx) });
 }
 
 async function startCachedTrack(chatId, track) {

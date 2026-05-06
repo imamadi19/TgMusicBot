@@ -143,6 +143,53 @@ test('filters check bot admin invite permission and play mode gates users', asyn
   assert.match(replies.at(-1), /invite users/);
 });
 
+test('assistant invite links fall back to existing group links', async () => {
+  const { createAssistantInviteLinks } = await import('../src/handlers/playback.js');
+  const calls = [];
+  const ctx = {
+    chat: { id: -100 },
+    api: {
+      async createChatInviteLink(chatId, options) {
+        calls.push({ chatId, options });
+        return { invite_link: 'https://t.me/+fresh' };
+      },
+      async getChat(chatId) {
+        calls.push({ chatId, getChat: true });
+        return { invite_link: 'https://t.me/+permanent', username: 'public_group' };
+      },
+    },
+  };
+
+  assert.deepEqual(await createAssistantInviteLinks(ctx), [
+    'https://t.me/+fresh',
+    'https://t.me/+permanent',
+    'https://t.me/public_group',
+  ]);
+  assert.equal(calls[0].chatId, -100);
+  assert.equal(calls[0].options.name, 'TgMusicBot assistant auto-join');
+  assert.equal('member_limit' in calls[0].options, false);
+  assert.equal(calls[1].getChat, true);
+});
+
+test('assistant invite links use group link when bot-created invite fails', async () => {
+  const { createAssistantInviteLinks } = await import('../src/handlers/playback.js');
+  const originalWarn = console.warn;
+  console.warn = () => {};
+  try {
+    const ctx = {
+      chat: { id: -100 },
+      api: {
+        async createChatInviteLink() { throw new Error('not enough rights'); },
+        async getChat() { return { invite_link: 'https://t.me/+fallback' }; },
+      },
+    };
+
+    assert.deepEqual(await createAssistantInviteLinks(ctx), ['https://t.me/+fallback']);
+  } finally {
+    console.warn = originalWarn;
+  }
+});
+
 test('helpers extract urls and Telegram media metadata', async () => {
   const { coalesce, getFile, getUrl, isValidMedia, truncate } = await import('../src/utils/helpers.js');
 
