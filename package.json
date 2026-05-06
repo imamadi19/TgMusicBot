@@ -18,7 +18,8 @@
   "dependencies": {
     "dotenv": "^16.4.7",
     "grammy": "^1.34.0",
-    "mongodb": "^6.12.0"
+    "mongodb": "^6.12.0",
+    "ytmusic-api": "^5.3.0"
   },
   "engines": {
     "node": ">=20.0.0"
