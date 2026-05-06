@@ -20,6 +20,7 @@ stop_event = threading.Event()
 paused = False
 call_client = None
 chat_id = None
+client = None
 
 
 def require_env(name: str) -> str:
@@ -137,6 +138,42 @@ def patch_pyrogram_large_chat_ids() -> None:
     pyrogram_utils.get_peer_type = get_peer_type
 
 
+def describe_adapter_error(exc: Exception) -> tuple[str, bool]:
+    """Return a short user-facing message and whether traceback is useful."""
+    text = " ".join(str(exc).split())
+    lowered = text.lower()
+
+    if "bot_method_invalid" in lowered or "phone.creategroupcall" in lowered:
+        return (
+            "STRING1/SESSION_STRINGS harus berisi session string akun user assistant, "
+            "bukan bot token/session bot. Buat ulang STRING1 dari akun Telegram biasa, "
+            "tambahkan akun assistant itu ke grup, lalu mulai voice/video chat sebelum /play.",
+            False,
+        )
+    if "assistant login terdeteksi sebagai bot" in lowered:
+        return (text, False)
+    if "peer id invalid" in lowered or "could not find the input entity" in lowered:
+        return (
+            "Assistant belum bisa menemukan grup. Pastikan akun assistant sudah join grup, "
+            "pernah membuka chat grup tersebut, dan bot menerima chat_id grup yang benar.",
+            False,
+        )
+    if "groupcallforbidden" in lowered or "forbidden" in lowered:
+        return (
+            "Assistant tidak punya izin voice chat. Jadikan assistant member/admin yang boleh join voice chat, "
+            "lalu pastikan voice/video chat grup sedang aktif.",
+            False,
+        )
+    if "no active group call" in lowered or "groupcallnotmodified" in lowered:
+        return (
+            "Voice/video chat grup belum aktif. Mulai obrolan suara/video di grup dulu, lalu ulangi /play.",
+            False,
+        )
+    if isinstance(exc, RuntimeError):
+        return (text, False)
+    return (text, True)
+
+
 def warm_peer_cache(client, target_chat_id: int) -> None:
     """Resolve the target chat once before PyTgCalls starts streaming.
 
@@ -156,7 +193,7 @@ def warm_peer_cache(client, target_chat_id: int) -> None:
 
 
 def main() -> int:
-    global call_client, chat_id
+    global call_client, chat_id, client
 
     api_id = int(require_env("TGMB_API_ID"))
     api_hash = require_env("TGMB_API_HASH")
@@ -183,26 +220,37 @@ def main() -> int:
         session_string=session_string,
         in_memory=True,
     )
-    client.start()
-    warm_peer_cache(client, chat_id)
+    client_started = False
+    try:
+        client.start()
+        client_started = True
+        assistant = client.get_me()
+        if getattr(assistant, "is_bot", False):
+            raise RuntimeError(
+                "Assistant login terdeteksi sebagai bot. STRING1 wajib dibuat dari akun user Telegram, "
+                "bukan TOKEN bot dari BotFather."
+            )
+        warm_peer_cache(client, chat_id)
 
-    call_client = PyTgCalls(client)
-    maybe_call(call_client, "start")
-    call_client.play(chat_id, file_path)
-    print(READY_MARKER, flush=True)
+        call_client = PyTgCalls(client)
+        maybe_call(call_client, "start")
+        call_client.play(chat_id, file_path)
+        print(READY_MARKER, flush=True)
 
-    stop_event.wait()
-
-    for name in ("leave_call", "leave_group_call"):
-        method = getattr(call_client, name, None)
-        if callable(method):
-            try:
-                method(chat_id)
-            except TypeError:
-                method()
-            break
-    maybe_call(call_client, "stop")
-    client.stop()
+        stop_event.wait()
+    finally:
+        if call_client is not None:
+            for name in ("leave_call", "leave_group_call"):
+                method = getattr(call_client, name, None)
+                if callable(method):
+                    try:
+                        method(chat_id)
+                    except TypeError:
+                        method()
+                    break
+            maybe_call(call_client, "stop")
+        if client_started:
+            client.stop()
     return 0
 
 
@@ -216,6 +264,8 @@ if __name__ == "__main__":
     try:
         raise SystemExit(main())
     except Exception as exc:  # noqa: BLE001 - surface adapter failures to Node.
-        print(f"VOICE_ADAPTER_ERROR: {exc}", file=sys.stderr, flush=True)
-        traceback.print_exc(file=sys.stderr)
+        message, include_traceback = describe_adapter_error(exc)
+        print(f"VOICE_ADAPTER_ERROR: {message}", file=sys.stderr, flush=True)
+        if include_traceback:
+            traceback.print_exc(file=sys.stderr)
         raise SystemExit(1)
