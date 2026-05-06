@@ -52,13 +52,12 @@ function trackFromResult(item) {
     uploadAt: safeText(item.upload_at),
     thumbnail: safeText(item.image_url),
     platform: 'YouTube',
-    source: 'NexRay',
   };
 }
 
 async function fetchJson(url) {
   const response = await fetch(url, { headers: { accept: 'application/json' } });
-  if (!response.ok) throw new Error(`NexRay API error: ${response.status} ${response.statusText}`);
+  if (!response.ok) throw new Error(`API error: ${response.status} ${response.statusText}`);
   return response.json();
 }
 
@@ -66,7 +65,7 @@ export async function searchNexRayYouTube(input, limit = MAX_SEARCH_RESULTS) {
   const url = new URL(SEARCH_ENDPOINT);
   url.searchParams.set('q', input);
   const payload = await fetchJson(url);
-  if (payload.status === false) throw new Error(payload.message || 'NexRay search failed');
+  if (payload.status === false) throw new Error(payload.message || 'search failed');
 
   const items = Array.isArray(payload.result) ? payload.result : [];
   return items
@@ -125,15 +124,15 @@ function safeFileBase(track) {
 
 export async function downloadNexRayYtMp3(track) {
   const targetUrl = normalizeYouTubeUrl(track?.url || track?.trackId);
-  if (!targetUrl) throw new Error('Missing YouTube URL for NexRay download');
+  if (!targetUrl) throw new Error('Missing YouTube URL for download');
 
   const apiUrl = new URL(YTMP3_ENDPOINT);
   apiUrl.searchParams.set('url', targetUrl);
   const payload = await fetchJson(apiUrl);
-  if (payload.status === false) throw new Error(payload.message || 'NexRay download failed');
+  if (payload.status === false) throw new Error(payload.message || 'download failed');
 
   const downloadUrl = firstKnownUrl(payload);
-  if (!downloadUrl) throw new Error('NexRay response did not include an audio download URL');
+  if (!downloadUrl) throw new Error('API response did not include an audio download URL');
 
   const response = await fetch(downloadUrl);
   if (!response.ok) throw new Error(`Audio download failed: ${response.status} ${response.statusText}`);
