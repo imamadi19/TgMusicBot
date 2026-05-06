@@ -42,13 +42,12 @@ def cleanup(*_args):
     stop_event.set()
 
 
-def toggle_pause(*_args):
+def pause(*_args):
     global paused
-    if call_client is None or chat_id is None:
+    if call_client is None or chat_id is None or paused:
         return
-    paused = not paused
-    method_names = ("pause", "pause_stream") if paused else ("resume", "resume_stream")
-    for name in method_names:
+    paused = True
+    for name in ("pause", "pause_stream"):
         method = getattr(call_client, name, None)
         if callable(method):
             try:
@@ -174,6 +173,38 @@ def describe_adapter_error(exc: Exception) -> tuple[str, bool]:
     return (text, True)
 
 
+def join_from_invite(client, invite_link: str) -> None:
+    if not invite_link:
+        return
+    try:
+        client.join_chat(invite_link)
+        print("TGMB_ASSISTANT_JOINED", flush=True)
+    except Exception as exc:  # noqa: BLE001 - assistant may already be a member.
+        text = " ".join(str(exc).split()).lower()
+        already_joined_markers = (
+            "user_already_participant",
+            "already a participant",
+            "already participant",
+            "already joined",
+        )
+        if any(marker in text for marker in already_joined_markers):
+            return
+        print(
+            f"VOICE_ADAPTER_WARN: gagal join assistant lewat invite link: {exc}. "
+            "Jika assistant belum ada di grup, pastikan bot admin dan boleh invite user.",
+            file=sys.stderr,
+            flush=True,
+        )
+
+
+def leave_target_chat(client, target_chat_id: int) -> None:
+    try:
+        client.leave_chat(target_chat_id)
+        print("TGMB_ASSISTANT_LEFT_CHAT", flush=True)
+    except Exception as exc:  # noqa: BLE001 - leaving is a best-effort cleanup.
+        print(f"VOICE_ADAPTER_WARN: gagal keluar dari grup {target_chat_id}: {exc}", file=sys.stderr, flush=True)
+
+
 def warm_peer_cache(client, target_chat_id: int) -> None:
     """Resolve the target chat once before PyTgCalls starts streaming.
 
@@ -200,11 +231,15 @@ def main() -> int:
     session_type = os.environ.get("TGMB_SESSION_TYPE", "pyrogram").strip().lower()
     session_string = require_env("TGMB_SESSION_STRING")
     chat_id = int(require_env("TGMB_CHAT_ID"))
-    file_path = require_env("TGMB_FILE_PATH")
+    action = os.environ.get("TGMB_ACTION", "play").strip().lower()
+    file_path = os.environ.get("TGMB_FILE_PATH", "").strip()
+    invite_link = os.environ.get("TGMB_INVITE_LINK", "").strip()
 
     if session_type != "pyrogram":
         raise RuntimeError("Adapter bawaan hanya mendukung SESSION_TYPE=pyrogram")
-    if not os.path.exists(file_path):
+    if action == "play" and not file_path:
+        raise RuntimeError("TGMB_FILE_PATH belum diisi")
+    if action == "play" and not os.path.exists(file_path):
         raise RuntimeError(f"File tidak ditemukan: {file_path}")
 
     patch_pyrogram_groupcall_error()
@@ -230,6 +265,13 @@ def main() -> int:
                 "Assistant login terdeteksi sebagai bot. STRING1 wajib dibuat dari akun user Telegram, "
                 "bukan TOKEN bot dari BotFather."
             )
+        if action == "leave_chat":
+            leave_target_chat(client, chat_id)
+            return 0
+        if action != "play":
+            raise RuntimeError(f"TGMB_ACTION tidak dikenal: {action}")
+
+        join_from_invite(client, invite_link)
         warm_peer_cache(client, chat_id)
 
         call_client = PyTgCalls(client)
@@ -258,7 +300,7 @@ if __name__ == "__main__":
     signal.signal(signal.SIGTERM, cleanup)
     signal.signal(signal.SIGINT, cleanup)
     if hasattr(signal, "SIGUSR1"):
-        signal.signal(signal.SIGUSR1, toggle_pause)
+        signal.signal(signal.SIGUSR1, pause)
     if hasattr(signal, "SIGUSR2"):
         signal.signal(signal.SIGUSR2, resume)
     try:

@@ -20,10 +20,40 @@ async function ensureDownloaded(track, isVideo) {
   return track.filePath;
 }
 
-async function startQueuedTrack(chatId, track, isVideo) {
+async function createAssistantInvite(ctx) {
+  try {
+    const expireDate = Math.floor(Date.now() / 1000) + 10 * 60;
+    const invite = await ctx.api.createChatInviteLink(ctx.chat.id, {
+      name: 'TgMusicBot assistant auto-join',
+      expire_date: expireDate,
+      member_limit: 1,
+    });
+    return invite.invite_link ?? '';
+  } catch (error) {
+    console.warn(`Failed to create assistant invite link for chat ${ctx.chat?.id}`, error);
+    return '';
+  }
+}
+
+async function startQueuedTrack(ctx, track, isVideo) {
   await ensureDownloaded(track, isVideo);
+  return voicePlayer.play(ctx.chat.id, track, { inviteLink: await createAssistantInvite(ctx) });
+}
+
+async function startCachedTrack(chatId, track) {
+  await ensureDownloaded(track, Boolean(track.isVideo));
   return voicePlayer.play(chatId, track);
 }
+
+voicePlayer.onTrackEnd(async ({ chatId, next }) => {
+  if (!next) return;
+  try {
+    await startCachedTrack(chatId, next);
+  } catch (error) {
+    chatCache.shift(chatId);
+    console.warn(`Failed to auto-start next track for chat ${chatId}`, error);
+  }
+});
 
 function formatError(error) {
   return htmlEscape(error?.message ?? error);
@@ -59,7 +89,7 @@ async function queueAndMaybePlay(ctx, statusMessage, track, isVideo, language) {
     return;
   }
   try {
-    await startQueuedTrack(chatId, saveTrack, isVideo);
+    await startQueuedTrack(ctx, saveTrack, isVideo);
   } catch (error) {
     chatCache.shift(chatId);
     await editStatus(ctx, statusMessage, t(language, 'playback.voiceFailed', { error: formatError(error) }));
@@ -109,7 +139,7 @@ export async function playHandler(ctx, isVideo = false) {
     await editStatus(ctx, status, t(language, 'playback.addedPlaylistTracks', { count: tracks.length, length }), { reply_markup: controlKeyboard(language) });
     if (queueWasEmpty) {
       try {
-        await startQueuedTrack(chatId, tracks[0], isVideo);
+        await startQueuedTrack(ctx, tracks[0], isVideo);
       } catch (error) {
         chatCache.shift(chatId);
         await ctx.reply(t(language, 'playback.voiceFailed', { error: formatError(error) }));
@@ -163,7 +193,7 @@ export async function skipHandler(ctx) {
     return;
   }
   try {
-    await startQueuedTrack(ctx.chat.id, next, next.isVideo);
+    await startQueuedTrack(ctx, next, next.isVideo);
     await ctx.reply(t(language, 'playback.skippedNow', { skipped: skipped.name, next: next.name }));
   } catch (error) {
     chatCache.shift(ctx.chat.id);
