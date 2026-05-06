@@ -9,7 +9,7 @@ TgMusicBot is now a JavaScript/Node.js Telegram music bot that keeps the origina
 - Node.js 20 or newer
 - MongoDB
 - `yt-dlp` and `ffmpeg` available on `PATH` (the Dockerfile installs both)
-- Python packages `pyrogram`, `tgcrypto`, and `py-tgcalls` for the bundled Telegram voice adapter (the Dockerfile installs them)
+- Python packages from `requirements.txt` (`pyrogrammod`, `tgcrypto`, `py-tgcalls`, and `yt-dlp`) for the bundled Telegram voice adapter (the Dockerfile installs them)
 - `ytmusic-api` is used for YouTube Music search metadata before falling back to `yt-dlp`
 - Telegram bot token from BotFather
 
@@ -23,7 +23,7 @@ npm start
 
 If YouTube asks yt-dlp to sign in, export browser cookies to a Netscape-format file and set `COOKIES_PATH=/absolute/path/to/cookies.txt` in `.env`. You can also set `COOKIES_URL` to a hosted cookies file URL.
 
-For voice chat playback, add the assistant user account to your group, start the group voice/video chat, and set `SESSION_TYPE=pyrogram` plus `STRING1` in `.env`. The default adapter command is `VOICE_ADAPTER_COMMAND=python3 scripts/pytgcalls_adapter.py`; override it only if you provide your own adapter.
+For voice chat playback, add the assistant user account to your group, start the group voice/video chat, install the Python packages from `requirements.txt`, and set `SESSION_TYPE=pyrogram` plus `STRING1` in `.env`. The default adapter command is `VOICE_ADAPTER_COMMAND=python3 scripts/pytgcalls_adapter.py`; override it only if you provide your own adapter.
 
 ## Main commands
 

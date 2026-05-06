@@ -11,6 +11,10 @@ import { controlKeyboard, supportKeyboard } from './keyboards.js';
 
 const MAX_QUEUE = 10;
 
+function formatError(error) {
+  return htmlEscape(error?.message ?? error);
+}
+
 function formatTrack(language, track, queueLength = 1) {
   const heading = queueLength > 1 ? t(language, 'playback.addedToQueue', { count: queueLength }) : t(language, 'playback.nowPlaying');
   return `<u><b>${heading}</b></u>\n\n<b>${t(language, 'playback.title')}:</b> <a href="${htmlEscape(track.url)}">${htmlEscape(track.name)}</a>\n\n<b>${t(language, 'playback.duration')}:</b> ${secondsToClock(track.duration)}\n<b>${t(language, 'playback.requestedBy')}:</b> ${htmlEscape(track.user)}`;
@@ -38,14 +42,14 @@ async function queueAndMaybePlay(ctx, statusMessage, track, isVideo, language) {
     saveTrack.filePath = await downloader.download(saveTrack, isVideo);
   } catch (error) {
     chatCache.shift(chatId);
-    await editStatus(ctx, statusMessage, t(language, 'playback.downloadFailed', { error: error.message }));
+    await editStatus(ctx, statusMessage, t(language, 'playback.downloadFailed', { error: formatError(error) }));
     return;
   }
   try {
     await voicePlayer.play(chatId, saveTrack);
   } catch (error) {
     chatCache.shift(chatId);
-    await editStatus(ctx, statusMessage, t(language, 'playback.voiceFailed', { error: error.message }));
+    await editStatus(ctx, statusMessage, t(language, 'playback.voiceFailed', { error: formatError(error) }));
     return;
   }
   await editStatus(ctx, statusMessage, formatTrack(language, saveTrack), { parse_mode: 'HTML', reply_markup: controlKeyboard(language), disable_web_page_preview: true });
@@ -88,7 +92,7 @@ export async function playHandler(ctx, isVideo = false) {
       try {
         await voicePlayer.play(chatId, tracks[0]);
       } catch (error) {
-        await ctx.reply(t(language, 'playback.voiceFailed', { error: error.message }));
+        await ctx.reply(t(language, 'playback.voiceFailed', { error: formatError(error) }));
       }
     }
     return;
@@ -104,7 +108,7 @@ export async function playHandler(ctx, isVideo = false) {
   try {
     info = await downloader.getInfo();
   } catch (error) {
-    await editStatus(ctx, status, t(language, 'playback.fetchError', { error: error.message }));
+    await editStatus(ctx, status, t(language, 'playback.fetchError', { error: formatError(error) }));
     return;
   }
 
