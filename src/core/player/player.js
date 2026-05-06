@@ -40,10 +40,40 @@ function logAdapterOutput(prefix, chunk, writer) {
   writer.write(`${prefix} ${text.length > MAX_LOG_LENGTH ? `${text.slice(0, MAX_LOG_LENGTH)}…\n` : text}`);
 }
 
-function sessionForChat(chatId) {
-  if (config.sessionStrings.length === 0) return '';
+function sessionStartIndexForChat(chatId) {
+  if (config.sessionStrings.length === 0) return 0;
   const hash = Math.abs(Number.parseInt(String(chatId).replace(/\D/g, '').slice(-6), 10) || 0);
-  return config.sessionStrings[hash % config.sessionStrings.length];
+  return hash % config.sessionStrings.length;
+}
+
+function sessionForChat(chatId) {
+  return config.sessionStrings[sessionStartIndexForChat(chatId)] ?? '';
+}
+
+function sessionCandidatesForChat(chatId) {
+  const sessions = config.sessionStrings;
+  if (sessions.length === 0) return [];
+  const startIndex = sessionStartIndexForChat(chatId);
+  return sessions.map((sessionString, offset) => {
+    const index = (startIndex + offset) % sessions.length;
+    return { assistantNumber: index + 1, sessionString: sessions[index] };
+  });
+}
+
+function shouldTryNextAssistant(error) {
+  const message = String(error?.message ?? error).toLowerCase();
+  return [
+    'assistant belum bisa menemukan grup',
+    'gagal join assistant',
+    'semua link invite gagal',
+    'peer id invalid',
+    'could not find the input entity',
+    'assistant login terdeteksi sebagai bot',
+    'bot_method_invalid',
+    'phone.creategroupcall',
+    'groupcallforbidden',
+    'forbidden',
+  ].some((marker) => message.includes(marker));
 }
 
 function durationToMs(duration) {
@@ -165,7 +195,10 @@ export class VoicePlayer {
     if (!waitReady) return child;
 
     await new Promise((resolve, reject) => {
-      const timer = setTimeout(() => reject(new Error('Assistant timeout saat join obrolan video. Pastikan obrolan video aktif dan assistant sudah ada di grup.')), START_TIMEOUT_MS);
+      const timer = setTimeout(() => {
+        if (!child.killed) child.kill('SIGTERM');
+        reject(new Error('Assistant timeout saat join obrolan video. Pastikan obrolan video aktif dan assistant sudah ada di grup.'));
+      }, START_TIMEOUT_MS);
       timer.unref?.();
 
       const cleanup = () => {
@@ -202,24 +235,46 @@ export class VoicePlayer {
     if (!config.voiceAdapterCommand) throw new Error('VOICE_ADAPTER_COMMAND belum diisi. Gunakan adapter PyTgCalls bawaan atau command adapter lain.');
     if (!config.apiId || !config.apiHash) throw new Error('API_ID dan API_HASH wajib diisi agar assistant bisa login.');
 
-    const sessionString = sessionForChat(chatId);
-    if (!sessionString) throw new Error('STRING1/SESSION_STRINGS belum diisi, assistant tidak bisa join obrolan video.');
+    const sessionCandidates = sessionCandidatesForChat(chatId);
+    if (sessionCandidates.length === 0) throw new Error('STRING1/SESSION_STRINGS belum diisi, assistant tidak bisa join obrolan video.');
 
     this.#cancelLeaveTimer(chatId);
     this.#killActive(chatId);
 
     const inviteLinks = normalizeInviteLinks(options);
-    const child = await this.#spawnAdapter(chatId, {
-      TGMB_ACTION: 'play',
-      TGMB_SESSION_STRING: sessionString,
-      TGMB_INVITE_LINK: inviteLinks[0] ?? '',
-      TGMB_INVITE_LINKS: JSON.stringify(inviteLinks),
-      TGMB_FILE_PATH: track.filePath,
-      TGMB_TRACK_ID: String(track.trackId ?? ''),
-      TGMB_TRACK_TITLE: String(track.name ?? ''),
-      TGMB_TRACK_URL: String(track.url ?? ''),
-      TGMB_IS_VIDEO: track.isVideo ? '1' : '0',
-    });
+    const failures = [];
+    let child = null;
+    let assistantNumber = 0;
+
+    for (const candidate of sessionCandidates) {
+      try {
+        child = await this.#spawnAdapter(chatId, {
+          TGMB_ACTION: 'play',
+          TGMB_SESSION_STRING: candidate.sessionString,
+          TGMB_ASSISTANT_INDEX: String(candidate.assistantNumber),
+          TGMB_INVITE_LINK: inviteLinks[0] ?? '',
+          TGMB_INVITE_LINKS: JSON.stringify(inviteLinks),
+          TGMB_FILE_PATH: track.filePath,
+          TGMB_TRACK_ID: String(track.trackId ?? ''),
+          TGMB_TRACK_TITLE: String(track.name ?? ''),
+          TGMB_TRACK_URL: String(track.url ?? ''),
+          TGMB_IS_VIDEO: track.isVideo ? '1' : '0',
+        });
+        assistantNumber = candidate.assistantNumber;
+        break;
+      } catch (error) {
+        failures.push({ assistantNumber: candidate.assistantNumber, error });
+        if (!shouldTryNextAssistant(error)) throw error;
+        if (failures.length < sessionCandidates.length) {
+          console.warn(`Assistant ${candidate.assistantNumber} gagal join/play di chat ${chatId}; mencoba assistant berikutnya.`, error);
+        }
+      }
+    }
+
+    if (!child) {
+      const detail = failures.map(({ assistantNumber: number, error }) => `Assistant ${number}: ${truncate(error?.message ?? error, 240)}`).join(' | ');
+      throw new Error(`Semua assistant gagal join obrolan video. ${detail}`);
+    }
 
     child.on('exit', () => {
       const active = this.#active.get(String(chatId));
@@ -229,7 +284,7 @@ export class VoicePlayer {
       }
     });
 
-    this.#active.set(String(chatId), { ...track, startedAt: new Date(), process: child });
+    this.#active.set(String(chatId), { ...track, startedAt: new Date(), process: child, assistantNumber });
     this.#scheduleTrackEnd(chatId, track, child);
     return this.#active.get(String(chatId));
   }

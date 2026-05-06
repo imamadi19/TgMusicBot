@@ -273,6 +273,7 @@ def main() -> int:
     session_type = os.environ.get("TGMB_SESSION_TYPE", "pyrogram").strip().lower()
     session_string = require_env("TGMB_SESSION_STRING")
     chat_id = int(require_env("TGMB_CHAT_ID"))
+    assistant_index = os.environ.get("TGMB_ASSISTANT_INDEX", "?").strip() or "?"
     action = os.environ.get("TGMB_ACTION", "play").strip().lower()
     file_path = os.environ.get("TGMB_FILE_PATH", "").strip()
     invite_links = parse_invite_links()
@@ -302,6 +303,8 @@ def main() -> int:
         client.start()
         client_started = True
         assistant = client.get_me()
+        assistant_name = getattr(assistant, "username", None) or getattr(assistant, "first_name", None) or getattr(assistant, "id", "unknown")
+        print(f"TGMB_ASSISTANT_SELECTED assistant={assistant_index} account={assistant_name}", flush=True)
         if getattr(assistant, "is_bot", False):
             raise RuntimeError(
                 "Assistant login terdeteksi sebagai bot. STRING1 wajib dibuat dari akun user Telegram, "
