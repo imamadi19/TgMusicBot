@@ -1,10 +1,14 @@
-import { helpCallback, startHandler } from './help.js';
+import { helpCallback, languageMenuHandler, languageSelectHandler, startHandler } from './help.js';
 import { activeVcHandler, loopHandler, muteHandler, pauseHandler, playHandler, queueHandler, removeHandler, resumeHandler, skipHandler, speedHandler, stopHandler, unmuteHandler } from './playback.js';
 import { addToPlaylistHandler, createPlaylistHandler, deletePlaylistHandler, myPlaylistsHandler, playlistInfoHandler, removeFromPlaylistHandler } from './playlists.js';
 import { broadcastHandler, loggerHandler, noopHandler, pingHandler, privacyHandler, settingsHandler, shellHandler, statsHandler } from './misc.js';
 
 export function loadHandlers(bot) {
-  bot.command(['start', 'help'], startHandler);
+  bot.command('start', startHandler);
+  bot.command('help', async (ctx) => {
+    await startHandler(ctx);
+  });
+  bot.command(['language', 'lang'], languageMenuHandler);
   bot.command('ping', pingHandler);
   bot.command(['play', 'p'], (ctx) => playHandler(ctx, false));
   bot.command(['vplay', 'v'], (ctx) => playHandler(ctx, true));
@@ -32,6 +36,9 @@ export function loadHandlers(bot) {
   bot.command('logger', loggerHandler);
   bot.command('sh', shellHandler);
   bot.command(['reload', 'authlist', 'auths', 'auth', 'addauth', 'removeauth', 'rmauth', 'stop_gcast', 'stop_broadcast', 'clearass', 'clearassistants', 'leaveall', 'seek'], noopHandler);
+  bot.callbackQuery('language_menu', languageMenuHandler);
+  bot.callbackQuery(/^lang_/, languageSelectHandler);
+  bot.callbackQuery('settings_menu', settingsHandler);
   bot.callbackQuery(/^help_/, helpCallback);
   bot.callbackQuery(/^vcplay_/, async (ctx) => {
     const action = ctx.callbackQuery.data.replace('vcplay_', '');
