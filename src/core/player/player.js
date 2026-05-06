@@ -5,10 +5,32 @@ import { chatCache } from '../cache/chat-cache.js';
 const READY_MARKER = 'TGMB_READY';
 const START_TIMEOUT_MS = 30000;
 const MAX_ERROR_LENGTH = 1200;
+const MAX_LOG_LENGTH = 2000;
 
 function truncate(text, max = MAX_ERROR_LENGTH) {
   const value = String(text ?? '').replace(/\s+/g, ' ').trim();
   return value.length > max ? `${value.slice(0, max)}…` : value;
+}
+
+function normalizeVoiceError(text) {
+  const value = truncate(text);
+  const lowered = value.toLowerCase();
+  if (lowered.includes('bot_method_invalid') || lowered.includes('phone.creategroupcall')) {
+    return 'STRING1/SESSION_STRINGS harus session string akun user assistant, bukan bot token/session bot. Buat ulang STRING1 dari akun Telegram biasa, tambahkan assistant ke grup, dan aktifkan voice/video chat.';
+  }
+  if (lowered.includes('assistant login terdeteksi sebagai bot')) return value;
+  if (lowered.includes('peer id invalid') || lowered.includes('could not find the input entity')) {
+    return 'Assistant belum bisa menemukan grup. Pastikan assistant sudah join grup, pernah membuka chat grup, dan chat_id benar.';
+  }
+  if (lowered.includes('groupcallforbidden') || lowered.includes('forbidden')) {
+    return 'Assistant tidak punya izin voice chat. Beri izin/jadikan admin, lalu pastikan voice/video chat grup aktif.';
+  }
+  return value;
+}
+
+function logAdapterOutput(prefix, chunk, writer) {
+  const text = String(chunk);
+  writer.write(`${prefix} ${text.length > MAX_LOG_LENGTH ? `${text.slice(0, MAX_LOG_LENGTH)}…\n` : text}`);
 }
 
 function sessionForChat(chatId) {
@@ -62,8 +84,8 @@ export class VoicePlayer {
 
     let stdout = '';
     let stderr = '';
-    child.stdout.on('data', (chunk) => { stdout += chunk; process.stdout.write(`[voice:${chatId}] ${chunk}`); });
-    child.stderr.on('data', (chunk) => { stderr += chunk; process.stderr.write(`[voice:${chatId}] ${chunk}`); });
+    child.stdout.on('data', (chunk) => { stdout += chunk; logAdapterOutput(`[voice:${chatId}]`, chunk, process.stdout); });
+    child.stderr.on('data', (chunk) => { stderr += chunk; logAdapterOutput(`[voice:${chatId}]`, chunk, process.stderr); });
     child.on('exit', () => {
       const active = this.#active.get(String(chatId));
       if (active?.process === child) this.#active.delete(String(chatId));
@@ -91,7 +113,7 @@ export class VoicePlayer {
       };
       const onExit = (code) => {
         cleanup();
-        reject(new Error(truncate(stderr || stdout || `Voice adapter keluar dengan kode ${code}`)));
+        reject(new Error(normalizeVoiceError(stderr || stdout || `Voice adapter keluar dengan kode ${code}`)));
       };
 
       child.stdout.on('data', onStdout);

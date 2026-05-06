@@ -11,6 +11,18 @@ import { controlKeyboard, supportKeyboard } from './keyboards.js';
 
 const MAX_QUEUE = 10;
 
+async function ensureDownloaded(track, isVideo) {
+  if (track.filePath) return track.filePath;
+  const downloader = new Downloader(track.url);
+  track.filePath = await downloader.download(track, isVideo);
+  return track.filePath;
+}
+
+async function startQueuedTrack(chatId, track, isVideo) {
+  await ensureDownloaded(track, isVideo);
+  return voicePlayer.play(chatId, track);
+}
+
 function formatError(error) {
   return htmlEscape(error?.message ?? error);
 }
@@ -37,16 +49,15 @@ async function queueAndMaybePlay(ctx, statusMessage, track, isVideo, language) {
     return;
   }
 
-  const downloader = new Downloader(saveTrack.url);
   try {
-    saveTrack.filePath = await downloader.download(saveTrack, isVideo);
+    await ensureDownloaded(saveTrack, isVideo);
   } catch (error) {
     chatCache.shift(chatId);
     await editStatus(ctx, statusMessage, t(language, 'playback.downloadFailed', { error: formatError(error) }));
     return;
   }
   try {
-    await voicePlayer.play(chatId, saveTrack);
+    await startQueuedTrack(chatId, saveTrack, isVideo);
   } catch (error) {
     chatCache.shift(chatId);
     await editStatus(ctx, statusMessage, t(language, 'playback.voiceFailed', { error: formatError(error) }));
@@ -58,7 +69,7 @@ async function queueAndMaybePlay(ctx, statusMessage, track, isVideo, language) {
 export async function playHandler(ctx, isVideo = false) {
   const language = await getUserLanguage(ctx.from?.id);
   const chatId = ctx.chat.id;
-  if (chatCache.getQueueLength(chatId) > MAX_QUEUE) {
+  if (chatCache.getQueueLength(chatId) >= MAX_QUEUE) {
     await ctx.reply(t(language, 'playback.queueFull'));
     return;
   }
@@ -85,13 +96,19 @@ export async function playHandler(ctx, isVideo = false) {
       return;
     }
     const remaining = MAX_QUEUE - chatCache.getQueueLength(chatId);
-    const tracks = playlist.songs.slice(0, remaining).map((track) => ({ ...track, user: firstName(ctx), isVideo }));
+    const tracks = playlist.songs.slice(0, remaining).map((track) => ({ ...track, user: firstName(ctx), isVideo, filePath: track.filePath ?? '', platform: track.platform ?? config.defaultService }));
+    if (tracks.length === 0) {
+      await editStatus(ctx, status, t(language, 'playback.queueFull'));
+      return;
+    }
+    const queueWasEmpty = chatCache.getQueueLength(chatId) === 0;
     const length = chatCache.addSongs(chatId, tracks);
     await editStatus(ctx, status, t(language, 'playback.addedPlaylistTracks', { count: tracks.length, length }), { reply_markup: controlKeyboard(language) });
-    if (length === tracks.length) {
+    if (queueWasEmpty) {
       try {
-        await voicePlayer.play(chatId, tracks[0]);
+        await startQueuedTrack(chatId, tracks[0], isVideo);
       } catch (error) {
+        chatCache.shift(chatId);
         await ctx.reply(t(language, 'playback.voiceFailed', { error: formatError(error) }));
       }
     }
@@ -134,9 +151,21 @@ export async function queueHandler(ctx) {
 export async function skipHandler(ctx) {
   const language = await getUserLanguage(ctx.from?.id);
   const { skipped, next } = voicePlayer.skip(ctx.chat.id);
-  if (!skipped) await ctx.reply(t(language, 'playback.nothingPlaying'));
-  else if (next) await ctx.reply(t(language, 'playback.skippedNow', { skipped: skipped.name, next: next.name }));
-  else await ctx.reply(t(language, 'playback.skippedEnded', { skipped: skipped.name }));
+  if (!skipped) {
+    await ctx.reply(t(language, 'playback.nothingPlaying'));
+    return;
+  }
+  if (!next) {
+    await ctx.reply(t(language, 'playback.skippedEnded', { skipped: skipped.name }));
+    return;
+  }
+  try {
+    await startQueuedTrack(ctx.chat.id, next, next.isVideo);
+    await ctx.reply(t(language, 'playback.skippedNow', { skipped: skipped.name, next: next.name }));
+  } catch (error) {
+    chatCache.shift(ctx.chat.id);
+    await ctx.reply(t(language, 'playback.voiceFailed', { error: formatError(error) }));
+  }
 }
 
 export async function stopHandler(ctx) {
