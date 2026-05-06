@@ -101,6 +101,60 @@ def patch_pyrogram_groupcall_error() -> None:
         setattr(exceptions_module, "GroupcallForbidden", fallback)
 
 
+def patch_pyrogram_large_chat_ids() -> None:
+    """Teach older Pyrogram builds to accept newer large supergroup IDs.
+
+    Telegram supergroup/channel Bot API IDs use the ``-100...`` prefix. Some
+    Pyrogram/PyrogramMod versions still validate the inner channel id as a
+    32-bit number, so newer chats such as ``-1003872810522`` are rejected by
+    ``utils.get_peer_type`` before Pyrogram can resolve them from the assistant
+    account. PyTgCalls calls that resolver internally, so patch the local
+    utility function to classify every ``-100`` id as a channel.
+    """
+    try:
+        import pyrogram.utils as pyrogram_utils
+    except ImportError:
+        return
+
+    original_get_peer_type = getattr(pyrogram_utils, "get_peer_type", None)
+    already_patched = getattr(original_get_peer_type, "_tgmb_large_id_patch", False)
+    if not callable(original_get_peer_type) or already_patched:
+        return
+
+    def get_peer_type(peer_id):
+        try:
+            return original_get_peer_type(peer_id)
+        except ValueError as exc:
+            try:
+                numeric_peer_id = int(peer_id)
+            except (TypeError, ValueError):
+                raise exc
+            if str(numeric_peer_id).startswith("-100"):
+                return "channel"
+            raise exc
+
+    get_peer_type._tgmb_large_id_patch = True
+    pyrogram_utils.get_peer_type = get_peer_type
+
+
+def warm_peer_cache(client, target_chat_id: int) -> None:
+    """Resolve the target chat once before PyTgCalls starts streaming.
+
+    PyTgCalls eventually asks Pyrogram to resolve ``target_chat_id``. Resolving
+    it here gives Pyrogram a chance to populate its peer storage and lets us
+    show a clear warning if the assistant has not joined the group yet.
+    """
+    try:
+        client.get_chat(target_chat_id)
+    except Exception as exc:  # noqa: BLE001 - keep adapter startup best-effort.
+        print(
+            f"VOICE_ADAPTER_WARN: gagal resolve chat {target_chat_id}: {exc}. "
+            "Pastikan assistant sudah join grup dan obrolan video aktif.",
+            file=sys.stderr,
+            flush=True,
+        )
+
+
 def main() -> int:
     global call_client, chat_id
 
@@ -117,6 +171,7 @@ def main() -> int:
         raise RuntimeError(f"File tidak ditemukan: {file_path}")
 
     patch_pyrogram_groupcall_error()
+    patch_pyrogram_large_chat_ids()
 
     from pyrogram import Client
     from pytgcalls import PyTgCalls
@@ -129,6 +184,7 @@ def main() -> int:
         in_memory=True,
     )
     client.start()
+    warm_peer_cache(client, chat_id)
 
     call_client = PyTgCalls(client)
     maybe_call(call_client, "start")
