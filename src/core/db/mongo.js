@@ -13,8 +13,13 @@ export async function connectDatabase() {
     database.collection('playlists').createIndex({ playlistId: 1 }, { unique: true }),
     database.collection('auth').createIndex({ chatId: 1, userId: 1 }, { unique: true }),
     database.collection('chats').createIndex({ chatId: 1 }, { unique: true }),
+    database.collection('user_settings').createIndex({ userId: 1 }, { unique: true }),
   ]);
   return database;
+}
+
+export function isDatabaseConnected() {
+  return Boolean(database);
 }
 
 export function db() {
