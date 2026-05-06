@@ -41,7 +41,13 @@ async function queueAndMaybePlay(ctx, statusMessage, track, isVideo, language) {
     await editStatus(ctx, statusMessage, t(language, 'playback.downloadFailed', { error: error.message }));
     return;
   }
-  await voicePlayer.play(chatId, saveTrack);
+  try {
+    await voicePlayer.play(chatId, saveTrack);
+  } catch (error) {
+    chatCache.shift(chatId);
+    await editStatus(ctx, statusMessage, t(language, 'playback.voiceFailed', { error: error.message }));
+    return;
+  }
   await editStatus(ctx, statusMessage, formatTrack(language, saveTrack), { parse_mode: 'HTML', reply_markup: controlKeyboard(language), disable_web_page_preview: true });
 }
 
@@ -78,7 +84,13 @@ export async function playHandler(ctx, isVideo = false) {
     const tracks = playlist.songs.slice(0, remaining).map((track) => ({ ...track, user: firstName(ctx), isVideo }));
     const length = chatCache.addSongs(chatId, tracks);
     await editStatus(ctx, status, t(language, 'playback.addedPlaylistTracks', { count: tracks.length, length }), { reply_markup: controlKeyboard(language) });
-    if (length === tracks.length) await voicePlayer.play(chatId, tracks[0]);
+    if (length === tracks.length) {
+      try {
+        await voicePlayer.play(chatId, tracks[0]);
+      } catch (error) {
+        await ctx.reply(t(language, 'playback.voiceFailed', { error: error.message }));
+      }
+    }
     return;
   }
 

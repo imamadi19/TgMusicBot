@@ -49,6 +49,7 @@ export const config = {
   devs: splitList(process.env.DEVS).map((id) => toInt(id)).filter(Boolean),
   cookiesPath: splitList(process.env.COOKIES_PATH),
   cookiesUrl: splitList(process.env.COOKIES_URL),
+  voiceAdapterCommand: process.env.VOICE_ADAPTER_COMMAND ?? 'python3 scripts/pytgcalls_adapter.py',
   startImg: process.env.START_IMG ?? '',
   port: process.env.PORT ?? '8080',
   autoLeave: toBool(process.env.AUTO_LEAVE, true),

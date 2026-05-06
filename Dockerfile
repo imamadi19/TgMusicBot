@@ -6,7 +6,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-pip \
     curl \
     ca-certificates \
-    && pip3 install --break-system-packages --no-cache-dir yt-dlp \
+    && pip3 install --break-system-packages --no-cache-dir "yt-dlp[default]" pyrogram tgcrypto py-tgcalls \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
