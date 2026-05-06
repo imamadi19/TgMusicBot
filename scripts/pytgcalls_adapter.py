@@ -72,6 +72,35 @@ def resume(*_args):
             break
 
 
+def patch_pyrogram_groupcall_error() -> None:
+    """Add the error alias expected by some PyTgCalls builds.
+
+    Recent plain Pyrogram releases do not export ``GroupcallForbidden`` while
+    several PyTgCalls releases import that exact name during client startup.
+    Falling back to Pyrogram's generic ``Forbidden`` RPC error keeps the import
+    compatible; PyTgCalls only needs the class to catch a forbidden group-call
+    response and clear its call cache.
+    """
+    try:
+        import pyrogram.errors as pyrogram_errors
+    except ImportError:
+        return
+
+    if hasattr(pyrogram_errors, "GroupcallForbidden"):
+        return
+
+    fallback = (
+        getattr(pyrogram_errors, "GroupCallForbidden", None)
+        or getattr(pyrogram_errors, "Forbidden", None)
+        or RuntimeError
+    )
+    setattr(pyrogram_errors, "GroupcallForbidden", fallback)
+
+    exceptions_module = getattr(pyrogram_errors, "exceptions", None)
+    if exceptions_module is not None and not hasattr(exceptions_module, "GroupcallForbidden"):
+        setattr(exceptions_module, "GroupcallForbidden", fallback)
+
+
 def main() -> int:
     global call_client, chat_id
 
@@ -86,6 +115,8 @@ def main() -> int:
         raise RuntimeError("Adapter bawaan hanya mendukung SESSION_TYPE=pyrogram")
     if not os.path.exists(file_path):
         raise RuntimeError(f"File tidak ditemukan: {file_path}")
+
+    patch_pyrogram_groupcall_error()
 
     from pyrogram import Client
     from pytgcalls import PyTgCalls

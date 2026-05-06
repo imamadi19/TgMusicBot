@@ -6,7 +6,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-pip \
     curl \
     ca-certificates \
-    && pip3 install --break-system-packages --no-cache-dir "yt-dlp[default]" pyrogram tgcrypto py-tgcalls \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt /tmp/requirements.txt
+RUN pip3 install --break-system-packages --no-cache-dir -r /tmp/requirements.txt \
+    && pip3 install --break-system-packages --no-cache-dir --force-reinstall pyrogrammod tgcrypto \
+    && rm -f /tmp/requirements.txt \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

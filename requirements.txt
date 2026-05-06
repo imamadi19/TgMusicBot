@@ -1,0 +1,6 @@
+# Python runtime packages for yt-dlp downloads and the bundled PyTgCalls adapter.
+yt-dlp[default]
+tgcrypto
+py-tgcalls
+# PyTgCalls expects group-call RPC errors that are provided by this Pyrogram fork.
+pyrogrammod
