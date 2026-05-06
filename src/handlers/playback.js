@@ -5,9 +5,11 @@ import { getPlaylist } from '../core/db/playlists.js';
 import { getUserLanguage } from '../core/db/user-settings.js';
 import { config } from '../config/index.js';
 import { t } from '../i18n/index.js';
-import { commandArgs, firstName, htmlEscape, isUrl } from '../utils/telegram.js';
+import { commandArgs, htmlEscape, isUrl } from '../utils/telegram.js';
+import { firstName } from '../utils/extras.js';
 import { secondsToClock } from '../utils/duration.js';
 import { controlKeyboard, supportKeyboard } from './keyboards.js';
+import { playMode } from './filters.js';
 
 const MAX_QUEUE = 10;
 
@@ -68,6 +70,7 @@ async function queueAndMaybePlay(ctx, statusMessage, track, isVideo, language) {
 
 export async function playHandler(ctx, isVideo = false) {
   const language = await getUserLanguage(ctx.from?.id);
+  if (!(await playMode(ctx))) return;
   const chatId = ctx.chat.id;
   if (chatCache.getQueueLength(chatId) >= MAX_QUEUE) {
     await ctx.reply(t(language, 'playback.queueFull'));

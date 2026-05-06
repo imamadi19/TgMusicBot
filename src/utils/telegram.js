@@ -5,10 +5,6 @@ export function commandArgs(ctx) {
   return text.replace(/^\/\w+(?:@\w+)?\s*/u, '').trim();
 }
 
-export function firstName(ctx) {
-  return ctx.from?.first_name || ctx.from?.username || 'User';
-}
-
 export function isOwner(userId, config) {
   return Number(userId) === Number(config.ownerId) || config.devs.includes(Number(userId));
 }
