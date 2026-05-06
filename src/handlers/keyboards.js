@@ -51,3 +51,26 @@ export function controlKeyboard(language = 'en', state = '') {
     .text(t(language, 'buttons.stop'), 'play_stop').text(muteOrUnmute[0], muteOrUnmute[1]).row()
     .text(t(language, 'buttons.addToPlaylist'), 'play_add_to_list').text(t(language, 'buttons.close'), 'vcplay_close');
 }
+
+export function youtubeSelectionKeyboard(messageId, tracks, page = 0, pageSize = 10) {
+  const keyboard = new InlineKeyboard();
+  const totalPages = Math.max(1, Math.ceil(tracks.length / pageSize));
+  const safePage = Math.max(0, Math.min(page, totalPages - 1));
+  const start = safePage * pageSize;
+  const visible = tracks.slice(start, start + pageSize);
+
+  visible.forEach((_, index) => {
+    const choice = start + index + 1;
+    keyboard.text(String(choice), `ytpick:${messageId}:${start + index}`);
+    if (index % 5 === 4) keyboard.row();
+  });
+
+  if (totalPages > 1) {
+    keyboard.row();
+    if (safePage > 0) keyboard.text('⬅️ Prev', `ytpage:${messageId}:${safePage - 1}`);
+    keyboard.text(`${safePage + 1}/${totalPages}`, `ytpage:${messageId}:${safePage}`);
+    if (safePage < totalPages - 1) keyboard.text('Next ➡️', `ytpage:${messageId}:${safePage + 1}`);
+  }
+
+  return keyboard;
+}
