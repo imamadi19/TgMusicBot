@@ -72,7 +72,7 @@ export class Downloader {
         const results = await searchNexRayYouTube(this.input);
         if (results.length > 0) return { platform: 'YouTube', results, selectionRequired: true };
       } catch (error) {
-        console.warn('NexRay YouTube search failed, falling back to yt-dlp:', error.message);
+        console.warn('API YouTube search failed, falling back to yt-dlp:', error.message);
       }
     }
 
@@ -91,7 +91,7 @@ export class Downloader {
       try {
         return await downloadNexRayYtMp3(track ?? { url: this.input });
       } catch (error) {
-        console.warn('NexRay YouTube download failed, falling back to yt-dlp:', error.message);
+        console.warn('API YouTube download failed, falling back to yt-dlp:', error.message);
       }
     }
 
