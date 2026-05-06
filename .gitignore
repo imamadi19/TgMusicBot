@@ -12,3 +12,4 @@ libntgcalls.a
 libntgcalls.so
 libtdjson.so.*
 libtdjson.so
+/node_modules
