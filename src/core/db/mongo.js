@@ -13,6 +13,8 @@ export async function connectDatabase() {
     database.collection('playlists').createIndex({ playlistId: 1 }, { unique: true }),
     database.collection('auth').createIndex({ chatId: 1, userId: 1 }, { unique: true }),
     database.collection('chats').createIndex({ chatId: 1 }, { unique: true }),
+    database.collection('users').createIndex({ userId: 1 }, { unique: true }),
+    database.collection('system_settings').createIndex({ updatedAt: -1 }),
     database.collection('user_settings').createIndex({ userId: 1 }, { unique: true }),
   ]);
   return database;

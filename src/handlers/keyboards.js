@@ -38,8 +38,16 @@ export function languageKeyboard() {
   return keyboard;
 }
 
-export function controlKeyboard(language = 'en') {
+export function controlKeyboard(language = 'en', state = '') {
+  const pauseOrResume = state === 'pause'
+    ? [t(language, 'buttons.resume'), 'play_resume']
+    : [t(language, 'buttons.pause'), 'play_pause'];
+  const muteOrUnmute = state === 'mute'
+    ? [t(language, 'buttons.unmute'), 'play_unmute']
+    : [t(language, 'buttons.mute'), 'play_mute'];
+
   return new InlineKeyboard()
-    .text(t(language, 'buttons.pause'), 'vcplay_pause').text(t(language, 'buttons.skip'), 'vcplay_skip').row()
-    .text(t(language, 'buttons.stop'), 'vcplay_stop');
+    .text(pauseOrResume[0], pauseOrResume[1]).text(t(language, 'buttons.skip'), 'play_skip').row()
+    .text(t(language, 'buttons.stop'), 'play_stop').text(muteOrUnmute[0], muteOrUnmute[1]).row()
+    .text(t(language, 'buttons.addToPlaylist'), 'play_add_to_list').text(t(language, 'buttons.close'), 'vcplay_close');
 }

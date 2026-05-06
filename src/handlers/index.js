@@ -1,8 +1,12 @@
 import { reloadAdminCacheHandler } from './admins.js';
+import { addAuthHandler, authListHandler, removeAuthHandler } from './auth.js';
+import { broadcastHandler, cancelBroadcastHandler } from './broadcast.js';
+import { vcPlayCallbackHandler } from './callbacks.js';
+import { clearAssistantsHandler, devActiveVcHandler, leaveAllHandler, loggerToggleHandler } from './devs.js';
 import { helpCallback, languageMenuHandler, languageSelectHandler, startHandler } from './help.js';
-import { activeVcHandler, loopHandler, muteHandler, pauseHandler, playHandler, queueHandler, removeHandler, resumeHandler, skipHandler, speedHandler, stopHandler, unmuteHandler } from './playback.js';
+import { loopHandler, muteHandler, pauseHandler, playHandler, queueHandler, removeHandler, resumeHandler, skipHandler, speedHandler, stopHandler, unmuteHandler } from './playback.js';
 import { addToPlaylistHandler, createPlaylistHandler, deletePlaylistHandler, myPlaylistsHandler, playlistInfoHandler, removeFromPlaylistHandler } from './playlists.js';
-import { broadcastHandler, loggerHandler, noopHandler, pingHandler, privacyHandler, settingsHandler, shellHandler, statsHandler } from './misc.js';
+import { noopHandler, pingHandler, privacyHandler, settingsHandler, shellHandler, statsHandler } from './misc.js';
 
 export function loadHandlers(bot) {
   bot.command('start', startHandler);
@@ -23,7 +27,7 @@ export function loadHandlers(bot) {
   bot.command('mute', muteHandler);
   bot.command('unmute', unmuteHandler);
   bot.command('speed', speedHandler);
-  bot.command(['av', 'active_vc'], activeVcHandler);
+  bot.command(['av', 'active_vc', 'activevc'], devActiveVcHandler);
   bot.command(['cplist', 'createplaylist'], createPlaylistHandler);
   bot.command('deleteplaylist', deletePlaylistHandler);
   bot.command(['addtoplaylist', 'addtoplist'], addToPlaylistHandler);
@@ -34,19 +38,19 @@ export function loadHandlers(bot) {
   bot.command('settings', settingsHandler);
   bot.command('privacy', privacyHandler);
   bot.command('reload', reloadAdminCacheHandler);
+  bot.command(['authlist', 'auths', 'auth'], authListHandler);
+  bot.command('addauth', addAuthHandler);
+  bot.command(['removeauth', 'rmauth'], removeAuthHandler);
   bot.command(['broadcast', 'gcast'], broadcastHandler);
-  bot.command('logger', loggerHandler);
+  bot.command(['stop_broadcast', 'stop_gcast'], cancelBroadcastHandler);
+  bot.command('logger', loggerToggleHandler);
   bot.command('sh', shellHandler);
-  bot.command(['authlist', 'auths', 'auth', 'addauth', 'removeauth', 'rmauth', 'stop_gcast', 'stop_broadcast', 'clearass', 'clearassistants', 'leaveall', 'seek'], noopHandler);
+  bot.command(['clearass', 'clearassistants'], clearAssistantsHandler);
+  bot.command('leaveall', leaveAllHandler);
+  bot.command('seek', noopHandler);
   bot.callbackQuery('language_menu', languageMenuHandler);
   bot.callbackQuery(/^lang_/, languageSelectHandler);
   bot.callbackQuery('settings_menu', settingsHandler);
   bot.callbackQuery(/^help_/, helpCallback);
-  bot.callbackQuery(/^vcplay_/, async (ctx) => {
-    const action = ctx.callbackQuery.data.replace('vcplay_', '');
-    if (action === 'pause') await pauseHandler(ctx);
-    else if (action === 'skip') await skipHandler(ctx);
-    else if (action === 'stop') await stopHandler(ctx);
-    await ctx.answerCallbackQuery();
-  });
+  bot.callbackQuery(/^(?:vcplay_|play_)/, vcPlayCallbackHandler);
 }

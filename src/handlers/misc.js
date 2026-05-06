@@ -2,7 +2,7 @@ import os from 'node:os';
 import { performance } from 'node:perf_hooks';
 import { getUserLanguage } from '../core/db/user-settings.js';
 import { languageName, t } from '../i18n/index.js';
-import { commandArgs, htmlEscape, isOwner } from '../utils/telegram.js';
+import { htmlEscape, isOwner } from '../utils/telegram.js';
 import { config } from '../config/index.js';
 
 const startedAt = performance.now();
@@ -51,21 +51,6 @@ export async function settingsHandler(ctx) {
     return;
   }
   await ctx.reply(text);
-}
-
-export async function loggerHandler(ctx) {
-  const language = await getUserLanguage(ctx.from?.id);
-  await ctx.reply(t(language, 'misc.logger', { logger: config.loggerId || t(language, 'misc.notConfigured') }));
-}
-
-export async function broadcastHandler(ctx) {
-  const language = await getUserLanguage(ctx.from?.id);
-  if (!isOwner(ctx.from.id, config)) {
-    await ctx.reply(t(language, 'misc.ownerBroadcast'));
-    return;
-  }
-  const text = commandArgs(ctx);
-  await ctx.reply(text ? t(language, 'misc.broadcastPending') : t(language, 'misc.broadcastUsage'));
 }
 
 export async function shellHandler(ctx) {

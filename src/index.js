@@ -2,6 +2,8 @@ import http from 'node:http';
 import { Bot } from 'grammy';
 import { config, validateConfig } from './config/index.js';
 import { connectDatabase, closeDatabase } from './core/db/mongo.js';
+import { rememberChat } from './core/db/chat-registry.js';
+import { getLoggerStatus } from './core/db/system.js';
 import { loadHandlers } from './handlers/index.js';
 
 function startHealthServer() {
@@ -25,6 +27,10 @@ async function main() {
     }
     return prev(method, payload, signal);
   });
+  bot.use(async (ctx, next) => {
+    await rememberChat(ctx).catch((error) => console.warn('Failed to remember chat/user', error));
+    await next();
+  });
   loadHandlers(bot);
 
   bot.catch((error) => {
@@ -33,7 +39,7 @@ async function main() {
 
   const me = await bot.api.getMe();
   console.log(`Bot started as @${me.username ?? me.first_name} (${me.id})`);
-  if (config.loggerId) {
+  if (config.loggerId && await getLoggerStatus()) {
     await bot.api.sendMessage(config.loggerId, 'The JavaScript bot has started!').catch(() => {});
   }
 

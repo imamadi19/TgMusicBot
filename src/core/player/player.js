@@ -142,6 +142,14 @@ export class VoicePlayer {
     chatCache.clear(chatId);
   }
 
+  stopAll() {
+    const chatIds = [...this.#active.keys()];
+    for (const chatId of chatIds) {
+      this.stop(chatId);
+    }
+    return chatIds.length;
+  }
+
   skip(chatId) {
     const skipped = chatCache.shift(chatId);
     this.#killActive(chatId);
