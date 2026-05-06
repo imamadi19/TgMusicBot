@@ -6,6 +6,8 @@ const READY_MARKER = 'TGMB_READY';
 const START_TIMEOUT_MS = 30000;
 const MAX_ERROR_LENGTH = 1200;
 const MAX_LOG_LENGTH = 2000;
+const TRACK_END_GRACE_MS = 3000;
+const ASSISTANT_LEAVE_DELAY_MS = 60 * 60 * 1000;
 
 function truncate(text, max = MAX_ERROR_LENGTH) {
   const value = String(text ?? '').replace(/\s+/g, ' ').trim();
@@ -39,11 +41,58 @@ function sessionForChat(chatId) {
   return config.sessionStrings[hash % config.sessionStrings.length];
 }
 
+function durationToMs(duration) {
+  const value = Number(duration);
+  if (!Number.isFinite(value) || value <= 0) return 0;
+  // Most downloader metadata uses seconds, but protect against accidental ms.
+  return value > 100000 ? value : value * 1000;
+}
+
+function clearTimer(timer) {
+  if (timer) clearTimeout(timer);
+}
+
 export class VoicePlayer {
   #active = new Map();
 
-  #killActive(chatId) {
+  #finishTimers = new Map();
+
+  #leaveTimers = new Map();
+
+  #onTrackEnd = null;
+
+  onTrackEnd(handler) {
+    this.#onTrackEnd = handler;
+  }
+
+  #clearFinishTimer(chatId) {
     const key = String(chatId);
+    clearTimer(this.#finishTimers.get(key));
+    this.#finishTimers.delete(key);
+  }
+
+  #cancelLeaveTimer(chatId) {
+    const key = String(chatId);
+    clearTimer(this.#leaveTimers.get(key));
+    this.#leaveTimers.delete(key);
+  }
+
+  #scheduleLeaveChat(chatId) {
+    if (!config.autoLeave) return;
+    const key = String(chatId);
+    this.#cancelLeaveTimer(key);
+    const timer = setTimeout(() => {
+      this.#leaveTimers.delete(key);
+      if (chatCache.getQueueLength(key) > 0 || this.#active.has(key)) return;
+      this.leaveChat(key).catch((error) => console.warn(`Assistant failed to leave chat ${key}`, error));
+    }, ASSISTANT_LEAVE_DELAY_MS);
+    timer.unref?.();
+    this.#leaveTimers.set(key, timer);
+  }
+
+  #killActive(chatId, { scheduleLeave = false } = {}) {
+    const key = String(chatId);
+    this.#clearFinishTimer(key);
     const active = this.#active.get(key);
     if (active?.process && !active.process.killed) {
       active.process.kill('SIGTERM');
@@ -52,18 +101,44 @@ export class VoicePlayer {
       }, 5000).unref?.();
     }
     this.#active.delete(key);
+    if (scheduleLeave) this.#scheduleLeaveChat(key);
   }
 
-  async play(chatId, track) {
-    if (!track?.filePath) throw new Error('File audio/video belum tersedia untuk diputar.');
-    if (!config.voiceAdapterCommand) throw new Error('VOICE_ADAPTER_COMMAND belum diisi. Gunakan adapter PyTgCalls bawaan atau command adapter lain.');
-    if (!config.apiId || !config.apiHash) throw new Error('API_ID dan API_HASH wajib diisi agar assistant bisa login.');
+  #scheduleTrackEnd(chatId, track, child, delayMs = null) {
+    const trackDurationMs = durationToMs(track.duration);
+    const durationMs = delayMs ?? (trackDurationMs ? trackDurationMs + TRACK_END_GRACE_MS : 0);
+    if (!durationMs || durationMs <= 0) return;
+    const key = String(chatId);
+    this.#clearFinishTimer(key);
+    const active = this.#active.get(key);
+    if (active?.process === child) {
+      active.timerEndsAt = Date.now() + durationMs;
+      active.remainingMs = durationMs;
+    }
+    const timer = setTimeout(() => {
+      const current = this.#active.get(key);
+      if (current?.process !== child) return;
+      this.#finishTimers.delete(key);
+      this.#finishCurrentTrack(key, 'ended');
+    }, durationMs);
+    timer.unref?.();
+    this.#finishTimers.set(key, timer);
+  }
 
-    const sessionString = sessionForChat(chatId);
-    if (!sessionString) throw new Error('STRING1/SESSION_STRINGS belum diisi, assistant tidak bisa join obrolan video.');
+  #finishCurrentTrack(chatId, reason) {
+    const key = String(chatId);
+    const finished = chatCache.shift(key);
+    this.#killActive(key, { scheduleLeave: chatCache.getQueueLength(key) === 0 });
+    const next = chatCache.current(key);
+    if (this.#onTrackEnd) {
+      Promise.resolve(this.#onTrackEnd({ chatId: key, finished, next, reason })).catch((error) => {
+        console.warn(`Track-end handler failed for chat ${key}`, error);
+      });
+    }
+    return { finished, next };
+  }
 
-    this.#killActive(chatId);
-
+  async #spawnAdapter(chatId, env, { waitReady = true } = {}) {
     const child = spawn(config.voiceAdapterCommand, [], {
       shell: true,
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -72,13 +147,8 @@ export class VoicePlayer {
         TGMB_API_ID: String(config.apiId),
         TGMB_API_HASH: config.apiHash,
         TGMB_SESSION_TYPE: config.sessionType,
-        TGMB_SESSION_STRING: sessionString,
         TGMB_CHAT_ID: String(chatId),
-        TGMB_FILE_PATH: track.filePath,
-        TGMB_TRACK_ID: String(track.trackId ?? ''),
-        TGMB_TRACK_TITLE: String(track.name ?? ''),
-        TGMB_TRACK_URL: String(track.url ?? ''),
-        TGMB_IS_VIDEO: track.isVideo ? '1' : '0',
+        ...env,
       },
     });
 
@@ -86,10 +156,8 @@ export class VoicePlayer {
     let stderr = '';
     child.stdout.on('data', (chunk) => { stdout += chunk; logAdapterOutput(`[voice:${chatId}]`, chunk, process.stdout); });
     child.stderr.on('data', (chunk) => { stderr += chunk; logAdapterOutput(`[voice:${chatId}]`, chunk, process.stderr); });
-    child.on('exit', () => {
-      const active = this.#active.get(String(chatId));
-      if (active?.process === child) this.#active.delete(String(chatId));
-    });
+
+    if (!waitReady) return child;
 
     await new Promise((resolve, reject) => {
       const timer = setTimeout(() => reject(new Error('Assistant timeout saat join obrolan video. Pastikan obrolan video aktif dan assistant sudah ada di grup.')), START_TIMEOUT_MS);
@@ -121,24 +189,68 @@ export class VoicePlayer {
       child.once('exit', onExit);
     });
 
+    return child;
+  }
+
+  async play(chatId, track, options = {}) {
+    if (!track?.filePath) throw new Error('File audio/video belum tersedia untuk diputar.');
+    if (!config.voiceAdapterCommand) throw new Error('VOICE_ADAPTER_COMMAND belum diisi. Gunakan adapter PyTgCalls bawaan atau command adapter lain.');
+    if (!config.apiId || !config.apiHash) throw new Error('API_ID dan API_HASH wajib diisi agar assistant bisa login.');
+
+    const sessionString = sessionForChat(chatId);
+    if (!sessionString) throw new Error('STRING1/SESSION_STRINGS belum diisi, assistant tidak bisa join obrolan video.');
+
+    this.#cancelLeaveTimer(chatId);
+    this.#killActive(chatId);
+
+    const child = await this.#spawnAdapter(chatId, {
+      TGMB_ACTION: 'play',
+      TGMB_SESSION_STRING: sessionString,
+      TGMB_INVITE_LINK: options.inviteLink ?? '',
+      TGMB_FILE_PATH: track.filePath,
+      TGMB_TRACK_ID: String(track.trackId ?? ''),
+      TGMB_TRACK_TITLE: String(track.name ?? ''),
+      TGMB_TRACK_URL: String(track.url ?? ''),
+      TGMB_IS_VIDEO: track.isVideo ? '1' : '0',
+    });
+
+    child.on('exit', () => {
+      const active = this.#active.get(String(chatId));
+      if (active?.process === child) {
+        this.#active.delete(String(chatId));
+        this.#clearFinishTimer(chatId);
+      }
+    });
+
     this.#active.set(String(chatId), { ...track, startedAt: new Date(), process: child });
+    this.#scheduleTrackEnd(chatId, track, child);
     return this.#active.get(String(chatId));
   }
 
   pause(chatId) {
     chatCache.setPaused(chatId, true);
     const active = this.#active.get(String(chatId));
-    if (active?.process && !active.process.killed) active.process.kill('SIGUSR1');
+    if (!active) return;
+    if (active.timerEndsAt) {
+      active.remainingMs = Math.max(1000, active.timerEndsAt - Date.now());
+      active.timerEndsAt = null;
+      this.#clearFinishTimer(chatId);
+    }
+    if (active.process && !active.process.killed) active.process.kill('SIGUSR1');
   }
 
   resume(chatId) {
     chatCache.setPaused(chatId, false);
     const active = this.#active.get(String(chatId));
-    if (active?.process && !active.process.killed) active.process.kill('SIGUSR2');
+    if (!active) return;
+    if (active.process && !active.process.killed) active.process.kill('SIGUSR2');
+    if (active.remainingMs && !active.timerEndsAt) {
+      this.#scheduleTrackEnd(chatId, active, active.process, active.remainingMs);
+    }
   }
 
   stop(chatId) {
-    this.#killActive(chatId);
+    this.#killActive(chatId, { scheduleLeave: true });
     chatCache.clear(chatId);
   }
 
@@ -152,9 +264,22 @@ export class VoicePlayer {
 
   skip(chatId) {
     const skipped = chatCache.shift(chatId);
-    this.#killActive(chatId);
+    this.#killActive(chatId, { scheduleLeave: chatCache.getQueueLength(chatId) === 0 });
     const next = chatCache.current(chatId);
+    if (next) this.#cancelLeaveTimer(chatId);
     return { skipped, next };
+  }
+
+  async leaveChat(chatId) {
+    if (!config.voiceAdapterCommand || !config.apiId || !config.apiHash) return false;
+    const sessionString = sessionForChat(chatId);
+    if (!sessionString) return false;
+    const child = await this.#spawnAdapter(chatId, {
+      TGMB_ACTION: 'leave_chat',
+      TGMB_SESSION_STRING: sessionString,
+    }, { waitReady: false });
+    await new Promise((resolve) => child.once('exit', resolve));
+    return true;
   }
 
   activeCalls() {
