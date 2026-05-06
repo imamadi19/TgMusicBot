@@ -118,6 +118,11 @@
       "description": "URL to a cookies file for yt-dlp. (vai batbin.me)",
       "required": false
     },
+    "VOICE_ADAPTER_COMMAND": {
+      "description": "Command used to start the voice-call adapter for each track.",
+      "required": false,
+      "value": "python3 scripts/pytgcalls_adapter.py"
+    },
     "SUPPORT_GROUP": {
       "description": "Link to the support group.",
       "required": false,
