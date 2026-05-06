@@ -8,6 +8,7 @@ it successfully joins the Telegram group call and starts streaming the file.
 
 from __future__ import annotations
 
+import json
 import os
 import signal
 import sys
@@ -173,12 +174,38 @@ def describe_adapter_error(exc: Exception) -> tuple[str, bool]:
     return (text, True)
 
 
-def join_from_invite(client, invite_link: str) -> None:
+def parse_invite_links() -> list[str]:
+    links_json = os.environ.get("TGMB_INVITE_LINKS", "").strip()
+    legacy_link = os.environ.get("TGMB_INVITE_LINK", "").strip()
+    links: list[str] = []
+
+    if links_json:
+        try:
+            parsed = json.loads(links_json)
+            if isinstance(parsed, list):
+                links.extend(str(link).strip() for link in parsed)
+            elif isinstance(parsed, str):
+                links.append(parsed.strip())
+        except json.JSONDecodeError:
+            links.extend(part.strip() for part in links_json.replace(",", "\n").splitlines())
+
+    if legacy_link:
+        links.append(legacy_link)
+
+    unique_links: list[str] = []
+    for link in links:
+        if link and link not in unique_links:
+            unique_links.append(link)
+    return unique_links
+
+
+def join_from_invite(client, invite_link: str) -> bool:
     if not invite_link:
-        return
+        return False
     try:
         client.join_chat(invite_link)
         print("TGMB_ASSISTANT_JOINED", flush=True)
+        return True
     except Exception as exc:  # noqa: BLE001 - assistant may already be a member.
         text = " ".join(str(exc).split()).lower()
         already_joined_markers = (
@@ -188,13 +215,28 @@ def join_from_invite(client, invite_link: str) -> None:
             "already joined",
         )
         if any(marker in text for marker in already_joined_markers):
-            return
+            return True
         print(
             f"VOICE_ADAPTER_WARN: gagal join assistant lewat invite link: {exc}. "
-            "Jika assistant belum ada di grup, pastikan bot admin dan boleh invite user.",
+            "Mencoba link invite cadangan jika tersedia.",
             file=sys.stderr,
             flush=True,
         )
+        return False
+
+
+def join_from_invite_links(client, invite_links: list[str]) -> None:
+    if not invite_links:
+        return
+    for invite_link in invite_links:
+        if join_from_invite(client, invite_link):
+            return
+    print(
+        "VOICE_ADAPTER_WARN: semua link invite gagal dipakai. "
+        "Jika assistant belum ada di grup, pastikan bot admin atau link grup masih valid.",
+        file=sys.stderr,
+        flush=True,
+    )
 
 
 def leave_target_chat(client, target_chat_id: int) -> None:
@@ -233,7 +275,7 @@ def main() -> int:
     chat_id = int(require_env("TGMB_CHAT_ID"))
     action = os.environ.get("TGMB_ACTION", "play").strip().lower()
     file_path = os.environ.get("TGMB_FILE_PATH", "").strip()
-    invite_link = os.environ.get("TGMB_INVITE_LINK", "").strip()
+    invite_links = parse_invite_links()
 
     if session_type != "pyrogram":
         raise RuntimeError("Adapter bawaan hanya mendukung SESSION_TYPE=pyrogram")
@@ -271,7 +313,7 @@ def main() -> int:
         if action != "play":
             raise RuntimeError(f"TGMB_ACTION tidak dikenal: {action}")
 
-        join_from_invite(client, invite_link)
+        join_from_invite_links(client, invite_links)
         warm_peer_cache(client, chat_id)
 
         call_client = PyTgCalls(client)

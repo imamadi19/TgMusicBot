@@ -14,6 +14,11 @@ function truncate(text, max = MAX_ERROR_LENGTH) {
   return value.length > max ? `${value.slice(0, max)}…` : value;
 }
 
+function normalizeInviteLinks(options = {}) {
+  const values = Array.isArray(options.inviteLinks) ? options.inviteLinks : [options.inviteLink];
+  return [...new Set(values.map((value) => String(value ?? '').trim()).filter(Boolean))];
+}
+
 function normalizeVoiceError(text) {
   const value = truncate(text);
   const lowered = value.toLowerCase();
@@ -203,10 +208,12 @@ export class VoicePlayer {
     this.#cancelLeaveTimer(chatId);
     this.#killActive(chatId);
 
+    const inviteLinks = normalizeInviteLinks(options);
     const child = await this.#spawnAdapter(chatId, {
       TGMB_ACTION: 'play',
       TGMB_SESSION_STRING: sessionString,
-      TGMB_INVITE_LINK: options.inviteLink ?? '',
+      TGMB_INVITE_LINK: inviteLinks[0] ?? '',
+      TGMB_INVITE_LINKS: JSON.stringify(inviteLinks),
       TGMB_FILE_PATH: track.filePath,
       TGMB_TRACK_ID: String(track.trackId ?? ''),
       TGMB_TRACK_TITLE: String(track.name ?? ''),
