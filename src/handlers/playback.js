@@ -8,7 +8,7 @@ import { t } from '../i18n/index.js';
 import { commandArgs, htmlEscape, isUrl } from '../utils/telegram.js';
 import { firstName } from '../utils/extras.js';
 import { secondsToClock } from '../utils/duration.js';
-import { controlKeyboard, supportKeyboard } from './keyboards.js';
+import { controlKeyboard, supportKeyboard, youtubeSelectionKeyboard } from './keyboards.js';
 import { playMode } from './filters.js';
 
 const MAX_QUEUE = 10;
@@ -82,6 +82,44 @@ function formatTrack(language, track, queueLength = 1) {
 
 async function editStatus(ctx, message, text, options = {}) {
   return ctx.api.editMessageText(ctx.chat.id, message.message_id, text, options);
+}
+
+
+function formatSearchResult(language, track, index) {
+  const channel = track.channel || track.channelUrl || '-';
+  const lines = [
+    `${index + 1}.`,
+    `<b>${t(language, 'playback.title')}:</b> ${htmlEscape(track.title ?? track.name)}`,
+    `<b>ChannelId:</b> ${htmlEscape(channel)}`,
+    `<b>${t(language, 'playback.duration')}:</b> ${secondsToClock(track.duration)}`,
+  ];
+  if (track.views) lines.push(`<b>Views:</b> ${htmlEscape(track.views)}`);
+  if (track.uploadAt) lines.push(`<b>Upload:</b> ${htmlEscape(track.uploadAt)}`);
+  lines.push(`<b>URL:</b> <a href="${htmlEscape(track.url)}">${htmlEscape(track.url)}</a>`);
+  return lines.join('\n');
+}
+
+function formatYouTubeSelection(language, tracks, page = 0, pageSize = 10) {
+  const totalPages = Math.max(1, Math.ceil(tracks.length / pageSize));
+  const safePage = Math.max(0, Math.min(page, totalPages - 1));
+  const start = safePage * pageSize;
+  const visible = tracks.slice(start, start + pageSize);
+  const header = `🎵 <b>${t(language, 'playback.chooseTrack')}</b> (${safePage + 1}/${totalPages})`;
+  return [header, ...visible.map((track, index) => formatSearchResult(language, track, start + index))].join('\n\n');
+}
+
+async function showYouTubeSelection(ctx, statusMessage, tracks, isVideo, language, page = 0) {
+  chatCache.setYouTubeSelection(ctx.chat.id, statusMessage.message_id, {
+    tracks,
+    userId: ctx.from?.id,
+    isVideo,
+    language,
+  });
+  await editStatus(ctx, statusMessage, formatYouTubeSelection(language, tracks, page), {
+    parse_mode: 'HTML',
+    reply_markup: youtubeSelectionKeyboard(statusMessage.message_id, tracks, page),
+    disable_web_page_preview: true,
+  });
 }
 
 async function queueAndMaybePlay(ctx, statusMessage, track, isVideo, language) {
@@ -178,9 +216,14 @@ export async function playHandler(ctx, isVideo = false) {
     return;
   }
 
-  const [track] = info.results ?? [];
+  const results = info.results ?? [];
+  const [track] = results;
   if (!track) {
     await editStatus(ctx, status, t(language, 'playback.noTracks'));
+    return;
+  }
+  if (info.selectionRequired && results.length > 1) {
+    await showYouTubeSelection(ctx, status, results, isVideo, language);
     return;
   }
   await queueAndMaybePlay(ctx, status, track, isVideo, language);
@@ -274,4 +317,57 @@ export async function activeVcHandler(ctx) {
   const language = await getUserLanguage(ctx.from?.id);
   const active = voicePlayer.activeCalls();
   await ctx.reply(active.length ? active.map(({ chatId, track }) => `${chatId}: ${track.name}`).join('\n') : t(language, 'playback.noActive'));
+}
+
+
+export async function youtubeSelectionPageHandler(ctx) {
+  const data = ctx.callbackQuery?.data ?? '';
+  const [, messageId, pageText] = data.split(':');
+  const selection = chatCache.getYouTubeSelection(ctx.chat.id, messageId);
+  if (!selection) {
+    await ctx.answerCallbackQuery({ text: t(await getUserLanguage(ctx.from?.id), 'playback.selectionExpired') }).catch(() => {});
+    return;
+  }
+  if (selection.userId && selection.userId !== ctx.from?.id) {
+    await ctx.answerCallbackQuery({ text: t(selection.language, 'playback.selectionOwnerOnly') }).catch(() => {});
+    return;
+  }
+  const page = Number.parseInt(pageText, 10) || 0;
+  await ctx.answerCallbackQuery().catch(() => {});
+  await ctx.editMessageText(formatYouTubeSelection(selection.language, selection.tracks, page), {
+    parse_mode: 'HTML',
+    reply_markup: youtubeSelectionKeyboard(messageId, selection.tracks, page),
+    disable_web_page_preview: true,
+  });
+}
+
+export async function youtubeSelectionPickHandler(ctx) {
+  const data = ctx.callbackQuery?.data ?? '';
+  const [, messageId, indexText] = data.split(':');
+  const selection = chatCache.getYouTubeSelection(ctx.chat.id, messageId);
+  if (!selection) {
+    await ctx.answerCallbackQuery({ text: t(await getUserLanguage(ctx.from?.id), 'playback.selectionExpired') }).catch(() => {});
+    return;
+  }
+  if (selection.userId && selection.userId !== ctx.from?.id) {
+    await ctx.answerCallbackQuery({ text: t(selection.language, 'playback.selectionOwnerOnly') }).catch(() => {});
+    return;
+  }
+  if (chatCache.getQueueLength(ctx.chat.id) >= MAX_QUEUE) {
+    await ctx.answerCallbackQuery({ text: t(selection.language, 'playback.queueFull') }).catch(() => {});
+    return;
+  }
+
+  const index = Number.parseInt(indexText, 10);
+  const track = selection.tracks[index];
+  if (!track) {
+    await ctx.answerCallbackQuery({ text: t(selection.language, 'playback.invalidSelection') }).catch(() => {});
+    return;
+  }
+
+  chatCache.deleteYouTubeSelection(ctx.chat.id, messageId);
+  await ctx.answerCallbackQuery({ text: t(selection.language, 'playback.trackSelected', { number: index + 1 }) }).catch(() => {});
+  const statusMessage = ctx.callbackQuery.message;
+  await editStatus(ctx, statusMessage, t(selection.language, 'playback.downloadingSelected', { title: htmlEscape(track.name) }), { parse_mode: 'HTML' });
+  await queueAndMaybePlay(ctx, statusMessage, track, Boolean(selection.isVideo), selection.language);
 }

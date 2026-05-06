@@ -4,7 +4,7 @@ import path from 'node:path';
 import { config } from '../../config/index.js';
 import { isUrl } from '../../utils/telegram.js';
 import { parseDuration } from '../../utils/duration.js';
-import { searchYouTubeMusic } from './ytmusic.js';
+import { downloadNexRayYtMp3, searchNexRayYouTube } from './nexray.js';
 
 const SUPPORTED_HOSTS = ['youtube.com', 'youtu.be', 'open.spotify.com', 'saavn', 'jiosaavn.com', 'music.apple.com', 'soundcloud.com'];
 const MAX_ERROR_LENGTH = 700;
@@ -69,10 +69,10 @@ export class Downloader {
   async getInfo() {
     if (!this.isUrl() && config.defaultService.toLowerCase().includes('youtube')) {
       try {
-        const results = await searchYouTubeMusic(this.input);
-        if (results.length > 0) return { platform: 'YouTube Music', results };
+        const results = await searchNexRayYouTube(this.input);
+        if (results.length > 0) return { platform: 'YouTube', results, selectionRequired: true };
       } catch (error) {
-        console.warn('YouTube Music search failed, falling back to yt-dlp:', error.message);
+        console.warn('NexRay YouTube search failed, falling back to yt-dlp:', error.message);
       }
     }
 
@@ -87,6 +87,14 @@ export class Downloader {
   }
 
   async download(track, isVideo = false) {
+    if (!isVideo && this.detectPlatformFor(track?.url ?? this.input) === 'YouTube') {
+      try {
+        return await downloadNexRayYtMp3(track ?? { url: this.input });
+      } catch (error) {
+        console.warn('NexRay YouTube download failed, falling back to yt-dlp:', error.message);
+      }
+    }
+
     const outputTemplate = path.join(config.downloadsDir, '%(id)s.%(ext)s');
     const args = [
       ...(await ytDlpBaseArgs()),
@@ -100,8 +108,12 @@ export class Downloader {
   }
 
   detectPlatform() {
-    if (!this.isUrl()) return config.defaultService;
-    const host = new URL(this.input).hostname;
+    return this.detectPlatformFor(this.input);
+  }
+
+  detectPlatformFor(value) {
+    if (!isUrl(value)) return config.defaultService;
+    const host = new URL(value).hostname;
     if (host.includes('spotify')) return 'Spotify';
     if (host.includes('saavn')) return 'JioSaavn';
     if (host.includes('apple')) return 'Apple Music';
