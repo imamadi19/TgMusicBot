@@ -338,6 +338,7 @@ docker stop tgmusicbot && docker rm tgmusicbot
 | `/ping` | Cek respons bot. |
 | `/stats` | Statistik bot. |
 | `/settings` | Menu pengaturan. |
+| `/reload` | Muat ulang cache admin grup dengan cooldown 3 menit. |
 | `/privacy` | Info privasi. |
 
 ## Cookies YouTube / yt-dlp

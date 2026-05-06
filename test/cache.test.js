@@ -22,3 +22,36 @@ test('ttl cache expires values', async () => {
   assert.equal(cache.get('key'), undefined);
   cache.close();
 });
+
+test('admin cache fetches, stores, and clears normalized admins', async () => {
+  const {
+    clearAdminCache,
+    getAdmins,
+    getCachedAdmins,
+  } = await import('../src/core/cache/admin-cache.js');
+  let calls = 0;
+  const api = {
+    async getChatAdministrators() {
+      calls += 1;
+      return [
+        { status: 'creator', user: { id: 10, first_name: 'Owner', username: 'owner' } },
+        { status: 'administrator', user: { id: 20, first_name: 'Admin' }, can_manage_chat: true },
+      ];
+    },
+  };
+
+  clearAdminCache(-100);
+  const first = await getAdmins(api, -100);
+  assert.equal(calls, 1);
+  assert.deepEqual(first.map((admin) => admin.userId), [10, 20]);
+  assert.equal(first[1].canManageChat, true);
+
+  const second = await getAdmins(api, -100);
+  assert.equal(calls, 1);
+  assert.equal(second, first);
+  assert.equal(getCachedAdmins(-100), first);
+
+  clearAdminCache(-100);
+  await getAdmins(api, -100);
+  assert.equal(calls, 2);
+});

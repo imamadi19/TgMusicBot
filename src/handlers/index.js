@@ -1,3 +1,4 @@
+import { reloadAdminCacheHandler } from './admins.js';
 import { helpCallback, languageMenuHandler, languageSelectHandler, startHandler } from './help.js';
 import { activeVcHandler, loopHandler, muteHandler, pauseHandler, playHandler, queueHandler, removeHandler, resumeHandler, skipHandler, speedHandler, stopHandler, unmuteHandler } from './playback.js';
 import { addToPlaylistHandler, createPlaylistHandler, deletePlaylistHandler, myPlaylistsHandler, playlistInfoHandler, removeFromPlaylistHandler } from './playlists.js';
@@ -32,10 +33,11 @@ export function loadHandlers(bot) {
   bot.command('stats', statsHandler);
   bot.command('settings', settingsHandler);
   bot.command('privacy', privacyHandler);
+  bot.command('reload', reloadAdminCacheHandler);
   bot.command(['broadcast', 'gcast'], broadcastHandler);
   bot.command('logger', loggerHandler);
   bot.command('sh', shellHandler);
-  bot.command(['reload', 'authlist', 'auths', 'auth', 'addauth', 'removeauth', 'rmauth', 'stop_gcast', 'stop_broadcast', 'clearass', 'clearassistants', 'leaveall', 'seek'], noopHandler);
+  bot.command(['authlist', 'auths', 'auth', 'addauth', 'removeauth', 'rmauth', 'stop_gcast', 'stop_broadcast', 'clearass', 'clearassistants', 'leaveall', 'seek'], noopHandler);
   bot.callbackQuery('language_menu', languageMenuHandler);
   bot.callbackQuery(/^lang_/, languageSelectHandler);
   bot.callbackQuery('settings_menu', settingsHandler);
