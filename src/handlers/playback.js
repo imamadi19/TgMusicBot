@@ -13,6 +13,9 @@ import { playMode } from './filters.js';
 
 const MAX_QUEUE = 10;
 const ASSISTANT_INVITE_EXPIRE_SECONDS = 60 * 60;
+const PROGRESS_UPDATE_INTERVAL_MS = 10000;
+
+const progressUpdaters = new Map();
 
 function appendUniqueInviteLink(links, link) {
   const value = String(link ?? '').trim();
@@ -61,6 +64,40 @@ async function startCachedTrack(chatId, track) {
   return voicePlayer.play(chatId, track);
 }
 
+function stopProgressUpdater(chatId) {
+  const key = String(chatId);
+  const timer = progressUpdaters.get(key);
+  if (timer) clearInterval(timer);
+  progressUpdaters.delete(key);
+}
+
+function startProgressUpdater(ctx, message, language) {
+  const chatId = ctx.chat?.id;
+  if (!chatId || !message?.message_id) return;
+  const key = String(chatId);
+  stopProgressUpdater(key);
+  const timer = setInterval(async () => {
+    const activeTrack = voicePlayer.activeTrack(key);
+    if (!activeTrack) {
+      if (chatCache.getQueueLength(key) === 0) stopProgressUpdater(key);
+      return;
+    }
+    if (chatCache.isPaused(key)) return;
+    try {
+      await ctx.api.editMessageReplyMarkup(chatId, message.message_id, {
+        reply_markup: controlKeyboard(language, '', activeTrack),
+      });
+    } catch (error) {
+      const description = String(error?.description ?? error?.message ?? error).toLowerCase();
+      if (!description.includes('message is not modified')) {
+        console.warn(`Failed to refresh playback progress for chat ${key}`, error);
+      }
+    }
+  }, PROGRESS_UPDATE_INTERVAL_MS);
+  timer.unref?.();
+  progressUpdaters.set(key, timer);
+}
+
 function prepareAssistantJoin(ctx) {
   const chatId = ctx.chat?.id;
   if (!chatId) return;
@@ -70,7 +107,10 @@ function prepareAssistantJoin(ctx) {
 }
 
 voicePlayer.onTrackEnd(async ({ chatId, next }) => {
-  if (!next) return;
+  if (!next) {
+    stopProgressUpdater(chatId);
+    return;
+  }
   try {
     await startCachedTrack(chatId, next);
   } catch (error) {
@@ -207,7 +247,8 @@ async function queueAndMaybePlay(ctx, statusMessage, track, isVideo, language) {
     await editStatus(ctx, statusMessage, t(language, 'playback.voiceFailed', { error: formatError(error) }));
     return;
   }
-  await editStatus(ctx, statusMessage, formatTrack(language, saveTrack), { parse_mode: 'HTML', reply_markup: controlKeyboard(language, '', saveTrack), disable_web_page_preview: true });
+  const playbackMessage = await editStatus(ctx, statusMessage, formatTrack(language, saveTrack), { parse_mode: 'HTML', reply_markup: controlKeyboard(language, '', saveTrack), disable_web_page_preview: true });
+  startProgressUpdater(ctx, playbackMessage ?? statusMessage, language);
 }
 
 export async function playHandler(ctx, isVideo = false) {
@@ -252,7 +293,9 @@ export async function playHandler(ctx, isVideo = false) {
     await editStatus(ctx, status, t(language, 'playback.addedPlaylistTracks', { count: tracks.length, length }));
     if (queueWasEmpty) {
       try {
-        await startQueuedTrack(ctx, tracks[0], isVideo);
+        const activeTrack = await startQueuedTrack(ctx, tracks[0], isVideo);
+        tracks[0].startedAt = activeTrack?.startedAt;
+        startProgressUpdater(ctx, status, language);
       } catch (error) {
         chatCache.shift(chatId);
         await ctx.reply(t(language, 'playback.voiceFailed', { error: formatError(error) }));
@@ -307,6 +350,7 @@ export async function skipHandler(ctx) {
     return;
   }
   if (!next) {
+    stopProgressUpdater(ctx.chat.id);
     await ctx.reply(t(language, 'playback.skippedEnded', { skipped: skipped.name }));
     return;
   }
@@ -322,6 +366,7 @@ export async function skipHandler(ctx) {
 export async function stopHandler(ctx) {
   const language = await getUserLanguage(ctx.from?.id);
   voicePlayer.stop(ctx.chat.id);
+  stopProgressUpdater(ctx.chat.id);
   await ctx.reply(t(language, 'playback.stopped'));
 }
 

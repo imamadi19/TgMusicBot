@@ -9,6 +9,23 @@ const MAX_LOG_LENGTH = 2000;
 const TRACK_END_GRACE_MS = 3000;
 const ASSISTANT_LEAVE_DELAY_MS = 60 * 60 * 1000;
 
+function signalProcess(child, signal) {
+  if (!child || child.killed) return;
+  try {
+    if (child.pid) {
+      process.kill(-child.pid, signal);
+      return;
+    }
+  } catch {
+    // Fall back to signalling the shell process when process groups are unavailable.
+  }
+  try {
+    child.kill(signal);
+  } catch {
+    // Best-effort control signals must not crash the bot.
+  }
+}
+
 function truncate(text, max = MAX_ERROR_LENGTH) {
   const value = String(text ?? '').replace(/\s+/g, ' ').trim();
   return value.length > max ? `${value.slice(0, max)}…` : value;
@@ -101,6 +118,8 @@ export class VoicePlayer {
 
   #joinAttempts = new Map();
 
+  #chatSessions = new Map();
+
   #onTrackEnd = null;
 
   onTrackEnd(handler) {
@@ -137,10 +156,8 @@ export class VoicePlayer {
     this.#clearFinishTimer(key);
     const active = this.#active.get(key);
     if (active?.process && !active.process.killed) {
-      active.process.kill('SIGTERM');
-      setTimeout(() => {
-        if (!active.process.killed) active.process.kill('SIGKILL');
-      }, 5000).unref?.();
+      signalProcess(active.process, 'SIGTERM');
+      setTimeout(() => signalProcess(active.process, 'SIGKILL'), 5000).unref?.();
     }
     this.#active.delete(key);
     if (scheduleLeave) this.#scheduleLeaveChat(key);
@@ -183,6 +200,7 @@ export class VoicePlayer {
   async #spawnAdapter(chatId, env, { waitReady = true } = {}) {
     const child = spawn(config.voiceAdapterCommand, [], {
       shell: true,
+      detached: true,
       stdio: ['ignore', 'pipe', 'pipe'],
       env: {
         ...process.env,
@@ -203,7 +221,7 @@ export class VoicePlayer {
 
     await new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
-        if (!child.killed) child.kill('SIGTERM');
+        signalProcess(child, 'SIGTERM');
         reject(new Error('Assistant timeout saat join obrolan video. Pastikan obrolan video aktif dan assistant sudah ada di grup.'));
       }, START_TIMEOUT_MS);
       timer.unref?.();
@@ -263,6 +281,7 @@ export class VoicePlayer {
             TGMB_INVITE_LINKS: JSON.stringify(inviteLinks),
           });
           await waitForExit(child);
+          this.#chatSessions.set(key, candidate.sessionString);
           return true;
         } catch (error) {
           failures.push({ assistantNumber: candidate.assistantNumber, error });
@@ -325,6 +344,7 @@ export class VoicePlayer {
           TGMB_IS_VIDEO: track.isVideo ? '1' : '0',
         });
         assistantNumber = candidate.assistantNumber;
+        this.#chatSessions.set(key, candidate.sessionString);
         break;
       } catch (error) {
         failures.push({ assistantNumber: candidate.assistantNumber, error });
@@ -363,7 +383,7 @@ export class VoicePlayer {
       active.timerEndsAt = null;
       this.#clearFinishTimer(chatId);
     }
-    if (active.process && !active.process.killed) active.process.kill('SIGUSR1');
+    signalProcess(active.process, 'SIGUSR1');
     return true;
   }
 
@@ -371,7 +391,7 @@ export class VoicePlayer {
     const active = this.#active.get(String(chatId));
     if (!active) return false;
     chatCache.setPaused(chatId, false);
-    if (active.process && !active.process.killed) active.process.kill('SIGUSR2');
+    signalProcess(active.process, 'SIGUSR2');
     if (active.remainingMs && !active.timerEndsAt) {
       const trackDurationMs = durationToMs(active.duration);
       if (trackDurationMs) {
@@ -407,7 +427,8 @@ export class VoicePlayer {
 
   async leaveChat(chatId) {
     if (!config.voiceAdapterCommand || !config.apiId || !config.apiHash) return false;
-    const sessionString = sessionForChat(chatId);
+    const key = String(chatId);
+    const sessionString = this.#chatSessions.get(key) ?? sessionForChat(key);
     if (!sessionString) return false;
     const child = await this.#spawnAdapter(chatId, {
       TGMB_ACTION: 'leave_chat',
