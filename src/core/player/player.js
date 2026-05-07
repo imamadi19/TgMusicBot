@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { config } from '../../config/index.js';
 import { chatCache } from '../cache/chat-cache.js';
@@ -8,6 +9,7 @@ const MAX_ERROR_LENGTH = 1200;
 const MAX_LOG_LENGTH = 2000;
 const TRACK_END_GRACE_MS = 3000;
 const ASSISTANT_LEAVE_DELAY_MS = 60 * 60 * 1000;
+const CONTROL_ACK_TIMEOUT_MS = 5000;
 
 function signalProcess(child, signal) {
   if (!child || child.killed) return;
@@ -55,6 +57,14 @@ function normalizeVoiceError(text) {
 function logAdapterOutput(prefix, chunk, writer) {
   const text = String(chunk);
   writer.write(`${prefix} ${text.length > MAX_LOG_LENGTH ? `${text.slice(0, MAX_LOG_LENGTH)}…\n` : text}`);
+}
+
+export function adapterShellCommand() {
+  // Keep the wrapper shell alive when playback-control signals are sent to the
+  // detached process group. Without this trap, /bin/sh can terminate on
+  // SIGUSR1/SIGUSR2 before the Python adapter handles pause/resume, causing the
+  // Node child "exit" handler to forget the active playback.
+  return `trap '' USR1 USR2; ${config.voiceAdapterCommand}`;
 }
 
 function sessionStartIndexForChat(chatId) {
@@ -109,6 +119,80 @@ function waitForExit(child) {
   return new Promise((resolve) => child.once('exit', resolve));
 }
 
+function waitForAdapterAck(active, commandId, timeoutMs = CONTROL_ACK_TIMEOUT_MS) {
+  const okPattern = `TGMB_CONTROL_OK ${commandId} `;
+  const errorPattern = `TGMB_CONTROL_ERROR ${commandId} `;
+  return new Promise((resolve, reject) => {
+    let output = '';
+    const cleanup = () => {
+      clearTimeout(timer);
+      active.process.stdout?.off('data', onData);
+      active.process.stderr?.off('data', onData);
+      active.process.off('exit', onExit);
+    };
+    const onData = (chunk) => {
+      output += String(chunk);
+      if (output.includes(okPattern)) {
+        cleanup();
+        resolve(true);
+        return;
+      }
+      const errorIndex = output.indexOf(errorPattern);
+      if (errorIndex !== -1) {
+        cleanup();
+        const message = output.slice(errorIndex + errorPattern.length).split(/\r?\n/, 1)[0] || 'adapter command failed';
+        reject(new Error(message));
+      }
+    };
+    const onExit = () => {
+      cleanup();
+      reject(new Error('adapter exited before confirming command'));
+    };
+    const timer = setTimeout(() => {
+      cleanup();
+      reject(new Error('adapter command confirmation timed out'));
+    }, timeoutMs);
+    timer.unref?.();
+    active.process.stdout?.on('data', onData);
+    active.process.stderr?.on('data', onData);
+    active.process.once('exit', onExit);
+  });
+}
+
+async function sendAdapterCommand(active, command) {
+  if (!active?.process?.stdin || active.process.stdin.destroyed || active.process.killed) return false;
+  const commandId = crypto.randomUUID();
+  const ack = waitForAdapterAck(active, commandId);
+  try {
+    active.process.stdin.write(`${JSON.stringify({ id: commandId, ...command })}\n`);
+    await ack;
+    return true;
+  } catch (error) {
+    console.warn(`Voice adapter control command failed: ${error.message}`);
+    return false;
+  }
+}
+
+function resetTrackTiming(track, startedAt = new Date()) {
+  delete track.remainingMs;
+  delete track.timerEndsAt;
+  track.startedAt = startedAt;
+  return startedAt;
+}
+
+export function requesterKey(track) {
+  const requesterId = track?.userId ?? track?.requesterId ?? track?.requestedById;
+  if (requesterId !== undefined && requesterId !== null && requesterId !== '') return `id:${requesterId}`;
+  const requesterName = String(track?.user ?? track?.requestedBy ?? '').trim().toLowerCase();
+  return requesterName ? `name:${requesterName}` : '';
+}
+
+function hasDifferentRequester(current, next) {
+  const currentRequester = requesterKey(current);
+  const nextRequester = requesterKey(next);
+  return Boolean(currentRequester && nextRequester && currentRequester !== nextRequester);
+}
+
 export class VoicePlayer {
   #active = new Map();
 
@@ -124,6 +208,29 @@ export class VoicePlayer {
 
   onTrackEnd(handler) {
     this.#onTrackEnd = handler;
+  }
+
+  #setActiveTrack(chatId, track, process, assistantNumber, startedAt = new Date()) {
+    const key = String(chatId);
+    chatCache.setPaused(key, false);
+    resetTrackTiming(track, startedAt);
+    const activeTrack = { ...track, startedAt, process, assistantNumber };
+    this.#active.set(key, activeTrack);
+    this.#scheduleTrackEnd(key, activeTrack, process);
+    return activeTrack;
+  }
+
+  async #replaceActiveStream(chatId, track, active) {
+    if (!track?.filePath || !(await sendAdapterCommand(active, { action: 'play', file_path: track.filePath, is_video: Boolean(track.isVideo) }))) {
+      return null;
+    }
+    const key = String(chatId);
+    if (active.suspended) {
+      signalProcess(active.process, 'SIGCONT');
+      active.suspended = false;
+    }
+    this.#clearFinishTimer(key);
+    return this.#setActiveTrack(key, track, active.process, active.assistantNumber);
   }
 
   #clearFinishTimer(chatId) {
@@ -198,10 +305,10 @@ export class VoicePlayer {
   }
 
   async #spawnAdapter(chatId, env, { waitReady = true } = {}) {
-    const child = spawn(config.voiceAdapterCommand, [], {
+    const child = spawn(adapterShellCommand(), [], {
       shell: true,
       detached: true,
-      stdio: ['ignore', 'pipe', 'pipe'],
+      stdio: ['pipe', 'pipe', 'pipe'],
       env: {
         ...process.env,
         TGMB_API_ID: String(config.apiId),
@@ -368,10 +475,7 @@ export class VoicePlayer {
       }
     });
 
-    chatCache.setPaused(chatId, false);
-    this.#active.set(String(chatId), { ...track, startedAt: new Date(), process: child, assistantNumber });
-    this.#scheduleTrackEnd(chatId, track, child);
-    return this.#active.get(String(chatId));
+    return this.#setActiveTrack(key, track, child, assistantNumber);
   }
 
   pause(chatId) {
@@ -381,6 +485,12 @@ export class VoicePlayer {
     if (active.timerEndsAt) {
       active.remainingMs = Math.max(1000, active.timerEndsAt - Date.now());
       active.timerEndsAt = null;
+      const currentTrack = chatCache.current(chatId);
+      if (currentTrack) {
+        currentTrack.remainingMs = active.remainingMs;
+        currentTrack.timerEndsAt = null;
+        currentTrack.startedAt = active.startedAt;
+      }
       this.#clearFinishTimer(chatId);
     }
     signalProcess(active.process, 'SIGUSR1');
@@ -409,8 +519,26 @@ export class VoicePlayer {
         active.startedAt = new Date(Date.now() - Math.max(0, trackDurationMs - active.remainingMs));
       }
       this.#scheduleTrackEnd(chatId, active, active.process, active.remainingMs);
+      const currentTrack = chatCache.current(chatId);
+      if (currentTrack) {
+        currentTrack.remainingMs = active.remainingMs;
+        currentTrack.timerEndsAt = active.timerEndsAt;
+        currentTrack.startedAt = active.startedAt;
+      }
     }
     return true;
+  }
+
+  async stopOrAdvance(chatId, { reuseActive = false } = {}) {
+    const key = String(chatId);
+    const [current, next] = chatCache.getQueue(key);
+    if (current && next && hasDifferentRequester(current, next)) {
+      const { skipped, next: nextTrack, activeTrack } = await this.skip(key, { reuseActive });
+      return { stopped: skipped, next: nextTrack, activeTrack, cleared: false };
+    }
+
+    const hadPlayback = this.stop(key);
+    return { stopped: current, next: null, activeTrack: null, cleared: true, hadPlayback };
   }
 
   stop(chatId) {
@@ -428,12 +556,31 @@ export class VoicePlayer {
     return chatIds.length;
   }
 
-  skip(chatId) {
-    const skipped = chatCache.shift(chatId);
-    this.#killActive(chatId, { scheduleLeave: chatCache.getQueueLength(chatId) === 0 });
-    const next = chatCache.current(chatId);
-    if (next) this.#cancelLeaveTimer(chatId);
-    return { skipped, next };
+  async replay(chatId, track = chatCache.current(chatId)) {
+    const key = String(chatId);
+    const active = this.#active.get(key);
+    if (!active || !track) return null;
+    const activeTrack = await this.#replaceActiveStream(key, track, active);
+    return activeTrack;
+  }
+
+  async skip(chatId, { reuseActive = false } = {}) {
+    const key = String(chatId);
+    const active = this.#active.get(key);
+    const skipped = chatCache.shift(key);
+    const next = chatCache.current(key);
+
+    if (reuseActive && skipped && next && active) {
+      const activeTrack = await this.#replaceActiveStream(key, next, active);
+      if (activeTrack) {
+        this.#cancelLeaveTimer(key);
+        return { skipped, next, activeTrack };
+      }
+    }
+
+    this.#killActive(key, { scheduleLeave: chatCache.getQueueLength(key) === 0 });
+    if (next) this.#cancelLeaveTimer(key);
+    return { skipped, next, activeTrack: null };
   }
 
   async leaveChat(chatId) {

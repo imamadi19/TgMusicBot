@@ -2,7 +2,7 @@ import { chatCache } from '../core/cache/chat-cache.js';
 import { Downloader } from '../core/dl/downloader.js';
 import { addSongToPlaylist, createPlaylist, listPlaylists } from '../core/db/playlists.js';
 import { getUserLanguage } from '../core/db/user-settings.js';
-import { voicePlayer } from '../core/player/player.js';
+import { requesterKey, voicePlayer } from '../core/player/player.js';
 import { config } from '../config/index.js';
 import { t } from '../i18n/index.js';
 import { adminModeCallback } from './filters.js';
@@ -97,7 +97,9 @@ export async function vcPlayCallbackHandler(ctx) {
         return;
       }
       case 'skip': {
-        const { skipped, next } = voicePlayer.skip(chatId);
+        const queuedNext = chatCache.getQueue(chatId)[1] ?? null;
+        if (queuedNext) await ensureDownloaded(queuedNext);
+        const { skipped, next, activeTrack: reusedTrack } = await voicePlayer.skip(chatId, { reuseActive: true });
         if (!skipped) {
           await answer(ctx, t(language, 'callbacks.noActivePlayback'));
           return;
@@ -106,17 +108,30 @@ export async function vcPlayCallbackHandler(ctx) {
           await answer(ctx, t(language, 'callbacks.trackSkipped'));
           return;
         }
-        const activeTrack = await startNextTrack(chatId, next);
+        const activeTrack = reusedTrack ?? await startNextTrack(chatId, next);
         await answer(ctx, t(language, 'callbacks.trackSkipped'));
         await editPlaybackControls(ctx, language, '', activeTrack);
         return;
       }
       case 'stop': {
-        if (!voicePlayer.stop(chatId)) {
-          await answer(ctx, t(language, 'callbacks.noActivePlayback'));
+        const queue = chatCache.getQueue(chatId);
+        const queuedCurrent = queue[0] ?? null;
+        const queuedNext = queue[1] ?? null;
+        const currentRequester = requesterKey(queuedCurrent);
+        const nextRequester = requesterKey(queuedNext);
+        if (queuedNext && currentRequester && nextRequester && currentRequester !== nextRequester) await ensureDownloaded(queuedNext);
+        const { stopped, next, activeTrack: reusedTrack, cleared, hadPlayback } = await voicePlayer.stopOrAdvance(chatId, { reuseActive: true });
+        if (cleared || !next) {
+          if (!hadPlayback && !stopped) {
+            await answer(ctx, t(language, 'callbacks.noActivePlayback'));
+            return;
+          }
+          await answer(ctx, t(language, 'callbacks.playbackStopped'));
           return;
         }
-        await answer(ctx, t(language, 'callbacks.playbackStopped'));
+        const activeTrack = reusedTrack ?? await startNextTrack(chatId, next);
+        await answer(ctx, t(language, 'callbacks.trackSkipped'));
+        await editPlaybackControls(ctx, language, '', activeTrack);
         return;
       }
       case 'pause': {
@@ -139,9 +154,8 @@ export async function vcPlayCallbackHandler(ctx) {
       }
       case 'replay': {
         await ensureDownloaded(currentTrack);
-        delete currentTrack.remainingMs;
-        delete currentTrack.timerEndsAt;
-        const activeTrack = await voicePlayer.play(chatId, { ...currentTrack, startedAt: undefined });
+        const activeTrack = await voicePlayer.replay(chatId, currentTrack)
+          ?? await voicePlayer.play(chatId, { ...currentTrack, startedAt: undefined });
         currentTrack.startedAt = activeTrack?.startedAt;
         await answer(ctx, t(language, 'callbacks.playbackResumed'));
         await editPlaybackControls(ctx, language, '', activeTrack);

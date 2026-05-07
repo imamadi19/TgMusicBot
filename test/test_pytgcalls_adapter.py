@@ -21,6 +21,11 @@ class FakeCallClient:
         self.calls.append(("resume", chat_id))
         return True
 
+    async def play(self, chat_id, file_path):
+        await asyncio.sleep(0)
+        self.calls.append(("play", chat_id, file_path))
+        return True
+
 
 class AdapterControlSignalTest(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
@@ -45,6 +50,26 @@ class AdapterControlSignalTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(
             self.fake_call_client.calls,
             [("pause", -100123), ("resume", -100123)],
+        )
+
+    async def test_play_control_command_switches_stream_in_same_call(self):
+        await self.adapter.handle_stdin_command({"action": "play", "file_path": "/tmp/next.mp3"})
+
+        self.assertFalse(self.adapter.paused)
+        self.assertEqual(
+            self.fake_call_client.calls,
+            [("play", -100123, "/tmp/next.mp3")],
+        )
+
+    async def test_play_control_command_resumes_before_switching_paused_stream(self):
+        self.adapter.paused = True
+
+        await self.adapter.handle_stdin_command({"action": "replay", "file_path": "/tmp/current.mp3"})
+
+        self.assertFalse(self.adapter.paused)
+        self.assertEqual(
+            self.fake_call_client.calls,
+            [("resume", -100123), ("play", -100123, "/tmp/current.mp3")],
         )
 
 
