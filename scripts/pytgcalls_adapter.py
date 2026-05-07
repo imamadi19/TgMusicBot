@@ -313,11 +313,14 @@ def main() -> int:
         if action == "leave_chat":
             leave_target_chat(client, chat_id)
             return 0
-        if action != "play":
+        if action not in {"play", "join_chat"}:
             raise RuntimeError(f"TGMB_ACTION tidak dikenal: {action}")
 
         join_from_invite_links(client, invite_links)
         warm_peer_cache(client, chat_id)
+        if action == "join_chat":
+            print(READY_MARKER, flush=True)
+            return 0
 
         call_client = PyTgCalls(client)
         maybe_call(call_client, "start")
