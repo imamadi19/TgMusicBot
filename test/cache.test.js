@@ -76,6 +76,7 @@ test('control keyboard exposes moving progress and transport controls', async ()
   const { controlKeyboard, progressLabel } = await import('../src/handlers/keyboards.js');
 
   assert.equal(progressLabel({ duration: 100, remainingMs: 50000 }), '00:50 | ━━━━━━◉━━━━━ | -00:50');
+  assert.match(progressLabel({ duration: 100, startedAt: new Date(Date.now() - 9500).toISOString() }), /^00:09 \| ━◉/);
 
   const rows = controlKeyboard('en', '', { duration: 65 }).inline_keyboard;
   assert.equal(rows[0][0].callback_data, 'play_progress');

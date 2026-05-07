@@ -16,6 +16,7 @@ import signal
 import sys
 import threading
 import traceback
+from pyrogram.raw import functions, types
 
 READY_MARKER = "TGMB_READY"
 
@@ -305,6 +306,22 @@ async def warm_peer_cache(client, target_chat_id: int) -> None:
         )
 
 
+async def mute_target_chat_notifications(client, target_chat_id: int) -> None:
+    """Mute the target group for the assistant account to avoid noisy joins."""
+    try:
+        peer = await call_method(client.resolve_peer, target_chat_id)
+        await call_method(
+            client.invoke,
+            functions.account.UpdateNotifySettings(
+                peer=types.InputNotifyPeer(peer=peer),
+                settings=types.InputPeerNotifySettings(mute_until=2_147_483_647),
+            ),
+        )
+        print("TGMB_ASSISTANT_MUTED_CHAT", flush=True)
+    except Exception as exc:  # noqa: BLE001 - muting notifications is best-effort.
+        print(f"VOICE_ADAPTER_WARN: gagal mute notifikasi grup {target_chat_id}: {exc}", file=sys.stderr, flush=True)
+
+
 async def main_async() -> int:
     global call_client, chat_id, client, async_stop_event
     async_stop_event = asyncio.Event()
@@ -359,6 +376,7 @@ async def main_async() -> int:
 
         await join_from_invite_links(client, invite_links)
         await warm_peer_cache(client, chat_id)
+        await mute_target_chat_notifications(client, chat_id)
         if action == "join_chat":
             print(READY_MARKER, flush=True)
             return 0
