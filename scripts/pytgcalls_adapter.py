@@ -8,6 +8,8 @@ it successfully joins the Telegram group call and starts streaming the file.
 
 from __future__ import annotations
 
+import asyncio
+import inspect
 import json
 import os
 import signal
@@ -18,6 +20,8 @@ import traceback
 READY_MARKER = "TGMB_READY"
 
 stop_event = threading.Event()
+async_stop_event = None
+event_loop = None
 paused = False
 call_client = None
 chat_id = None
@@ -31,19 +35,53 @@ def require_env(name: str) -> str:
     return value
 
 
-def maybe_call(obj, *names):
+async def maybe_await(value):
+    if inspect.isawaitable(value):
+        return await value
+    return value
+
+
+async def call_method(method, *args):
+    return await maybe_await(method(*args))
+
+
+async def call_method_with_optional_chat(method):
+    try:
+        return await call_method(method, chat_id)
+    except TypeError:
+        return await call_method(method)
+
+
+async def maybe_call_async(obj, *names):
     for name in names:
         method = getattr(obj, name, None)
         if callable(method):
-            return method()
+            return await call_method(method)
     return None
+
+
+def log_control_error(action: str, future):
+    try:
+        future.result()
+    except Exception as exc:  # noqa: BLE001 - signal callbacks must not crash the adapter.
+        print(f"VOICE_ADAPTER_WARN: gagal {action}: {exc}", file=sys.stderr, flush=True)
+
+
+def schedule_control(action: str, coroutine):
+    if event_loop is None or not event_loop.is_running():
+        coroutine.close()
+        return
+    future = asyncio.run_coroutine_threadsafe(coroutine, event_loop)
+    future.add_done_callback(lambda done: log_control_error(action, done))
 
 
 def cleanup(*_args):
     stop_event.set()
+    if event_loop is not None and event_loop.is_running() and async_stop_event is not None:
+        event_loop.call_soon_threadsafe(async_stop_event.set)
 
 
-def pause(*_args):
+async def pause_async():
     global paused
     if call_client is None or chat_id is None or paused:
         return
@@ -51,14 +89,15 @@ def pause(*_args):
     for name in ("pause", "pause_stream"):
         method = getattr(call_client, name, None)
         if callable(method):
-            try:
-                method(chat_id)
-            except TypeError:
-                method()
+            await call_method_with_optional_chat(method)
             break
 
 
-def resume(*_args):
+def pause(*_args):
+    schedule_control("pause", pause_async())
+
+
+async def resume_async():
     global paused
     if call_client is None or chat_id is None:
         return
@@ -66,11 +105,12 @@ def resume(*_args):
     for name in ("resume", "resume_stream"):
         method = getattr(call_client, name, None)
         if callable(method):
-            try:
-                method(chat_id)
-            except TypeError:
-                method()
+            await call_method_with_optional_chat(method)
             break
+
+
+def resume(*_args):
+    schedule_control("resume", resume_async())
 
 
 def patch_pyrogram_groupcall_error() -> None:
@@ -199,11 +239,11 @@ def parse_invite_links() -> list[str]:
     return unique_links
 
 
-def join_from_invite(client, invite_link: str) -> bool:
+async def join_from_invite(client, invite_link: str) -> bool:
     if not invite_link:
         return False
     try:
-        client.join_chat(invite_link)
+        await call_method(client.join_chat, invite_link)
         print("TGMB_ASSISTANT_JOINED", flush=True)
         return True
     except Exception as exc:  # noqa: BLE001 - assistant may already be a member.
@@ -225,11 +265,11 @@ def join_from_invite(client, invite_link: str) -> bool:
         return False
 
 
-def join_from_invite_links(client, invite_links: list[str]) -> None:
+async def join_from_invite_links(client, invite_links: list[str]) -> None:
     if not invite_links:
         return
     for invite_link in invite_links:
-        if join_from_invite(client, invite_link):
+        if await join_from_invite(client, invite_link):
             return
     print(
         "VOICE_ADAPTER_WARN: semua link invite gagal dipakai. "
@@ -239,15 +279,15 @@ def join_from_invite_links(client, invite_links: list[str]) -> None:
     )
 
 
-def leave_target_chat(client, target_chat_id: int) -> None:
+async def leave_target_chat(client, target_chat_id: int) -> None:
     try:
-        client.leave_chat(target_chat_id)
+        await call_method(client.leave_chat, target_chat_id)
         print("TGMB_ASSISTANT_LEFT_CHAT", flush=True)
     except Exception as exc:  # noqa: BLE001 - leaving is a best-effort cleanup.
         print(f"VOICE_ADAPTER_WARN: gagal keluar dari grup {target_chat_id}: {exc}", file=sys.stderr, flush=True)
 
 
-def warm_peer_cache(client, target_chat_id: int) -> None:
+async def warm_peer_cache(client, target_chat_id: int) -> None:
     """Resolve the target chat once before PyTgCalls starts streaming.
 
     PyTgCalls eventually asks Pyrogram to resolve ``target_chat_id``. Resolving
@@ -255,7 +295,7 @@ def warm_peer_cache(client, target_chat_id: int) -> None:
     show a clear warning if the assistant has not joined the group yet.
     """
     try:
-        client.get_chat(target_chat_id)
+        await call_method(client.get_chat, target_chat_id)
     except Exception as exc:  # noqa: BLE001 - keep adapter startup best-effort.
         print(
             f"VOICE_ADAPTER_WARN: gagal resolve chat {target_chat_id}: {exc}. "
@@ -265,8 +305,9 @@ def warm_peer_cache(client, target_chat_id: int) -> None:
         )
 
 
-def main() -> int:
-    global call_client, chat_id, client
+async def main_async() -> int:
+    global call_client, chat_id, client, async_stop_event
+    async_stop_event = asyncio.Event()
 
     api_id = int(require_env("TGMB_API_ID"))
     api_hash = require_env("TGMB_API_HASH")
@@ -300,9 +341,9 @@ def main() -> int:
     )
     client_started = False
     try:
-        client.start()
+        await call_method(client.start)
         client_started = True
-        assistant = client.get_me()
+        assistant = await call_method(client.get_me)
         assistant_name = getattr(assistant, "username", None) or getattr(assistant, "first_name", None) or getattr(assistant, "id", "unknown")
         print(f"TGMB_ASSISTANT_SELECTED assistant={assistant_index} account={assistant_name}", flush=True)
         if getattr(assistant, "is_bot", False):
@@ -311,37 +352,45 @@ def main() -> int:
                 "bukan TOKEN bot dari BotFather."
             )
         if action == "leave_chat":
-            leave_target_chat(client, chat_id)
+            await leave_target_chat(client, chat_id)
             return 0
         if action not in {"play", "join_chat"}:
             raise RuntimeError(f"TGMB_ACTION tidak dikenal: {action}")
 
-        join_from_invite_links(client, invite_links)
-        warm_peer_cache(client, chat_id)
+        await join_from_invite_links(client, invite_links)
+        await warm_peer_cache(client, chat_id)
         if action == "join_chat":
             print(READY_MARKER, flush=True)
             return 0
 
         call_client = PyTgCalls(client)
-        maybe_call(call_client, "start")
-        call_client.play(chat_id, file_path)
+        await maybe_call_async(call_client, "start")
+        await call_method(call_client.play, chat_id, file_path)
         print(READY_MARKER, flush=True)
 
-        stop_event.wait()
+        await async_stop_event.wait()
     finally:
         if call_client is not None:
             for name in ("leave_call", "leave_group_call"):
                 method = getattr(call_client, name, None)
                 if callable(method):
-                    try:
-                        method(chat_id)
-                    except TypeError:
-                        method()
+                    await call_method_with_optional_chat(method)
                     break
-            maybe_call(call_client, "stop")
+            await maybe_call_async(call_client, "stop")
         if client_started:
-            client.stop()
+            await call_method(client.stop)
     return 0
+
+
+def main() -> int:
+    global event_loop
+    event_loop = asyncio.new_event_loop()
+    try:
+        asyncio.set_event_loop(event_loop)
+        return event_loop.run_until_complete(main_async())
+    finally:
+        event_loop.close()
+        event_loop = None
 
 
 if __name__ == "__main__":
