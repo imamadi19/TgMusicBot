@@ -4,6 +4,7 @@ import { chatCache } from '../cache/chat-cache.js';
 
 const READY_MARKER = 'TGMB_READY';
 const START_TIMEOUT_MS = 30000;
+const JOIN_TIMEOUT_MS = 10000;
 const MAX_ERROR_LENGTH = 1200;
 const MAX_LOG_LENGTH = 2000;
 const TRACK_END_GRACE_MS = 3000;
@@ -66,6 +67,7 @@ function shouldTryNextAssistant(error) {
     'assistant belum bisa menemukan grup',
     'gagal join assistant',
     'semua link invite gagal',
+    'assistant timeout',
     'peer id invalid',
     'could not find the input entity',
     'assistant login terdeteksi sebagai bot',
@@ -93,6 +95,8 @@ export class VoicePlayer {
   #finishTimers = new Map();
 
   #leaveTimers = new Map();
+
+  #joinAttempts = new Map();
 
   #onTrackEnd = null;
 
@@ -173,7 +177,7 @@ export class VoicePlayer {
     return { finished, next };
   }
 
-  async #spawnAdapter(chatId, env, { waitReady = true } = {}) {
+  async #spawnAdapter(chatId, env, { waitReady = true, timeoutMs = START_TIMEOUT_MS } = {}) {
     const child = spawn(config.voiceAdapterCommand, [], {
       shell: true,
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -196,9 +200,10 @@ export class VoicePlayer {
 
     await new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
+        cleanup();
         if (!child.killed) child.kill('SIGTERM');
-        reject(new Error('Assistant timeout saat join obrolan video. Pastikan obrolan video aktif dan assistant sudah ada di grup.'));
-      }, START_TIMEOUT_MS);
+        reject(new Error('Assistant timeout saat login/join Telegram. Periksa STRING session assistant, koneksi VPS ke Telegram, dan apakah akun terkena flood-wait.'));
+      }, timeoutMs);
       timer.unref?.();
 
       const cleanup = () => {
@@ -219,6 +224,10 @@ export class VoicePlayer {
       };
       const onExit = (code) => {
         cleanup();
+        if (code === 0 && stdout.includes(READY_MARKER)) {
+          resolve();
+          return;
+        }
         reject(new Error(normalizeVoiceError(stderr || stdout || `Voice adapter keluar dengan kode ${code}`)));
       };
 
@@ -228,6 +237,49 @@ export class VoicePlayer {
     });
 
     return child;
+  }
+
+  async joinChat(chatId, options = {}) {
+    if (!config.voiceAdapterCommand || !config.apiId || !config.apiHash) return false;
+
+    const sessionCandidates = sessionCandidatesForChat(chatId);
+    if (sessionCandidates.length === 0) return false;
+
+    const key = String(chatId);
+    if (this.#joinAttempts.has(key)) return this.#joinAttempts.get(key);
+
+    const inviteLinks = normalizeInviteLinks(options);
+    const joinPromise = (async () => {
+      const failures = [];
+      for (const candidate of sessionCandidates) {
+        try {
+          await this.#spawnAdapter(chatId, {
+            TGMB_ACTION: 'join_chat',
+            TGMB_SESSION_STRING: candidate.sessionString,
+            TGMB_ASSISTANT_INDEX: String(candidate.assistantNumber),
+            TGMB_INVITE_LINK: inviteLinks[0] ?? '',
+            TGMB_INVITE_LINKS: JSON.stringify(inviteLinks),
+          }, { timeoutMs: JOIN_TIMEOUT_MS });
+          return true;
+        } catch (error) {
+          failures.push({ assistantNumber: candidate.assistantNumber, error });
+          if (!shouldTryNextAssistant(error)) throw error;
+          if (failures.length < sessionCandidates.length) {
+            console.warn(`Assistant ${candidate.assistantNumber} gagal join awal di chat ${chatId}; mencoba assistant berikutnya.`, error);
+          }
+        }
+      }
+
+      const detail = failures.map(({ assistantNumber: number, error }) => `Assistant ${number}: ${truncate(error?.message ?? error, 240)}`).join(' | ');
+      throw new Error(`Semua assistant gagal join grup. ${detail}`);
+    })();
+
+    this.#joinAttempts.set(key, joinPromise);
+    try {
+      return await joinPromise;
+    } finally {
+      this.#joinAttempts.delete(key);
+    }
   }
 
   async play(chatId, track, options = {}) {
@@ -284,36 +336,45 @@ export class VoicePlayer {
       }
     });
 
+    chatCache.setPaused(chatId, false);
     this.#active.set(String(chatId), { ...track, startedAt: new Date(), process: child, assistantNumber });
     this.#scheduleTrackEnd(chatId, track, child);
     return this.#active.get(String(chatId));
   }
 
   pause(chatId) {
-    chatCache.setPaused(chatId, true);
     const active = this.#active.get(String(chatId));
-    if (!active) return;
+    if (!active) return false;
+    chatCache.setPaused(chatId, true);
     if (active.timerEndsAt) {
       active.remainingMs = Math.max(1000, active.timerEndsAt - Date.now());
       active.timerEndsAt = null;
       this.#clearFinishTimer(chatId);
     }
     if (active.process && !active.process.killed) active.process.kill('SIGUSR1');
+    return true;
   }
 
   resume(chatId) {
-    chatCache.setPaused(chatId, false);
     const active = this.#active.get(String(chatId));
-    if (!active) return;
+    if (!active) return false;
+    chatCache.setPaused(chatId, false);
     if (active.process && !active.process.killed) active.process.kill('SIGUSR2');
     if (active.remainingMs && !active.timerEndsAt) {
+      const trackDurationMs = durationToMs(active.duration);
+      if (trackDurationMs) {
+        active.startedAt = new Date(Date.now() - Math.max(0, trackDurationMs - active.remainingMs));
+      }
       this.#scheduleTrackEnd(chatId, active, active.process, active.remainingMs);
     }
+    return true;
   }
 
   stop(chatId) {
+    const hadPlayback = this.#active.has(String(chatId)) || chatCache.getQueueLength(chatId) > 0;
     this.#killActive(chatId, { scheduleLeave: true });
     chatCache.clear(chatId);
+    return hadPlayback;
   }
 
   stopAll() {
@@ -342,6 +403,10 @@ export class VoicePlayer {
     }, { waitReady: false });
     await new Promise((resolve) => child.once('exit', resolve));
     return true;
+  }
+
+  activeTrack(chatId) {
+    return this.#active.get(String(chatId));
   }
 
   activeCalls() {

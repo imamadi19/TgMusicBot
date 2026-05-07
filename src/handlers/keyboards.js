@@ -38,18 +38,34 @@ export function languageKeyboard() {
   return keyboard;
 }
 
-export function controlKeyboard(language = 'en', state = '') {
-  const pauseOrResume = state === 'pause'
-    ? [t(language, 'buttons.resume'), 'play_resume']
-    : [t(language, 'buttons.pause'), 'play_pause'];
-  const muteOrUnmute = state === 'mute'
-    ? [t(language, 'buttons.unmute'), 'play_unmute']
-    : [t(language, 'buttons.mute'), 'play_mute'];
+function clock(totalSeconds = 0) {
+  const seconds = Math.max(0, Math.floor(Number(totalSeconds) || 0));
+  const minutes = Math.floor(seconds / 60);
+  const rest = seconds % 60;
+  return `${String(minutes).padStart(2, '0')}:${String(rest).padStart(2, '0')}`;
+}
 
+function progressLabel(track = {}) {
+  const duration = Math.max(0, Math.floor(Number(track.duration) || 0));
+  const startedAt = track.startedAt ? new Date(track.startedAt).getTime() : 0;
+  const pausedRemaining = Number(track.remainingMs);
+  const pausedElapsed = duration && Number.isFinite(pausedRemaining) && !track.timerEndsAt
+    ? Math.max(0, duration - Math.ceil(pausedRemaining / 1000))
+    : null;
+  const elapsed = pausedElapsed ?? (startedAt ? Math.max(0, Math.floor((Date.now() - startedAt) / 1000)) : 0);
+  const safeElapsed = duration ? Math.min(elapsed, duration) : elapsed;
+  const remaining = duration ? Math.max(0, duration - safeElapsed) : 0;
+  return `${clock(safeElapsed)} | ━━━━━━━━◉ | -${clock(remaining)}`;
+}
+
+export function controlKeyboard(language = 'en', state = '', track = {}) {
   return new InlineKeyboard()
-    .text(pauseOrResume[0], pauseOrResume[1]).text(t(language, 'buttons.skip'), 'play_skip').row()
-    .text(t(language, 'buttons.stop'), 'play_stop').text(muteOrUnmute[0], muteOrUnmute[1]).row()
-    .text(t(language, 'buttons.addToPlaylist'), 'play_add_to_list').text(t(language, 'buttons.close'), 'vcplay_close');
+    .text(progressLabel(track), 'play_progress').row()
+    .text('▷', 'play_resume')
+    .text('Ⅱ', 'play_pause')
+    .text('↻', 'play_replay')
+    .text('▸▸▏', 'play_skip')
+    .text('▢', 'play_stop');
 }
 
 export function youtubeSelectionKeyboard(messageId, tracks, index = 0) {
