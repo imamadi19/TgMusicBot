@@ -489,13 +489,13 @@ export async function stopHandler(ctx) {
 
 export async function pauseHandler(ctx) {
   const language = await getUserLanguage(ctx.from?.id);
-  voicePlayer.pause(ctx.chat.id);
+  await voicePlayer.pause(ctx.chat.id);
   await ctx.reply(t(language, 'playback.paused'));
 }
 
 export async function resumeHandler(ctx) {
   const language = await getUserLanguage(ctx.from?.id);
-  voicePlayer.resume(ctx.chat.id);
+  await voicePlayer.resume(ctx.chat.id);
   await ctx.reply(t(language, 'playback.resumed'));
 }
 
