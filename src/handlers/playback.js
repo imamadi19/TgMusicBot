@@ -1,6 +1,6 @@
 import { chatCache } from '../core/cache/chat-cache.js';
 import { Downloader } from '../core/dl/downloader.js';
-import { voicePlayer } from '../core/player/player.js';
+import { requesterKey, voicePlayer } from '../core/player/player.js';
 import { getPlaylist } from '../core/db/playlists.js';
 import { getUserLanguage } from '../core/db/user-settings.js';
 import { config } from '../config/index.js';
@@ -8,7 +8,7 @@ import { t } from '../i18n/index.js';
 import { commandArgs, htmlEscape, isUrl } from '../utils/telegram.js';
 import { firstName } from '../utils/extras.js';
 import { secondsToClock } from '../utils/duration.js';
-import { controlKeyboard, progressKeyboard, supportKeyboard, youtubeSelectionKeyboard } from './keyboards.js';
+import { completedProgressKeyboard, controlKeyboard, supportKeyboard, youtubeSelectionKeyboard } from './keyboards.js';
 import { playMode } from './filters.js';
 
 const MAX_QUEUE = 10;
@@ -104,6 +104,21 @@ async function editPanelMarkup(panel, replyMarkup) {
   }
 }
 
+async function markPlaybackPanelCompleted(chatId, track) {
+  const panel = playbackPanels.get(panelKey(chatId, track));
+  if (!panel) return;
+  await editPanelMarkup(panel, completedProgressKeyboard(track));
+  forgetPlaybackPanel(chatId, track);
+}
+
+async function activatePlaybackPanel(chatId, track, activeTrack) {
+  const panel = playbackPanels.get(panelKey(chatId, track));
+  if (!panel) return;
+  panel.track = track;
+  await editPanelTextAndMarkup(panel, formatTrack(panel.language, track), controlKeyboard(panel.language, '', activeTrack));
+  startProgressUpdaterFromPanel(panel);
+}
+
 async function editPanelTextAndMarkup(panel, text, replyMarkup) {
   if (!panel?.api || !panel?.messageId) return;
   try {
@@ -169,11 +184,7 @@ function prepareAssistantJoin(ctx) {
 }
 
 voicePlayer.onTrackEnd(async ({ chatId, finished, next }) => {
-  const finishedPanel = playbackPanels.get(panelKey(chatId, finished));
-  if (finishedPanel) {
-    await editPanelMarkup(finishedPanel, progressKeyboard({ ...finished, startedAt: new Date(Date.now() - (Number(finished?.duration) || 0) * 1000) }));
-    forgetPlaybackPanel(chatId, finished);
-  }
+  await markPlaybackPanelCompleted(chatId, finished);
 
   if (!next) {
     stopProgressUpdater(chatId);
@@ -183,12 +194,7 @@ voicePlayer.onTrackEnd(async ({ chatId, finished, next }) => {
   try {
     const activeTrack = await startCachedTrack(chatId, next);
     next.startedAt = activeTrack?.startedAt;
-    const nextPanel = playbackPanels.get(panelKey(chatId, next));
-    if (nextPanel) {
-      nextPanel.track = next;
-      await editPanelTextAndMarkup(nextPanel, formatTrack(nextPanel.language, next), controlKeyboard(nextPanel.language, '', activeTrack));
-      startProgressUpdaterFromPanel(nextPanel);
-    }
+    await activatePlaybackPanel(chatId, next, activeTrack);
   } catch (error) {
     chatCache.shift(chatId);
     console.warn(`Failed to auto-start next track for chat ${chatId}`, error);
@@ -297,7 +303,7 @@ async function showYouTubeSelection(ctx, statusMessage, tracks, isVideo, languag
 
 async function queueAndMaybePlay(ctx, statusMessage, track, isVideo, language) {
   const chatId = ctx.chat.id;
-  const saveTrack = { ...track, user: firstName(ctx), isVideo, filePath: '', platform: track.platform ?? config.defaultService };
+  const saveTrack = { ...track, user: firstName(ctx), userId: ctx.from?.id, isVideo, filePath: '', platform: track.platform ?? config.defaultService };
   if (chatCache.getTrackIfExists(chatId, saveTrack.trackId)) {
     await editStatus(ctx, statusMessage, t(language, 'playback.duplicate'));
     return;
@@ -361,7 +367,7 @@ export async function playHandler(ctx, isVideo = false) {
       return;
     }
     const remaining = MAX_QUEUE - chatCache.getQueueLength(chatId);
-    const tracks = playlist.songs.slice(0, remaining).map((track) => ({ ...track, user: firstName(ctx), isVideo, filePath: track.filePath ?? '', platform: track.platform ?? config.defaultService }));
+    const tracks = playlist.songs.slice(0, remaining).map((track) => ({ ...track, user: firstName(ctx), userId: ctx.from?.id, isVideo, filePath: track.filePath ?? '', platform: track.platform ?? config.defaultService }));
     if (tracks.length === 0) {
       await editStatus(ctx, status, t(language, 'playback.queueFull'));
       return;
@@ -424,7 +430,15 @@ export async function queueHandler(ctx) {
 
 export async function skipHandler(ctx) {
   const language = await getUserLanguage(ctx.from?.id);
-  const { skipped, next } = voicePlayer.skip(ctx.chat.id);
+  const queuedNext = chatCache.getQueue(ctx.chat.id)[1] ?? null;
+  try {
+    if (queuedNext) await ensureDownloaded(queuedNext, queuedNext.isVideo);
+  } catch (error) {
+    await ctx.reply(t(language, 'playback.voiceFailed', { error: formatError(error) }));
+    return;
+  }
+
+  const { skipped, next, activeTrack: reusedTrack } = await voicePlayer.skip(ctx.chat.id, { reuseActive: true });
   if (!skipped) {
     await ctx.reply(t(language, 'playback.nothingPlaying'));
     return;
@@ -435,7 +449,7 @@ export async function skipHandler(ctx) {
     return;
   }
   try {
-    await startQueuedTrack(ctx, next, next.isVideo);
+    if (!reusedTrack) await startQueuedTrack(ctx, next, next.isVideo);
     await ctx.reply(t(language, 'playback.skippedNow', { skipped: skipped.name, next: next.name }));
   } catch (error) {
     chatCache.shift(ctx.chat.id);
@@ -445,9 +459,32 @@ export async function skipHandler(ctx) {
 
 export async function stopHandler(ctx) {
   const language = await getUserLanguage(ctx.from?.id);
-  voicePlayer.stop(ctx.chat.id);
-  stopProgressUpdater(ctx.chat.id);
-  await ctx.reply(t(language, 'playback.stopped'));
+  const queue = chatCache.getQueue(ctx.chat.id);
+  const queuedCurrent = queue[0] ?? null;
+  const queuedNext = queue[1] ?? null;
+  const currentRequester = requesterKey(queuedCurrent);
+  const nextRequester = requesterKey(queuedNext);
+  try {
+    if (queuedNext && currentRequester && nextRequester && currentRequester !== nextRequester) await ensureDownloaded(queuedNext, queuedNext.isVideo);
+  } catch (error) {
+    await ctx.reply(t(language, 'playback.voiceFailed', { error: formatError(error) }));
+    return;
+  }
+
+  const { stopped, next, activeTrack: reusedTrack, cleared } = await voicePlayer.stopOrAdvance(ctx.chat.id, { reuseActive: true });
+  if (cleared || !next) {
+    stopProgressUpdater(ctx.chat.id);
+    await ctx.reply(t(language, 'playback.stopped'));
+    return;
+  }
+
+  try {
+    if (!reusedTrack) await startQueuedTrack(ctx, next, next.isVideo);
+    await ctx.reply(t(language, 'playback.skippedNow', { skipped: stopped.name, next: next.name }));
+  } catch (error) {
+    chatCache.shift(ctx.chat.id);
+    await ctx.reply(t(language, 'playback.voiceFailed', { error: formatError(error) }));
+  }
 }
 
 export async function pauseHandler(ctx) {

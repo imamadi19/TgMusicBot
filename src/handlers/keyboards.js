@@ -71,6 +71,12 @@ export function progressKeyboard(track = {}) {
   return new InlineKeyboard().text(progressLabel(track), 'play_progress');
 }
 
+export function completedProgressKeyboard(track = {}) {
+  const duration = Math.max(0, Math.floor(Number(track.duration) || 0));
+  const completedAt = new Date(Date.now() - duration * 1000);
+  return progressKeyboard({ ...track, remainingMs: 0, timerEndsAt: null, startedAt: completedAt });
+}
+
 export function controlKeyboard(language = 'en', state = '', track = {}) {
   return progressKeyboard(track).row()
     .text('▷', 'play_resume')

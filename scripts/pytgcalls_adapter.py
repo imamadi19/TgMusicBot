@@ -114,6 +114,60 @@ def resume(*_args):
     schedule_control("resume", resume_async())
 
 
+async def play_file_async(file_path: str):
+    global paused
+    if call_client is None or chat_id is None:
+        raise RuntimeError("voice call belum aktif")
+    if not file_path:
+        raise RuntimeError("file_path kosong")
+    if paused:
+        await resume_async()
+    await call_method(call_client.play, chat_id, file_path)
+    paused = False
+
+
+async def handle_stdin_command(command: dict):
+    action = str(command.get("action", "")).strip().lower()
+    command_id = str(command.get("id", "")).strip() or "-"
+    if action in {"play", "replay", "switch"}:
+        await play_file_async(str(command.get("file_path", "")))
+        print(f"TGMB_CONTROL_OK {command_id} play", flush=True)
+        return
+    if action == "pause":
+        await pause_async()
+        print(f"TGMB_CONTROL_OK {command_id} pause", flush=True)
+        return
+    if action == "resume":
+        await resume_async()
+        print(f"TGMB_CONTROL_OK {command_id} resume", flush=True)
+        return
+    if action == "stop":
+        cleanup()
+        print(f"TGMB_CONTROL_OK {command_id} stop", flush=True)
+        return
+    raise RuntimeError(f"command tidak dikenal: {action}")
+
+
+async def stdin_command_loop():
+    while not stop_event.is_set():
+        line = await asyncio.to_thread(sys.stdin.readline)
+        if line == "":
+            return
+        line = line.strip()
+        if not line:
+            continue
+        command_id = "-"
+        try:
+            command = json.loads(line)
+            if not isinstance(command, dict):
+                raise ValueError("command harus object JSON")
+            command_id = str(command.get("id", "")).strip() or "-"
+            await handle_stdin_command(command)
+        except Exception as exc:  # noqa: BLE001 - control channel must keep running.
+            print(f"TGMB_CONTROL_ERROR {command_id} {exc}", file=sys.stderr, flush=True)
+            print(f"VOICE_ADAPTER_WARN: gagal memproses command stdin: {exc}", file=sys.stderr, flush=True)
+
+
 def patch_pyrogram_groupcall_error() -> None:
     """Add the error alias expected by some PyTgCalls builds.
 
@@ -383,10 +437,15 @@ async def main_async() -> int:
 
         call_client = PyTgCalls(client)
         await maybe_call_async(call_client, "start")
-        await call_method(call_client.play, chat_id, file_path)
+        await play_file_async(file_path)
         print(READY_MARKER, flush=True)
 
-        await async_stop_event.wait()
+        command_task = asyncio.create_task(stdin_command_loop())
+        try:
+            await async_stop_event.wait()
+        finally:
+            command_task.cancel()
+            await asyncio.gather(command_task, return_exceptions=True)
     finally:
         if call_client is not None:
             for name in ("leave_call", "leave_group_call"):

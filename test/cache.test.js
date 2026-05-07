@@ -73,7 +73,7 @@ test('broadcast options and targets mirror Go handler flags', async () => {
 });
 
 test('control keyboard exposes moving progress and transport controls', async () => {
-  const { controlKeyboard, progressKeyboard, progressLabel } = await import('../src/handlers/keyboards.js');
+  const { completedProgressKeyboard, controlKeyboard, progressKeyboard, progressLabel } = await import('../src/handlers/keyboards.js');
 
   assert.equal(progressLabel({ duration: 100, remainingMs: 50000 }), '00:50 | ━━━━━━◉━━━━━ | -00:50');
   assert.match(progressLabel({ duration: 100, startedAt: new Date(Date.now() - 9500).toISOString() }), /^00:09 \| ━◉/);
@@ -87,6 +87,10 @@ test('control keyboard exposes moving progress and transport controls', async ()
   const progressRows = progressKeyboard({ duration: 65 }).inline_keyboard;
   assert.equal(progressRows.length, 1);
   assert.equal(progressRows[0][0].callback_data, 'play_progress');
+
+  const completedRows = completedProgressKeyboard({ duration: 65 }).inline_keyboard;
+  assert.equal(completedRows.length, 1);
+  assert.equal(completedRows[0][0].text, '01:05 | ━━━━━━━━━━━◉ | -00:00');
 });
 
 
@@ -175,6 +179,41 @@ test('filters check bot admin invite permission and play mode gates users', asyn
   const deniedCtx = { ...baseCtx, api: { async getChatMember() { return { status: 'administrator', can_invite_users: false }; } } };
   assert.equal(await checkBotAdmin(deniedCtx, (message) => replies.push(message)), false);
   assert.match(replies.at(-1), /invite users/);
+});
+
+
+
+test('stop advances to next requester but clears same requester queue', async () => {
+  const { chatCache } = await import('../src/core/cache/chat-cache.js');
+  const { requesterKey, voicePlayer } = await import('../src/core/player/player.js');
+  const differentChat = -9001;
+  const sameChat = -9002;
+
+  chatCache.clear(differentChat);
+  chatCache.clear(sameChat);
+  assert.equal(requesterKey({ userId: 10, user: 'Alice' }), 'id:10');
+
+  chatCache.addSong(differentChat, { trackId: 'a', name: 'A', userId: 10 });
+  chatCache.addSong(differentChat, { trackId: 'b', name: 'B', userId: 20 });
+  const advanced = await voicePlayer.stopOrAdvance(differentChat);
+  assert.equal(advanced.cleared, false);
+  assert.equal(advanced.stopped.trackId, 'a');
+  assert.equal(advanced.next.trackId, 'b');
+  assert.equal(chatCache.current(differentChat).trackId, 'b');
+
+  chatCache.addSong(sameChat, { trackId: 'c', name: 'C', userId: 10 });
+  chatCache.addSong(sameChat, { trackId: 'd', name: 'D', userId: 10 });
+  const cleared = await voicePlayer.stopOrAdvance(sameChat);
+  assert.equal(cleared.cleared, true);
+  assert.equal(chatCache.getQueueLength(sameChat), 0);
+
+  chatCache.clear(differentChat);
+  chatCache.clear(sameChat);
+});
+
+test('voice adapter shell wrapper ignores control signals in shell', async () => {
+  const { adapterShellCommand } = await import('../src/core/player/player.js');
+  assert.equal(adapterShellCommand(), "trap '' USR1 USR2; python3 scripts/pytgcalls_adapter.py");
 });
 
 test('assistant invite links fall back to existing group links', async () => {
