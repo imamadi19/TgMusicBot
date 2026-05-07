@@ -1,5 +1,6 @@
 import { chatCache } from '../core/cache/chat-cache.js';
 import { Downloader } from '../core/dl/downloader.js';
+import { cleanupTrackDownload, cleanupTrackDownloads, ensureTrackDownloaded, preloadTrack, preloadTracks } from '../core/dl/queue-downloads.js';
 import { requesterKey, voicePlayer } from '../core/player/player.js';
 import { getPlaylist } from '../core/db/playlists.js';
 import { getUserLanguage } from '../core/db/user-settings.js';
@@ -24,10 +25,7 @@ function appendUniqueInviteLink(links, link) {
 }
 
 async function ensureDownloaded(track, isVideo) {
-  if (track.filePath) return track.filePath;
-  const downloader = new Downloader(track.url);
-  track.filePath = await downloader.download(track, isVideo);
-  return track.filePath;
+  return ensureTrackDownloaded(track, isVideo);
 }
 
 export async function createAssistantInviteLinks(ctx) {
@@ -62,7 +60,7 @@ async function startQueuedTrack(ctx, track, isVideo) {
 
 async function startCachedTrack(chatId, track) {
   await ensureDownloaded(track, Boolean(track.isVideo));
-  return voicePlayer.play(chatId, track);
+  return voicePlayer.play(chatId, track, { reuseActive: true });
 }
 
 function stopProgressUpdater(chatId) {
@@ -178,6 +176,7 @@ function startProgressUpdater(ctx, message, language) {
 function prepareAssistantJoin(ctx) {
   const chatId = ctx.chat?.id;
   if (!chatId) return;
+  if (voicePlayer.activeTrack(chatId) || chatCache.getQueueLength(chatId) > 0) return;
   createAssistantInviteLinks(ctx)
     .then((inviteLinks) => voicePlayer.joinChat(chatId, { inviteLinks }))
     .catch((error) => console.warn(`Assistant gagal join awal untuk chat ${chatId}`, error));
@@ -188,6 +187,7 @@ voicePlayer.onTrackEnd(async ({ chatId, finished, next }) => {
 
   if (!next) {
     stopProgressUpdater(chatId);
+    cleanupTrackDownload(finished, { chatId });
     return;
   }
 
@@ -195,8 +195,14 @@ voicePlayer.onTrackEnd(async ({ chatId, finished, next }) => {
     const activeTrack = await startCachedTrack(chatId, next);
     next.startedAt = activeTrack?.startedAt;
     await activatePlaybackPanel(chatId, next, activeTrack);
+    cleanupTrackDownload(finished, { chatId });
   } catch (error) {
-    chatCache.shift(chatId);
+    const failedNext = chatCache.shift(chatId);
+    cleanupTrackDownload(failedNext, { chatId });
+    if (chatCache.getQueueLength(chatId) === 0) {
+      stopProgressUpdater(chatId);
+      voicePlayer.stop(chatId);
+    }
     console.warn(`Failed to auto-start next track for chat ${chatId}`, error);
   }
 });
@@ -310,6 +316,7 @@ async function queueAndMaybePlay(ctx, statusMessage, track, isVideo, language) {
   }
   const length = chatCache.addSong(chatId, saveTrack);
   if (length > 1) {
+    preloadTrack(saveTrack, isVideo, { chatId });
     const queueMessage = await editStatus(ctx, statusMessage, formatTrack(language, saveTrack, length), { parse_mode: 'HTML', disable_web_page_preview: true });
     rememberPlaybackPanel(ctx, queueMessage ?? statusMessage, language, saveTrack);
     return;
@@ -374,6 +381,7 @@ export async function playHandler(ctx, isVideo = false) {
     }
     const queueWasEmpty = chatCache.getQueueLength(chatId) === 0;
     const length = chatCache.addSongs(chatId, tracks);
+    preloadTracks(queueWasEmpty ? tracks.slice(1) : tracks, { chatId });
     await editStatus(ctx, status, t(language, 'playback.addedPlaylistTracks', { count: tracks.length, length }));
     if (queueWasEmpty) {
       try {
@@ -445,14 +453,17 @@ export async function skipHandler(ctx) {
   }
   if (!next) {
     stopProgressUpdater(ctx.chat.id);
+    cleanupTrackDownload(skipped, { chatId: ctx.chat.id });
     await ctx.reply(t(language, 'playback.skippedEnded', { skipped: skipped.name }));
     return;
   }
   try {
     if (!reusedTrack) await startQueuedTrack(ctx, next, next.isVideo);
+    cleanupTrackDownload(skipped, { chatId: ctx.chat.id });
     await ctx.reply(t(language, 'playback.skippedNow', { skipped: skipped.name, next: next.name }));
   } catch (error) {
-    chatCache.shift(ctx.chat.id);
+    const failedNext = chatCache.shift(ctx.chat.id);
+    cleanupTrackDownload(failedNext, { chatId: ctx.chat.id });
     await ctx.reply(t(language, 'playback.voiceFailed', { error: formatError(error) }));
   }
 }
@@ -474,15 +485,18 @@ export async function stopHandler(ctx) {
   const { stopped, next, activeTrack: reusedTrack, cleared } = await voicePlayer.stopOrAdvance(ctx.chat.id, { reuseActive: true });
   if (cleared || !next) {
     stopProgressUpdater(ctx.chat.id);
+    cleanupTrackDownloads(queue, { chatId: ctx.chat.id });
     await ctx.reply(t(language, 'playback.stopped'));
     return;
   }
 
   try {
     if (!reusedTrack) await startQueuedTrack(ctx, next, next.isVideo);
+    cleanupTrackDownload(stopped, { chatId: ctx.chat.id });
     await ctx.reply(t(language, 'playback.skippedNow', { skipped: stopped.name, next: next.name }));
   } catch (error) {
-    chatCache.shift(ctx.chat.id);
+    const failedNext = chatCache.shift(ctx.chat.id);
+    cleanupTrackDownload(failedNext, { chatId: ctx.chat.id });
     await ctx.reply(t(language, 'playback.voiceFailed', { error: formatError(error) }));
   }
 }
@@ -507,6 +521,7 @@ export async function removeHandler(ctx) {
     return;
   }
   const removed = chatCache.remove(ctx.chat.id, index);
+  if (removed) cleanupTrackDownload(removed, { chatId: ctx.chat.id });
   await ctx.reply(removed ? t(language, 'playback.removed', { name: removed.name }) : t(language, 'playback.invalidQueue'));
 }
 

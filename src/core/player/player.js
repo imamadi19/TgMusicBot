@@ -33,9 +33,13 @@ function truncate(text, max = MAX_ERROR_LENGTH) {
   return value.length > max ? `${value.slice(0, max)}…` : value;
 }
 
+function uniqueInviteLinks(values) {
+  return [...new Set(values.map((value) => String(value ?? '').trim()).filter(Boolean))];
+}
+
 function normalizeInviteLinks(options = {}) {
   const values = Array.isArray(options.inviteLinks) ? options.inviteLinks : [options.inviteLink];
-  return [...new Set(values.map((value) => String(value ?? '').trim()).filter(Boolean))];
+  return uniqueInviteLinks(values);
 }
 
 function normalizeVoiceError(text) {
@@ -204,10 +208,23 @@ export class VoicePlayer {
 
   #chatSessions = new Map();
 
+  #chatInviteLinks = new Map();
+
   #onTrackEnd = null;
 
   onTrackEnd(handler) {
     this.#onTrackEnd = handler;
+  }
+
+  #inviteLinksFor(chatId, options = {}) {
+    const key = String(chatId);
+    const incomingLinks = normalizeInviteLinks(options);
+    if (incomingLinks.length > 0) {
+      const mergedLinks = uniqueInviteLinks([...incomingLinks, ...(this.#chatInviteLinks.get(key) ?? [])]);
+      this.#chatInviteLinks.set(key, mergedLinks);
+      return mergedLinks;
+    }
+    return this.#chatInviteLinks.get(key) ?? [];
   }
 
   #setActiveTrack(chatId, track, process, assistantNumber, startedAt = new Date()) {
@@ -294,8 +311,12 @@ export class VoicePlayer {
   #finishCurrentTrack(chatId, reason) {
     const key = String(chatId);
     const finished = chatCache.shift(key);
-    this.#killActive(key, { scheduleLeave: chatCache.getQueueLength(key) === 0 });
     const next = chatCache.current(key);
+    if (!next) {
+      this.#killActive(key, { scheduleLeave: true });
+    } else {
+      this.#cancelLeaveTimer(key);
+    }
     if (this.#onTrackEnd) {
       Promise.resolve(this.#onTrackEnd({ chatId: key, finished, next, reason })).catch((error) => {
         console.warn(`Track-end handler failed for chat ${key}`, error);
@@ -375,7 +396,7 @@ export class VoicePlayer {
     const key = String(chatId);
     if (this.#joinAttempts.has(key)) return this.#joinAttempts.get(key);
 
-    const inviteLinks = normalizeInviteLinks(options);
+    const inviteLinks = this.#inviteLinksFor(key, options);
     const joinPromise = (async () => {
       const failures = [];
       for (const candidate of sessionCandidates) {
@@ -429,9 +450,14 @@ export class VoicePlayer {
     }
 
     this.#cancelLeaveTimer(key);
+    const active = this.#active.get(key);
+    if (options.reuseActive && active) {
+      const activeTrack = await this.#replaceActiveStream(key, track, active);
+      if (activeTrack) return activeTrack;
+    }
     this.#killActive(key);
 
-    const inviteLinks = normalizeInviteLinks(options);
+    const inviteLinks = this.#inviteLinksFor(key, options);
     const failures = [];
     let child = null;
     let assistantNumber = 0;
@@ -547,6 +573,7 @@ export class VoicePlayer {
   stop(chatId) {
     const hadPlayback = this.#active.has(String(chatId)) || chatCache.getQueueLength(chatId) > 0;
     this.#killActive(chatId, { scheduleLeave: true });
+    this.#chatInviteLinks.delete(String(chatId));
     chatCache.clear(chatId);
     return hadPlayback;
   }

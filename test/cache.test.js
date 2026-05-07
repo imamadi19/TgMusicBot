@@ -295,3 +295,40 @@ test('Ndikz ytmp3 response exposes direct download URL', async () => {
     'https://ydl.ymcdn.org/api/v1/download/f5fdb3bd707fcb0498742e4c5d548e10/G8KvOPxuoiE',
   );
 });
+
+test('download cleanup only removes managed downloaded files', async () => {
+  const fs = await import('node:fs/promises');
+  const os = await import('node:os');
+  const path = await import('node:path');
+  const { config } = await import('../src/config/index.js');
+  const { deleteTrackDownload } = await import('../src/core/dl/queue-downloads.js');
+
+  const originalDownloadsDir = config.downloadsDir;
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'tgmb-download-cleanup-'));
+  const downloadsDir = path.join(tempRoot, 'downloads');
+  await fs.mkdir(downloadsDir, { recursive: true });
+  config.downloadsDir = downloadsDir;
+
+  try {
+    const managedPath = path.join(downloadsDir, 'track.mp3');
+    const outsidePath = path.join(tempRoot, 'outside.mp3');
+    const cookiePath = path.join(downloadsDir, 'yt-dlp-cookies.txt');
+    await fs.writeFile(managedPath, 'audio');
+    await fs.writeFile(outsidePath, 'outside');
+    await fs.writeFile(cookiePath, 'cookies');
+
+    const managedTrack = { name: 'managed', filePath: managedPath };
+    assert.equal(await deleteTrackDownload(managedTrack), true);
+    assert.equal(managedTrack.filePath, '');
+    await assert.rejects(fs.access(managedPath));
+
+    assert.equal(await deleteTrackDownload({ name: 'outside', filePath: outsidePath }), false);
+    await fs.access(outsidePath);
+
+    assert.equal(await deleteTrackDownload({ name: 'cookies', filePath: cookiePath }), false);
+    await fs.access(cookiePath);
+  } finally {
+    config.downloadsDir = originalDownloadsDir;
+    await fs.rm(tempRoot, { recursive: true, force: true });
+  }
+});
