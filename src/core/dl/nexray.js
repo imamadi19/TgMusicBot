@@ -8,6 +8,7 @@ import { parseDuration } from '../../utils/duration.js';
 
 const SEARCH_ENDPOINT = 'https://api.nexray.eu.cc/search/youtube';
 const YTMP3_ENDPOINT = 'https://api.nexray.eu.cc/downloader/v1/ytmp3';
+const NDIKZ_YTMP3_ENDPOINT = 'https://ndikz-api.vercel.app/download/ytmp3';
 const MAX_SEARCH_RESULTS = 50;
 
 function timeoutSignal(timeoutMs) {
@@ -101,7 +102,7 @@ function collectUrls(value, urls = []) {
   return urls;
 }
 
-function firstKnownUrl(payload) {
+export function extractAudioDownloadUrl(payload) {
   const candidates = [
     payload?.result?.download_url,
     payload?.result?.downloadUrl,
@@ -130,17 +131,17 @@ function safeFileBase(track) {
   return String(track?.trackId || track?.id || Date.now()).replace(/[^\w.-]+/g, '_').slice(0, 80) || String(Date.now());
 }
 
-export async function downloadNexRayYtMp3(track) {
+async function downloadYtMp3FromApi(track, endpoint, label) {
   const targetUrl = normalizeYouTubeUrl(track?.url || track?.trackId);
   if (!targetUrl) throw new Error('Missing YouTube URL for download');
 
-  const apiUrl = new URL(YTMP3_ENDPOINT);
+  const apiUrl = new URL(endpoint);
   apiUrl.searchParams.set('url', targetUrl);
   const payload = await fetchJson(apiUrl);
-  if (payload.status === false) throw new Error(payload.message || 'download failed');
+  if (payload.status === false) throw new Error(payload.message || `${label} download failed`);
 
-  const downloadUrl = firstKnownUrl(payload);
-  if (!downloadUrl) throw new Error('API response did not include an audio download URL');
+  const downloadUrl = extractAudioDownloadUrl(payload);
+  if (!downloadUrl) throw new Error(`${label} response did not include an audio download URL`);
 
   const response = await fetch(downloadUrl, { signal: timeoutSignal(config.downloadTimeoutMs) });
   if (!response.ok) throw new Error(`Audio download failed: ${response.status} ${response.statusText}`);
@@ -151,6 +152,14 @@ export async function downloadNexRayYtMp3(track) {
   if (!response.body) throw new Error('Audio download returned an empty response body');
   await pipeline(Readable.fromWeb(response.body), createWriteStream(filePath));
   return filePath;
+}
+
+export async function downloadNexRayYtMp3(track) {
+  return downloadYtMp3FromApi(track, YTMP3_ENDPOINT, 'NexRay API');
+}
+
+export async function downloadNdikzYtMp3(track) {
+  return downloadYtMp3FromApi(track, NDIKZ_YTMP3_ENDPOINT, 'Ndikz API');
 }
 
 export { normalizeYouTubeUrl };

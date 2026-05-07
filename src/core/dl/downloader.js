@@ -4,7 +4,7 @@ import path from 'node:path';
 import { config } from '../../config/index.js';
 import { isUrl } from '../../utils/telegram.js';
 import { parseDuration } from '../../utils/duration.js';
-import { downloadNexRayYtMp3, searchNexRayYouTube } from './nexray.js';
+import { downloadNdikzYtMp3, downloadNexRayYtMp3, searchNexRayYouTube } from './nexray.js';
 
 const SUPPORTED_HOSTS = ['youtube.com', 'youtu.be', 'open.spotify.com', 'saavn.com', 'jiosaavn.com', 'music.apple.com', 'soundcloud.com'];
 
@@ -121,7 +121,12 @@ export class Downloader {
       try {
         return await downloadNexRayYtMp3(track ?? { url: this.input });
       } catch (error) {
-        console.warn('API YouTube download failed, falling back to yt-dlp:', error.message);
+        console.warn('NexRay YouTube download failed, trying Ndikz API:', error.message);
+        try {
+          return await downloadNdikzYtMp3(track ?? { url: this.input });
+        } catch (fallbackError) {
+          console.warn('Ndikz YouTube download failed, falling back to yt-dlp:', fallbackError.message);
+        }
       }
     }
 

@@ -280,3 +280,18 @@ test('helpers extract urls and Telegram media metadata', async () => {
   assert.equal(coalesce('value', 'fallback'), 'value');
   assert.equal(truncate('abcdef', 3), 'abc');
 });
+
+test('Ndikz ytmp3 response exposes direct download URL', async () => {
+  const { extractAudioDownloadUrl } = await import('../src/core/dl/nexray.js');
+  const payload = {
+    status: true,
+    creator: 'Ndikz',
+    title: 'Khifnu - Merindumu lagi Official Music Video',
+    download: 'https://ydl.ymcdn.org/api/v1/download/f5fdb3bd707fcb0498742e4c5d548e10/G8KvOPxuoiE',
+  };
+
+  assert.equal(
+    extractAudioDownloadUrl(payload),
+    'https://ydl.ymcdn.org/api/v1/download/f5fdb3bd707fcb0498742e4c5d548e10/G8KvOPxuoiE',
+  );
+});
