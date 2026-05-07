@@ -384,6 +384,13 @@ export class VoicePlayer {
       this.#clearFinishTimer(chatId);
     }
     signalProcess(active.process, 'SIGUSR1');
+    setTimeout(() => {
+      const current = this.#active.get(String(chatId));
+      if (current?.process === active.process && chatCache.isPaused(chatId)) {
+        signalProcess(active.process, 'SIGSTOP');
+        current.suspended = true;
+      }
+    }, 200).unref?.();
     return true;
   }
 
@@ -391,6 +398,10 @@ export class VoicePlayer {
     const active = this.#active.get(String(chatId));
     if (!active) return false;
     chatCache.setPaused(chatId, false);
+    if (active.suspended) {
+      signalProcess(active.process, 'SIGCONT');
+      active.suspended = false;
+    }
     signalProcess(active.process, 'SIGUSR2');
     if (active.remainingMs && !active.timerEndsAt) {
       const trackDurationMs = durationToMs(active.duration);

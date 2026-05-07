@@ -139,7 +139,10 @@ export async function vcPlayCallbackHandler(ctx) {
       }
       case 'replay': {
         await ensureDownloaded(currentTrack);
-        const activeTrack = await voicePlayer.play(chatId, { ...currentTrack });
+        delete currentTrack.remainingMs;
+        delete currentTrack.timerEndsAt;
+        const activeTrack = await voicePlayer.play(chatId, { ...currentTrack, startedAt: undefined });
+        currentTrack.startedAt = activeTrack?.startedAt;
         await answer(ctx, t(language, 'callbacks.playbackResumed'));
         await editPlaybackControls(ctx, language, '', activeTrack);
         return;

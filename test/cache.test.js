@@ -73,7 +73,7 @@ test('broadcast options and targets mirror Go handler flags', async () => {
 });
 
 test('control keyboard exposes moving progress and transport controls', async () => {
-  const { controlKeyboard, progressLabel } = await import('../src/handlers/keyboards.js');
+  const { controlKeyboard, progressKeyboard, progressLabel } = await import('../src/handlers/keyboards.js');
 
   assert.equal(progressLabel({ duration: 100, remainingMs: 50000 }), '00:50 | ━━━━━━◉━━━━━ | -00:50');
   assert.match(progressLabel({ duration: 100, startedAt: new Date(Date.now() - 9500).toISOString() }), /^00:09 \| ━◉/);
@@ -83,6 +83,10 @@ test('control keyboard exposes moving progress and transport controls', async ()
   assert.equal(rows[0][0].text, '00:00 | ◉━━━━━━━━━━━ | -01:05');
   assert.deepEqual(rows[1].map((button) => button.callback_data), ['play_resume', 'play_pause', 'play_replay', 'play_skip', 'play_stop']);
   assert.deepEqual(rows[1].map((button) => button.text), ['▷', 'Ⅱ', '↻', '▸▸▏', '▢']);
+
+  const progressRows = progressKeyboard({ duration: 65 }).inline_keyboard;
+  assert.equal(progressRows.length, 1);
+  assert.equal(progressRows[0][0].callback_data, 'play_progress');
 });
 
 

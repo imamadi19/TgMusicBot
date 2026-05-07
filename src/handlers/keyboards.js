@@ -67,9 +67,12 @@ export function progressLabel(track = {}) {
   return `${clock(safeElapsed)} | ${progressBar(safeElapsed, duration)} | -${clock(remaining)}`;
 }
 
+export function progressKeyboard(track = {}) {
+  return new InlineKeyboard().text(progressLabel(track), 'play_progress');
+}
+
 export function controlKeyboard(language = 'en', state = '', track = {}) {
-  return new InlineKeyboard()
-    .text(progressLabel(track), 'play_progress').row()
+  return progressKeyboard(track).row()
     .text('▷', 'play_resume')
     .text('Ⅱ', 'play_pause')
     .text('↻', 'play_replay')

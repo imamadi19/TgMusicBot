@@ -8,7 +8,7 @@ import { t } from '../i18n/index.js';
 import { commandArgs, htmlEscape, isUrl } from '../utils/telegram.js';
 import { firstName } from '../utils/extras.js';
 import { secondsToClock } from '../utils/duration.js';
-import { controlKeyboard, supportKeyboard, youtubeSelectionKeyboard } from './keyboards.js';
+import { controlKeyboard, progressKeyboard, supportKeyboard, youtubeSelectionKeyboard } from './keyboards.js';
 import { playMode } from './filters.js';
 
 const MAX_QUEUE = 10;
@@ -16,6 +16,7 @@ const ASSISTANT_INVITE_EXPIRE_SECONDS = 60 * 60;
 const PROGRESS_UPDATE_INTERVAL_MS = 10000;
 
 const progressUpdaters = new Map();
+const playbackPanels = new Map();
 
 function appendUniqueInviteLink(links, link) {
   const value = String(link ?? '').trim();
@@ -71,6 +72,67 @@ function stopProgressUpdater(chatId) {
   progressUpdaters.delete(key);
 }
 
+function panelKey(chatId, track) {
+  return `${String(chatId)}:${String(track?.trackId ?? track?.url ?? track?.name ?? '')}`;
+}
+
+function rememberPlaybackPanel(ctx, message, language, track) {
+  const chatId = ctx.chat?.id;
+  if (!chatId || !message?.message_id || !track) return;
+  playbackPanels.set(panelKey(chatId, track), {
+    api: ctx.api,
+    chatId,
+    messageId: message.message_id,
+    language,
+    track,
+  });
+}
+
+function forgetPlaybackPanel(chatId, track) {
+  playbackPanels.delete(panelKey(chatId, track));
+}
+
+async function editPanelMarkup(panel, replyMarkup) {
+  if (!panel?.api || !panel?.messageId) return;
+  try {
+    await panel.api.editMessageReplyMarkup(panel.chatId, panel.messageId, { reply_markup: replyMarkup });
+  } catch (error) {
+    const description = String(error?.description ?? error?.message ?? error).toLowerCase();
+    if (!description.includes('message is not modified')) {
+      console.warn(`Failed to edit playback controls for chat ${panel.chatId}`, error);
+    }
+  }
+}
+
+async function editPanelTextAndMarkup(panel, text, replyMarkup) {
+  if (!panel?.api || !panel?.messageId) return;
+  try {
+    await panel.api.editMessageText(panel.chatId, panel.messageId, text, {
+      parse_mode: 'HTML',
+      reply_markup: replyMarkup,
+      disable_web_page_preview: true,
+    });
+  } catch (error) {
+    try {
+      await panel.api.editMessageCaption(panel.chatId, panel.messageId, {
+        caption: text,
+        parse_mode: 'HTML',
+        reply_markup: replyMarkup,
+      });
+    } catch {
+      const description = String(error?.description ?? error?.message ?? error).toLowerCase();
+      if (!description.includes('message is not modified')) {
+        console.warn(`Failed to edit playback panel for chat ${panel.chatId}`, error);
+      }
+    }
+  }
+}
+
+function startProgressUpdaterFromPanel(panel) {
+  if (!panel?.api || !panel?.messageId) return;
+  startProgressUpdater({ chat: { id: panel.chatId }, api: panel.api }, { message_id: panel.messageId }, panel.language);
+}
+
 function startProgressUpdater(ctx, message, language) {
   const chatId = ctx.chat?.id;
   if (!chatId || !message?.message_id) return;
@@ -106,13 +168,27 @@ function prepareAssistantJoin(ctx) {
     .catch((error) => console.warn(`Assistant gagal join awal untuk chat ${chatId}`, error));
 }
 
-voicePlayer.onTrackEnd(async ({ chatId, next }) => {
+voicePlayer.onTrackEnd(async ({ chatId, finished, next }) => {
+  const finishedPanel = playbackPanels.get(panelKey(chatId, finished));
+  if (finishedPanel) {
+    await editPanelMarkup(finishedPanel, progressKeyboard({ ...finished, startedAt: new Date(Date.now() - (Number(finished?.duration) || 0) * 1000) }));
+    forgetPlaybackPanel(chatId, finished);
+  }
+
   if (!next) {
     stopProgressUpdater(chatId);
     return;
   }
+
   try {
-    await startCachedTrack(chatId, next);
+    const activeTrack = await startCachedTrack(chatId, next);
+    next.startedAt = activeTrack?.startedAt;
+    const nextPanel = playbackPanels.get(panelKey(chatId, next));
+    if (nextPanel) {
+      nextPanel.track = next;
+      await editPanelTextAndMarkup(nextPanel, formatTrack(nextPanel.language, next), controlKeyboard(nextPanel.language, '', activeTrack));
+      startProgressUpdaterFromPanel(nextPanel);
+    }
   } catch (error) {
     chatCache.shift(chatId);
     console.warn(`Failed to auto-start next track for chat ${chatId}`, error);
@@ -228,7 +304,8 @@ async function queueAndMaybePlay(ctx, statusMessage, track, isVideo, language) {
   }
   const length = chatCache.addSong(chatId, saveTrack);
   if (length > 1) {
-    await editStatus(ctx, statusMessage, formatTrack(language, saveTrack, length), { parse_mode: 'HTML', disable_web_page_preview: true });
+    const queueMessage = await editStatus(ctx, statusMessage, formatTrack(language, saveTrack, length), { parse_mode: 'HTML', disable_web_page_preview: true });
+    rememberPlaybackPanel(ctx, queueMessage ?? statusMessage, language, saveTrack);
     return;
   }
 
@@ -248,6 +325,7 @@ async function queueAndMaybePlay(ctx, statusMessage, track, isVideo, language) {
     return;
   }
   const playbackMessage = await editStatus(ctx, statusMessage, formatTrack(language, saveTrack), { parse_mode: 'HTML', reply_markup: controlKeyboard(language, '', saveTrack), disable_web_page_preview: true });
+  rememberPlaybackPanel(ctx, playbackMessage ?? statusMessage, language, saveTrack);
   startProgressUpdater(ctx, playbackMessage ?? statusMessage, language);
 }
 
@@ -295,7 +373,9 @@ export async function playHandler(ctx, isVideo = false) {
       try {
         const activeTrack = await startQueuedTrack(ctx, tracks[0], isVideo);
         tracks[0].startedAt = activeTrack?.startedAt;
-        startProgressUpdater(ctx, status, language);
+        const playbackMessage = await editStatus(ctx, status, formatTrack(language, tracks[0]), { parse_mode: 'HTML', reply_markup: controlKeyboard(language, '', tracks[0]), disable_web_page_preview: true });
+        rememberPlaybackPanel(ctx, playbackMessage ?? status, language, tracks[0]);
+        startProgressUpdater(ctx, playbackMessage ?? status, language);
       } catch (error) {
         chatCache.shift(chatId);
         await ctx.reply(t(language, 'playback.voiceFailed', { error: formatError(error) }));
