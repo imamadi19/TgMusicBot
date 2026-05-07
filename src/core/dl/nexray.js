@@ -10,6 +10,11 @@ const SEARCH_ENDPOINT = 'https://api.nexray.eu.cc/search/youtube';
 const YTMP3_ENDPOINT = 'https://api.nexray.eu.cc/downloader/v1/ytmp3';
 const MAX_SEARCH_RESULTS = 50;
 
+function timeoutSignal(timeoutMs) {
+  const value = Number(timeoutMs);
+  return Number.isFinite(value) && value > 0 ? AbortSignal.timeout(value) : undefined;
+}
+
 function safeText(value, fallback = '') {
   return String(value ?? fallback).trim();
 }
@@ -56,7 +61,10 @@ function trackFromResult(item) {
 }
 
 async function fetchJson(url) {
-  const response = await fetch(url, { headers: { accept: 'application/json' } });
+  const response = await fetch(url, {
+    headers: { accept: 'application/json' },
+    signal: timeoutSignal(config.requestTimeoutMs),
+  });
   if (!response.ok) throw new Error(`API error: ${response.status} ${response.statusText}`);
   return response.json();
 }
@@ -134,7 +142,7 @@ export async function downloadNexRayYtMp3(track) {
   const downloadUrl = firstKnownUrl(payload);
   if (!downloadUrl) throw new Error('API response did not include an audio download URL');
 
-  const response = await fetch(downloadUrl);
+  const response = await fetch(downloadUrl, { signal: timeoutSignal(config.downloadTimeoutMs) });
   if (!response.ok) throw new Error(`Audio download failed: ${response.status} ${response.statusText}`);
 
   const contentType = response.headers.get('content-type') ?? '';

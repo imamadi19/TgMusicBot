@@ -9,6 +9,11 @@ import { downloadNexRayYtMp3, searchNexRayYouTube } from './nexray.js';
 const SUPPORTED_HOSTS = ['youtube.com', 'youtu.be', 'open.spotify.com', 'saavn', 'jiosaavn.com', 'music.apple.com', 'soundcloud.com'];
 const MAX_ERROR_LENGTH = 700;
 
+function timeoutSignal(timeoutMs) {
+  const value = Number(timeoutMs);
+  return Number.isFinite(value) && value > 0 ? AbortSignal.timeout(value) : undefined;
+}
+
 function shortenError(message) {
   const text = String(message ?? '').replace(/\s+/g, ' ').trim();
   if (text.includes("Sign in to confirm you're not a bot")) {
@@ -26,7 +31,7 @@ async function cookieArgs() {
 
   const cookieUrl = config.cookiesUrl[0];
   const cookieFile = path.join(config.downloadsDir, 'yt-dlp-cookies.txt');
-  const response = await fetch(cookieUrl);
+  const response = await fetch(cookieUrl, { signal: timeoutSignal(config.requestTimeoutMs) });
   if (!response.ok) throw new Error(`Failed to fetch cookies: ${response.status} ${response.statusText}`);
   await fs.writeFile(cookieFile, await response.text(), { mode: 0o600 });
   return ['--cookies', cookieFile];
@@ -36,15 +41,36 @@ async function ytDlpBaseArgs() {
   return ['--no-playlist', '--js-runtimes', 'node', ...(await cookieArgs())];
 }
 
-function run(command, args) {
+function run(command, args, { timeoutMs = config.ytdlpTimeoutMs } = {}) {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+    let settled = false;
+    const timeout = Number(timeoutMs) > 0
+      ? setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        if (!child.killed) child.kill('SIGTERM');
+        setTimeout(() => {
+          if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
+        }, 5000).unref?.();
+        reject(new Error(`${command} timeout setelah ${Math.round(timeoutMs / 1000)} detik. Coba ulangi lagu/link lain atau naikkan YTDLP_TIMEOUT_MS.`));
+      }, timeoutMs)
+      : null;
+    timeout?.unref?.();
     let stdout = '';
     let stderr = '';
     child.stdout.on('data', (chunk) => { stdout += chunk; });
     child.stderr.on('data', (chunk) => { stderr += chunk; });
-    child.on('error', reject);
+    child.on('error', (error) => {
+      if (settled) return;
+      settled = true;
+      if (timeout) clearTimeout(timeout);
+      reject(error);
+    });
     child.on('close', (code) => {
+      if (settled) return;
+      settled = true;
+      if (timeout) clearTimeout(timeout);
       if (code === 0) resolve(stdout);
       else reject(new Error(shortenError(stderr || `${command} exited with code ${code}`)));
     });

@@ -87,6 +87,11 @@ function clearTimer(timer) {
   if (timer) clearTimeout(timer);
 }
 
+function waitForExit(child) {
+  if (child.exitCode !== null || child.signalCode !== null) return Promise.resolve();
+  return new Promise((resolve) => child.once('exit', resolve));
+}
+
 export class VoicePlayer {
   #active = new Map();
 
@@ -250,13 +255,14 @@ export class VoicePlayer {
       const failures = [];
       for (const candidate of sessionCandidates) {
         try {
-          await this.#spawnAdapter(chatId, {
+          const child = await this.#spawnAdapter(chatId, {
             TGMB_ACTION: 'join_chat',
             TGMB_SESSION_STRING: candidate.sessionString,
             TGMB_ASSISTANT_INDEX: String(candidate.assistantNumber),
             TGMB_INVITE_LINK: inviteLinks[0] ?? '',
             TGMB_INVITE_LINKS: JSON.stringify(inviteLinks),
           });
+          await waitForExit(child);
           return true;
         } catch (error) {
           failures.push({ assistantNumber: candidate.assistantNumber, error });
@@ -287,8 +293,17 @@ export class VoicePlayer {
     const sessionCandidates = sessionCandidatesForChat(chatId);
     if (sessionCandidates.length === 0) throw new Error('STRING1/SESSION_STRINGS belum diisi, assistant tidak bisa join obrolan video.');
 
-    this.#cancelLeaveTimer(chatId);
-    this.#killActive(chatId);
+    const key = String(chatId);
+    if (this.#joinAttempts.has(key)) {
+      try {
+        await this.#joinAttempts.get(key);
+      } catch (error) {
+        console.warn(`Assistant pre-join failed for chat ${chatId}; play will retry directly.`, error);
+      }
+    }
+
+    this.#cancelLeaveTimer(key);
+    this.#killActive(key);
 
     const inviteLinks = normalizeInviteLinks(options);
     const failures = [];
@@ -398,7 +413,7 @@ export class VoicePlayer {
       TGMB_ACTION: 'leave_chat',
       TGMB_SESSION_STRING: sessionString,
     }, { waitReady: false });
-    await new Promise((resolve) => child.once('exit', resolve));
+    await waitForExit(child);
     return true;
   }
 
