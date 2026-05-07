@@ -27,6 +27,7 @@ paused = False
 call_client = None
 chat_id = None
 client = None
+stream_started = False
 
 
 def require_env(name: str) -> str:
@@ -51,6 +52,13 @@ async def call_method_with_optional_chat(method):
         return await call_method(method, chat_id)
     except TypeError:
         return await call_method(method)
+
+
+async def call_method_with_optional_chat_and_file(method, file_path: str):
+    try:
+        return await call_method(method, chat_id, file_path)
+    except TypeError:
+        return await call_method(method, file_path)
 
 
 async def maybe_call_async(obj, *names):
@@ -114,15 +122,36 @@ def resume(*_args):
     schedule_control("resume", resume_async())
 
 
+async def switch_stream_in_current_call(file_path: str) -> bool:
+    """Switch media source without asking PyTgCalls to join the call again.
+
+    PyTgCalls releases expose different method names for in-call source
+    replacement. Prefer those methods when available so queue transitions and
+    manual skips keep the assistant in the existing group call instead of
+    leaving and rejoining between songs.
+    """
+    for name in ("change_stream", "change_stream_source", "change_stream_sources", "set_stream", "set_stream_source"):
+        method = getattr(call_client, name, None)
+        if not callable(method):
+            continue
+        await call_method_with_optional_chat_and_file(method, file_path)
+        return True
+    return False
+
+
 async def play_file_async(file_path: str):
-    global paused
+    global paused, stream_started
     if call_client is None or chat_id is None:
         raise RuntimeError("voice call belum aktif")
     if not file_path:
         raise RuntimeError("file_path kosong")
     if paused:
         await resume_async()
+    if stream_started and await switch_stream_in_current_call(file_path):
+        paused = False
+        return
     await call_method(call_client.play, chat_id, file_path)
+    stream_started = True
     paused = False
 
 

@@ -5,11 +5,18 @@ import { getUserLanguage } from '../core/db/user-settings.js';
 import { requesterKey, voicePlayer } from '../core/player/player.js';
 import { config } from '../config/index.js';
 import { t } from '../i18n/index.js';
-import { adminModeCallback } from './filters.js';
 import { controlKeyboard, progressLabel } from './keyboards.js';
 
+const requesterOnlyActions = new Set(['skip', 'stop', 'pause', 'resume', 'replay', 'mute', 'unmute']);
+
 function actionFromData(data = '') {
-  return data.replace(/^(?:vcplay_|play_)/, '');
+  return data.replace(/^(?:vcplay_|play_)/, '').split(':', 1)[0];
+}
+
+function isTrackRequester(ctx, track) {
+  const requesterId = Number(track?.userId ?? track?.requesterId ?? track?.requestedById);
+  if (!Number.isFinite(requesterId) || requesterId <= 0) return true;
+  return requesterId === Number(ctx.from?.id);
 }
 
 async function answer(ctx, text, { showAlert = true } = {}) {
@@ -73,11 +80,6 @@ export async function vcPlayCallbackHandler(ctx) {
     return;
   }
 
-  if (!(await adminModeCallback(ctx))) {
-    await answer(ctx, t(language, 'auth.adminOnly'));
-    return;
-  }
-
   const chatId = ctx.chat.id;
   const currentTrack = chatCache.current(chatId);
   if (!currentTrack) {
@@ -85,12 +87,16 @@ export async function vcPlayCallbackHandler(ctx) {
     return;
   }
 
+  if (requesterOnlyActions.has(action) && !isTrackRequester(ctx, currentTrack)) {
+    await answer(ctx, t(language, 'callbacks.requesterOnly'));
+    return;
+  }
+
   try {
     switch (action) {
       case 'progress': {
         const activeTrack = voicePlayer.activeTrack(chatId) ?? currentTrack;
-        await answer(ctx, progressLabel(activeTrack));
-        await editPlaybackControls(ctx, language, '', activeTrack);
+        await answer(ctx, progressLabel(activeTrack), { showAlert: false });
         return;
       }
       case 'skip': {

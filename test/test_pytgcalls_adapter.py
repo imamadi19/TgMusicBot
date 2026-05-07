@@ -28,6 +28,13 @@ class FakeCallClient:
         return True
 
 
+class FakeSwitchCallClient(FakeCallClient):
+    async def change_stream(self, chat_id, file_path):
+        await asyncio.sleep(0)
+        self.calls.append(("change_stream", chat_id, file_path))
+        return True
+
+
 class FakeChatAccessClient:
     def __init__(self, *, chat=None, get_chat_error=None, dialogs=None):
         self.chat = chat
@@ -61,6 +68,7 @@ class AdapterControlSignalTest(unittest.IsolatedAsyncioTestCase):
         self.adapter.call_client = self.fake_call_client
         self.adapter.chat_id = -100123
         self.adapter.paused = False
+        self.adapter.stream_started = False
 
     async def test_pause_and_resume_schedule_async_pytgcalls_methods(self):
         self.adapter.pause()
@@ -75,13 +83,27 @@ class AdapterControlSignalTest(unittest.IsolatedAsyncioTestCase):
             [("pause", -100123), ("resume", -100123)],
         )
 
-    async def test_play_control_command_switches_stream_in_same_call(self):
+    async def test_play_control_command_starts_stream_when_no_stream_exists_yet(self):
+        await self.adapter.handle_stdin_command({"action": "play", "file_path": "/tmp/next.mp3"})
+
+        self.assertFalse(self.adapter.paused)
+        self.assertTrue(self.adapter.stream_started)
+        self.assertEqual(
+            self.fake_call_client.calls,
+            [("play", -100123, "/tmp/next.mp3")],
+        )
+
+    async def test_play_control_command_prefers_in_call_stream_switch(self):
+        self.fake_call_client = FakeSwitchCallClient()
+        self.adapter.call_client = self.fake_call_client
+        self.adapter.stream_started = True
+
         await self.adapter.handle_stdin_command({"action": "play", "file_path": "/tmp/next.mp3"})
 
         self.assertFalse(self.adapter.paused)
         self.assertEqual(
             self.fake_call_client.calls,
-            [("play", -100123, "/tmp/next.mp3")],
+            [("change_stream", -100123, "/tmp/next.mp3")],
         )
 
     async def test_play_control_command_resumes_before_switching_paused_stream(self):

@@ -94,6 +94,110 @@ test('control keyboard exposes moving progress and transport controls', async ()
 });
 
 
+test('playback control callbacks do not require group administrator status', async () => {
+  const { chatCache } = await import('../src/core/cache/chat-cache.js');
+  const { vcPlayCallbackHandler } = await import('../src/handlers/callbacks.js');
+  const { voicePlayer } = await import('../src/core/player/player.js');
+  const chatId = -9100;
+  const answers = [];
+  let pauseChatId = null;
+  const originalPause = voicePlayer.pause;
+
+  chatCache.clear(chatId);
+  chatCache.addSong(chatId, { trackId: 'pause-test', name: 'Pause Test', duration: 65, url: 'https://example.com/pause-test', userId: 321 });
+  voicePlayer.pause = async (targetChatId) => {
+    pauseChatId = targetChatId;
+    return true;
+  };
+
+  try {
+    await vcPlayCallbackHandler({
+      chat: { id: chatId, type: 'supergroup' },
+      from: { id: 321 },
+      callbackQuery: { data: 'play_pause', message: { message_id: 10 } },
+      async answerCallbackQuery(payload) { answers.push(payload); },
+      async editMessageReplyMarkup() {},
+      api: {
+        async getChatMember() { throw new Error('admin lookup should not be required for playback controls'); },
+        async editMessageReplyMarkup() {},
+      },
+    });
+  } finally {
+    voicePlayer.pause = originalPause;
+    chatCache.clear(chatId);
+  }
+
+  assert.equal(pauseChatId, chatId);
+  assert.equal(answers[0]?.text, 'Playback paused.');
+});
+
+
+test('playback control callbacks are limited to the track requester', async () => {
+  const { chatCache } = await import('../src/core/cache/chat-cache.js');
+  const { vcPlayCallbackHandler } = await import('../src/handlers/callbacks.js');
+  const { voicePlayer } = await import('../src/core/player/player.js');
+  const chatId = -9101;
+  const answers = [];
+  let pauseCalled = false;
+  const originalPause = voicePlayer.pause;
+
+  chatCache.clear(chatId);
+  chatCache.addSong(chatId, { trackId: 'requester-test', name: 'Requester Test', duration: 65, url: 'https://example.com/requester-test', userId: 111 });
+  voicePlayer.pause = async () => {
+    pauseCalled = true;
+    return true;
+  };
+
+  try {
+    await vcPlayCallbackHandler({
+      chat: { id: chatId, type: 'supergroup' },
+      from: { id: 222 },
+      callbackQuery: { data: 'play_pause', message: { message_id: 11 } },
+      async answerCallbackQuery(payload) { answers.push(payload); },
+      async editMessageReplyMarkup() { throw new Error('non-requester must not edit playback controls'); },
+      api: {
+        async getChatMember() { throw new Error('admin lookup should not be required for playback controls'); },
+        async editMessageReplyMarkup() { throw new Error('non-requester must not edit playback controls'); },
+      },
+    });
+  } finally {
+    voicePlayer.pause = originalPause;
+    chatCache.clear(chatId);
+  }
+
+  assert.equal(pauseCalled, false);
+  assert.equal(answers[0]?.text, 'Only the user who requested this track can use these buttons.');
+});
+
+test('progress callback only answers progress without restoring controls on old panels', async () => {
+  const { chatCache } = await import('../src/core/cache/chat-cache.js');
+  const { vcPlayCallbackHandler } = await import('../src/handlers/callbacks.js');
+  const chatId = -9102;
+  const answers = [];
+
+  chatCache.clear(chatId);
+  chatCache.addSong(chatId, { trackId: 'progress-test', name: 'Progress Test', duration: 65, url: 'https://example.com/progress-test', userId: 111 });
+
+  try {
+    await vcPlayCallbackHandler({
+      chat: { id: chatId, type: 'supergroup' },
+      from: { id: 222 },
+      callbackQuery: { data: 'play_progress', message: { message_id: 12 } },
+      async answerCallbackQuery(payload) { answers.push(payload); },
+      async editMessageReplyMarkup() { throw new Error('progress button must not restore transport controls'); },
+      api: {
+        async editMessageReplyMarkup() { throw new Error('progress button must not restore transport controls'); },
+      },
+    });
+  } finally {
+    chatCache.clear(chatId);
+  }
+
+  assert.match(answers[0]?.text, /^00:00 \| ◉/);
+  assert.equal(answers[0]?.show_alert, false);
+});
+
+
 test('youtube selection keyboard uses carousel navigation with top result selected first', async () => {
   const { youtubeSelectionKeyboard } = await import('../src/handlers/keyboards.js');
   const tracks = [{ name: 'A' }, { name: 'B' }, { name: 'C' }];
