@@ -320,7 +320,7 @@ def main() -> int:
         if action == "join_chat":
             print(READY_MARKER, flush=True)
             return 0
-
+        
         from pytgcalls import PyTgCalls
 
         call_client = PyTgCalls(client)

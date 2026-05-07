@@ -260,6 +260,7 @@ export class VoicePlayer {
             TGMB_INVITE_LINK: inviteLinks[0] ?? '',
             TGMB_INVITE_LINKS: JSON.stringify(inviteLinks),
           }, { timeoutMs: JOIN_TIMEOUT_MS });
+          });
           return true;
         } catch (error) {
           failures.push({ assistantNumber: candidate.assistantNumber, error });
