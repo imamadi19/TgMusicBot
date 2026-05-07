@@ -135,7 +135,7 @@ export async function vcPlayCallbackHandler(ctx) {
         return;
       }
       case 'pause': {
-        if (!voicePlayer.pause(chatId)) {
+        if (!(await voicePlayer.pause(chatId))) {
           await answer(ctx, t(language, 'callbacks.noActivePlayback'));
           return;
         }
@@ -144,7 +144,7 @@ export async function vcPlayCallbackHandler(ctx) {
         return;
       }
       case 'resume': {
-        if (!voicePlayer.resume(chatId)) {
+        if (!(await voicePlayer.resume(chatId))) {
           await answer(ctx, t(language, 'callbacks.noActivePlayback'));
           return;
         }

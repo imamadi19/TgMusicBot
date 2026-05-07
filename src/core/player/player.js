@@ -478,48 +478,51 @@ export class VoicePlayer {
     return this.#setActiveTrack(key, track, child, assistantNumber);
   }
 
-  pause(chatId) {
-    const active = this.#active.get(String(chatId));
+  async pause(chatId) {
+    const key = String(chatId);
+    const active = this.#active.get(key);
     if (!active) return false;
-    chatCache.setPaused(chatId, true);
+    chatCache.setPaused(key, true);
     if (active.timerEndsAt) {
       active.remainingMs = Math.max(1000, active.timerEndsAt - Date.now());
       active.timerEndsAt = null;
-      const currentTrack = chatCache.current(chatId);
+      const currentTrack = chatCache.current(key);
       if (currentTrack) {
         currentTrack.remainingMs = active.remainingMs;
         currentTrack.timerEndsAt = null;
         currentTrack.startedAt = active.startedAt;
       }
-      this.#clearFinishTimer(chatId);
+      this.#clearFinishTimer(key);
     }
-    signalProcess(active.process, 'SIGUSR1');
-    setTimeout(() => {
-      const current = this.#active.get(String(chatId));
-      if (current?.process === active.process && chatCache.isPaused(chatId)) {
-        signalProcess(active.process, 'SIGSTOP');
-        current.suspended = true;
-      }
-    }, 200).unref?.();
-    return true;
-  }
 
-  resume(chatId) {
-    const active = this.#active.get(String(chatId));
-    if (!active) return false;
-    chatCache.setPaused(chatId, false);
     if (active.suspended) {
       signalProcess(active.process, 'SIGCONT');
       active.suspended = false;
     }
-    signalProcess(active.process, 'SIGUSR2');
+    const acknowledged = await sendAdapterCommand(active, { action: 'pause' });
+    if (!acknowledged) signalProcess(active.process, 'SIGUSR1');
+    return true;
+  }
+
+  async resume(chatId) {
+    const key = String(chatId);
+    const active = this.#active.get(key);
+    if (!active) return false;
+    if (active.suspended) {
+      signalProcess(active.process, 'SIGCONT');
+      active.suspended = false;
+    }
+
+    const acknowledged = await sendAdapterCommand(active, { action: 'resume' });
+    if (!acknowledged) signalProcess(active.process, 'SIGUSR2');
+    chatCache.setPaused(key, false);
     if (active.remainingMs && !active.timerEndsAt) {
       const trackDurationMs = durationToMs(active.duration);
       if (trackDurationMs) {
         active.startedAt = new Date(Date.now() - Math.max(0, trackDurationMs - active.remainingMs));
       }
-      this.#scheduleTrackEnd(chatId, active, active.process, active.remainingMs);
-      const currentTrack = chatCache.current(chatId);
+      this.#scheduleTrackEnd(key, active, active.process, active.remainingMs);
+      const currentTrack = chatCache.current(key);
       if (currentTrack) {
         currentTrack.remainingMs = active.remainingMs;
         currentTrack.timerEndsAt = active.timerEndsAt;
