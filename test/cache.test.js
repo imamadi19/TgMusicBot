@@ -85,6 +85,24 @@ test('control keyboard exposes callback actions from Go flow', async () => {
   assert.equal(muted[3], 'play_unmute');
 });
 
+
+test('youtube selection keyboard uses carousel navigation with top result selected first', async () => {
+  const { youtubeSelectionKeyboard } = await import('../src/handlers/keyboards.js');
+  const tracks = [{ name: 'A' }, { name: 'B' }, { name: 'C' }];
+
+  const first = youtubeSelectionKeyboard(99, tracks).inline_keyboard;
+  assert.deepEqual(first.map((row) => row.map((button) => button.callback_data)), [
+    ['ytpage:99:2', 'ytpage:99:1'],
+    ['ytpick:99:0'],
+  ]);
+
+  const middle = youtubeSelectionKeyboard(99, tracks, 1).inline_keyboard;
+  assert.deepEqual(middle.map((row) => row.map((button) => button.callback_data)), [
+    ['ytpage:99:0', 'ytpage:99:2'],
+    ['ytpick:99:1'],
+  ]);
+});
+
 test('new auth broadcast callback keys are localized beyond English', async () => {
   const { languages } = await import('../src/i18n/languages.js');
   const { t } = await import('../src/i18n/index.js');
