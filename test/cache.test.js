@@ -72,17 +72,14 @@ test('broadcast options and targets mirror Go handler flags', async () => {
   assert.equal(getFloodWait(new Error('boom')), 0);
 });
 
-test('control keyboard exposes callback actions from Go flow', async () => {
+test('control keyboard exposes player-style progress and transport controls', async () => {
   const { controlKeyboard } = await import('../src/handlers/keyboards.js');
 
-  const normal = controlKeyboard('en').inline_keyboard.flat().map((button) => button.callback_data);
-  assert.deepEqual(normal, ['play_pause', 'play_skip', 'play_stop', 'play_mute', 'play_add_to_list', 'vcplay_close']);
-
-  const paused = controlKeyboard('en', 'pause').inline_keyboard.flat().map((button) => button.callback_data);
-  assert.equal(paused[0], 'play_resume');
-
-  const muted = controlKeyboard('en', 'mute').inline_keyboard.flat().map((button) => button.callback_data);
-  assert.equal(muted[3], 'play_unmute');
+  const rows = controlKeyboard('en', '', { duration: 65 }).inline_keyboard;
+  assert.equal(rows[0][0].callback_data, 'play_progress');
+  assert.equal(rows[0][0].text, '00:00 | ━━━━━━━━◉ | -01:05');
+  assert.deepEqual(rows[1].map((button) => button.callback_data), ['play_resume', 'play_pause', 'play_replay', 'play_skip', 'play_stop']);
+  assert.deepEqual(rows[1].map((button) => button.text), ['▷', 'Ⅱ', '↻', '▸▸▏', '▢']);
 });
 
 

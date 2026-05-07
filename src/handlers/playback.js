@@ -61,6 +61,14 @@ async function startCachedTrack(chatId, track) {
   return voicePlayer.play(chatId, track);
 }
 
+function prepareAssistantJoin(ctx) {
+  const chatId = ctx.chat?.id;
+  if (!chatId) return;
+  createAssistantInviteLinks(ctx)
+    .then((inviteLinks) => voicePlayer.joinChat(chatId, { inviteLinks }))
+    .catch((error) => console.warn(`Assistant gagal join awal untuk chat ${chatId}`, error));
+}
+
 voicePlayer.onTrackEnd(async ({ chatId, next }) => {
   if (!next) return;
   try {
@@ -180,7 +188,7 @@ async function queueAndMaybePlay(ctx, statusMessage, track, isVideo, language) {
   }
   const length = chatCache.addSong(chatId, saveTrack);
   if (length > 1) {
-    await editStatus(ctx, statusMessage, formatTrack(language, saveTrack, length), { parse_mode: 'HTML', reply_markup: controlKeyboard(language), disable_web_page_preview: true });
+    await editStatus(ctx, statusMessage, formatTrack(language, saveTrack, length), { parse_mode: 'HTML', disable_web_page_preview: true });
     return;
   }
 
@@ -192,13 +200,14 @@ async function queueAndMaybePlay(ctx, statusMessage, track, isVideo, language) {
     return;
   }
   try {
-    await startQueuedTrack(ctx, saveTrack, isVideo);
+    const activeTrack = await startQueuedTrack(ctx, saveTrack, isVideo);
+    saveTrack.startedAt = activeTrack?.startedAt;
   } catch (error) {
     chatCache.shift(chatId);
     await editStatus(ctx, statusMessage, t(language, 'playback.voiceFailed', { error: formatError(error) }));
     return;
   }
-  await editStatus(ctx, statusMessage, formatTrack(language, saveTrack), { parse_mode: 'HTML', reply_markup: controlKeyboard(language), disable_web_page_preview: true });
+  await editStatus(ctx, statusMessage, formatTrack(language, saveTrack), { parse_mode: 'HTML', reply_markup: controlKeyboard(language, '', saveTrack), disable_web_page_preview: true });
 }
 
 export async function playHandler(ctx, isVideo = false) {
@@ -220,6 +229,7 @@ export async function playHandler(ctx, isVideo = false) {
   }
 
   const status = await ctx.reply(input.startsWith('tgpl_') ? t(language, 'playback.searchingPlaylist') : t(language, 'playback.searchingDownload'));
+  prepareAssistantJoin(ctx);
 
   if (input.startsWith('tgpl_')) {
     const playlist = await getPlaylist(input);
@@ -239,7 +249,7 @@ export async function playHandler(ctx, isVideo = false) {
     }
     const queueWasEmpty = chatCache.getQueueLength(chatId) === 0;
     const length = chatCache.addSongs(chatId, tracks);
-    await editStatus(ctx, status, t(language, 'playback.addedPlaylistTracks', { count: tracks.length, length }), { reply_markup: controlKeyboard(language) });
+    await editStatus(ctx, status, t(language, 'playback.addedPlaylistTracks', { count: tracks.length, length }));
     if (queueWasEmpty) {
       try {
         await startQueuedTrack(ctx, tracks[0], isVideo);

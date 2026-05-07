@@ -5,8 +5,6 @@ import { getUserLanguage } from '../core/db/user-settings.js';
 import { voicePlayer } from '../core/player/player.js';
 import { config } from '../config/index.js';
 import { t } from '../i18n/index.js';
-import { secondsToClock } from '../utils/duration.js';
-import { htmlEscape } from '../utils/telegram.js';
 import { adminModeCallback } from './filters.js';
 import { controlKeyboard } from './keyboards.js';
 
@@ -14,30 +12,22 @@ function actionFromData(data = '') {
   return data.replace(/^(?:vcplay_|play_)/, '');
 }
 
-function callbackUserName(ctx) {
-  return ctx.from?.first_name || ctx.from?.username || t('en', 'general.user');
-}
-
-function formatTrackStatus(language, track, statusKey, emoji = '▶') {
-  const prefix = emoji ? `${emoji} ` : '';
-  return `${prefix}${t(language, statusKey)}\n\n<b>${t(language, 'callbacks.track')}:</b> <a href="${htmlEscape(track.url)}">${htmlEscape(track.name)}</a>\n<b>${t(language, 'playback.duration')}:</b> ${secondsToClock(track.duration)}\n<b>${t(language, 'playback.requestedBy')}:</b> ${htmlEscape(track.user)}`;
-}
-
 async function answer(ctx, text) {
   await ctx.answerCallbackQuery({ text }).catch(() => {});
 }
 
-async function editPlaybackMessage(ctx, text, language, state = '') {
-  await ctx.editMessageText(text, {
-    parse_mode: 'HTML',
-    reply_markup: controlKeyboard(language, state),
-    disable_web_page_preview: true,
-  }).catch(async () => {
-    await ctx.api.editMessageText(ctx.chat.id, ctx.callbackQuery.message.message_id, text, {
-      parse_mode: 'HTML',
-      reply_markup: controlKeyboard(language, state),
-      disable_web_page_preview: true,
-    }).catch(() => {});
+async function editPlaybackControls(ctx, language, state = '', track = null) {
+  const active = track ?? voicePlayer.activeTrack(ctx.chat.id) ?? chatCache.current(ctx.chat.id);
+  const options = { reply_markup: controlKeyboard(language, state, active) };
+  await ctx.editMessageReplyMarkup(options).catch(async () => {
+    await ctx.api.editMessageReplyMarkup(ctx.chat.id, ctx.callbackQuery.message.message_id, options).catch(() => {});
+  });
+}
+
+async function clearPlaybackControls(ctx) {
+  const options = { reply_markup: { inline_keyboard: [] } };
+  await ctx.editMessageReplyMarkup(options).catch(async () => {
+    await ctx.api.editMessageReplyMarkup(ctx.chat.id, ctx.callbackQuery.message.message_id, options).catch(() => {});
   });
 }
 
@@ -101,14 +91,17 @@ export async function vcPlayCallbackHandler(ctx) {
   const currentTrack = chatCache.current(chatId);
   if (!currentTrack) {
     await answer(ctx, t(language, 'callbacks.noActivePlayback'));
-    await editPlaybackMessage(ctx, t(language, 'callbacks.noActivePlayback'), language);
+    await clearPlaybackControls(ctx);
     return;
   }
 
-  const userName = htmlEscape(callbackUserName(ctx));
-
   try {
     switch (action) {
+      case 'progress': {
+        await ctx.answerCallbackQuery().catch(() => {});
+        await editPlaybackControls(ctx, language);
+        return;
+      }
       case 'skip': {
         const { skipped, next } = voicePlayer.skip(chatId);
         if (!skipped) {
@@ -117,46 +110,61 @@ export async function vcPlayCallbackHandler(ctx) {
         }
         if (!next) {
           await answer(ctx, t(language, 'callbacks.trackSkipped'));
-          await ctx.deleteMessage().catch(() => {});
+          await clearPlaybackControls(ctx);
           return;
         }
-        await startNextTrack(chatId, next);
+        const activeTrack = await startNextTrack(chatId, next);
         await answer(ctx, t(language, 'callbacks.trackSkipped'));
-        await ctx.deleteMessage().catch(() => {});
+        await editPlaybackControls(ctx, language, '', activeTrack);
         return;
       }
       case 'stop': {
-        voicePlayer.stop(chatId);
+        if (!voicePlayer.stop(chatId)) {
+          await answer(ctx, t(language, 'callbacks.noActivePlayback'));
+          await clearPlaybackControls(ctx);
+          return;
+        }
         await answer(ctx, t(language, 'callbacks.playbackStopped'));
-        await editPlaybackMessage(ctx, `${t(language, 'callbacks.playbackStopped')}\n${t(language, 'callbacks.requestedBy', { user: userName })}`, language);
+        await clearPlaybackControls(ctx);
         return;
       }
       case 'pause': {
-        voicePlayer.pause(chatId);
+        if (!voicePlayer.pause(chatId)) {
+          await answer(ctx, t(language, 'callbacks.noActivePlayback'));
+          await clearPlaybackControls(ctx);
+          return;
+        }
         await answer(ctx, t(language, 'callbacks.playbackPaused'));
-        const text = `${formatTrackStatus(language, currentTrack, 'callbacks.paused', '⏸')}\n\n${t(language, 'callbacks.pausedBy', { user: userName })}`;
-        await editPlaybackMessage(ctx, text, language, 'pause');
+        await editPlaybackControls(ctx, language, 'pause');
         return;
       }
       case 'resume': {
-        voicePlayer.resume(chatId);
+        if (!voicePlayer.resume(chatId)) {
+          await answer(ctx, t(language, 'callbacks.noActivePlayback'));
+          await clearPlaybackControls(ctx);
+          return;
+        }
         await answer(ctx, t(language, 'callbacks.playbackResumed'));
-        const text = `${formatTrackStatus(language, currentTrack, 'callbacks.nowPlaying', '▶')}\n\n${t(language, 'callbacks.resumedBy', { user: userName })}`;
-        await editPlaybackMessage(ctx, text, language, 'resume');
+        await editPlaybackControls(ctx, language, 'resume');
+        return;
+      }
+      case 'replay': {
+        await ensureDownloaded(currentTrack);
+        const activeTrack = await voicePlayer.play(chatId, { ...currentTrack });
+        await answer(ctx, t(language, 'callbacks.playbackResumed'));
+        await editPlaybackControls(ctx, language, '', activeTrack);
         return;
       }
       case 'mute': {
         chatCache.setMuted(chatId, true);
         await answer(ctx, t(language, 'callbacks.playbackMuted'));
-        const text = `${formatTrackStatus(language, currentTrack, 'callbacks.muted', '')}\n\n${t(language, 'callbacks.mutedBy', { user: userName })}`;
-        await editPlaybackMessage(ctx, text, language, 'mute');
+        await editPlaybackControls(ctx, language, 'mute');
         return;
       }
       case 'unmute': {
         chatCache.setMuted(chatId, false);
         await answer(ctx, t(language, 'callbacks.playbackUnmuted'));
-        const text = `${formatTrackStatus(language, currentTrack, 'callbacks.nowPlaying', '▶')}\n\n${t(language, 'callbacks.unmutedBy', { user: userName })}`;
-        await editPlaybackMessage(ctx, text, language, 'unmute');
+        await editPlaybackControls(ctx, language, 'unmute');
         return;
       }
       case 'add_to_list': {
@@ -164,13 +172,12 @@ export async function vcPlayCallbackHandler(ctx) {
         return;
       }
       default: {
-        const text = formatTrackStatus(language, currentTrack, 'callbacks.nowPlaying', '▶');
-        await editPlaybackMessage(ctx, text, language, 'resume');
+        await editPlaybackControls(ctx, language, 'resume');
       }
     }
   } catch (error) {
     console.warn('Playback callback failed', error);
     await answer(ctx, t(language, 'callbacks.actionFailed'));
-    await editPlaybackMessage(ctx, t(language, 'callbacks.actionFailed'), language);
+    await editPlaybackControls(ctx, language);
   }
 }
