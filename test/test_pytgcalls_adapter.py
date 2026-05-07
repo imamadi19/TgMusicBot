@@ -1,6 +1,7 @@
 import asyncio
 import importlib.util
 from pathlib import Path
+from types import SimpleNamespace
 import unittest
 
 
@@ -24,6 +25,28 @@ class FakeCallClient:
     async def play(self, chat_id, file_path):
         await asyncio.sleep(0)
         self.calls.append(("play", chat_id, file_path))
+        return True
+
+
+class FakeChatAccessClient:
+    def __init__(self, *, chat=None, get_chat_error=None, dialogs=None):
+        self.chat = chat
+        self.get_chat_error = get_chat_error
+        self.dialogs = dialogs or []
+        self.get_chat_calls = []
+        self.join_chat_calls = []
+
+    async def get_chat(self, chat_id):
+        self.get_chat_calls.append(chat_id)
+        if self.get_chat_error is not None:
+            raise self.get_chat_error
+        return self.chat
+
+    def get_dialogs(self):
+        return self.dialogs
+
+    async def join_chat(self, invite_link):
+        self.join_chat_calls.append(invite_link)
         return True
 
 
@@ -71,6 +94,36 @@ class AdapterControlSignalTest(unittest.IsolatedAsyncioTestCase):
             self.fake_call_client.calls,
             [("resume", -100123), ("play", -100123, "/tmp/current.mp3")],
         )
+
+    async def test_existing_chat_skips_invite_links(self):
+        chat = SimpleNamespace(id=-100123)
+        client = FakeChatAccessClient(chat=chat)
+
+        existing_chat = await self.adapter.ensure_target_chat_ready(client, -100123, ["https://t.me/+invite"])
+
+        self.assertIs(existing_chat, chat)
+        self.assertEqual(client.get_chat_calls, [-100123])
+        self.assertEqual(client.join_chat_calls, [])
+
+    async def test_dialog_match_skips_invite_when_get_chat_fails(self):
+        chat = SimpleNamespace(id=-100123)
+        client = FakeChatAccessClient(
+            get_chat_error=RuntimeError("CHANNEL_INVALID"),
+            dialogs=[SimpleNamespace(chat=chat)],
+        )
+
+        existing_chat = await self.adapter.ensure_target_chat_ready(client, -100123, ["https://t.me/+invite"])
+
+        self.assertIs(existing_chat, chat)
+        self.assertEqual(client.join_chat_calls, [])
+
+    async def test_missing_chat_uses_invite_link(self):
+        client = FakeChatAccessClient(get_chat_error=RuntimeError("CHANNEL_INVALID"))
+
+        existing_chat = await self.adapter.ensure_target_chat_ready(client, -100123, ["https://t.me/+invite"])
+
+        self.assertIsNone(existing_chat)
+        self.assertEqual(client.join_chat_calls, ["https://t.me/+invite"])
 
 
 if __name__ == "__main__":

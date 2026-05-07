@@ -233,6 +233,63 @@ def patch_pyrogram_large_chat_ids() -> None:
     pyrogram_utils.get_peer_type = get_peer_type
 
 
+def same_chat_id(value, target_chat_id: int) -> bool:
+    try:
+        return int(value) == int(target_chat_id)
+    except (TypeError, ValueError):
+        return False
+
+
+def chat_from_dialog(dialog):
+    return getattr(dialog, "chat", dialog)
+
+
+async def find_dialog_chat(client, target_chat_id: int):
+    get_dialogs = getattr(client, "get_dialogs", None)
+    if not callable(get_dialogs):
+        return None
+
+    dialogs = get_dialogs()
+    if inspect.isawaitable(dialogs):
+        dialogs = await dialogs
+
+    if hasattr(dialogs, "__aiter__"):
+        async for dialog in dialogs:
+            chat = chat_from_dialog(dialog)
+            if same_chat_id(getattr(chat, "id", None), target_chat_id):
+                return chat
+        return None
+
+    for dialog in dialogs or []:
+        chat = chat_from_dialog(dialog)
+        if same_chat_id(getattr(chat, "id", None), target_chat_id):
+            return chat
+    return None
+
+
+async def get_existing_target_chat(client, target_chat_id: int):
+    try:
+        chat = await call_method(client.get_chat, target_chat_id)
+        print("TGMB_ASSISTANT_ALREADY_IN_CHAT", flush=True)
+        return chat
+    except Exception:
+        pass
+
+    chat = await find_dialog_chat(client, target_chat_id)
+    if chat is not None:
+        print("TGMB_ASSISTANT_ALREADY_IN_CHAT", flush=True)
+        return chat
+    return None
+
+
+async def ensure_target_chat_ready(client, target_chat_id: int, invite_links: list[str]):
+    existing_chat = await get_existing_target_chat(client, target_chat_id)
+    if existing_chat is not None:
+        return existing_chat
+    await join_from_invite_links(client, invite_links)
+    return None
+
+
 def describe_adapter_error(exc: Exception) -> tuple[str, bool]:
     """Return a short user-facing message and whether traceback is useful."""
     text = " ".join(str(exc).split())
@@ -342,13 +399,15 @@ async def leave_target_chat(client, target_chat_id: int) -> None:
         print(f"VOICE_ADAPTER_WARN: gagal keluar dari grup {target_chat_id}: {exc}", file=sys.stderr, flush=True)
 
 
-async def warm_peer_cache(client, target_chat_id: int) -> None:
+async def warm_peer_cache(client, target_chat_id: int, known_chat=None) -> None:
     """Resolve the target chat once before PyTgCalls starts streaming.
 
     PyTgCalls eventually asks Pyrogram to resolve ``target_chat_id``. Resolving
     it here gives Pyrogram a chance to populate its peer storage and lets us
     show a clear warning if the assistant has not joined the group yet.
     """
+    if known_chat is not None:
+        return
     try:
         await call_method(client.get_chat, target_chat_id)
     except Exception as exc:  # noqa: BLE001 - keep adapter startup best-effort.
@@ -428,8 +487,8 @@ async def main_async() -> int:
         if action not in {"play", "join_chat"}:
             raise RuntimeError(f"TGMB_ACTION tidak dikenal: {action}")
 
-        await join_from_invite_links(client, invite_links)
-        await warm_peer_cache(client, chat_id)
+        existing_chat = await ensure_target_chat_ready(client, chat_id, invite_links)
+        await warm_peer_cache(client, chat_id, existing_chat)
         await mute_target_chat_notifications(client, chat_id)
         if action == "join_chat":
             print(READY_MARKER, flush=True)

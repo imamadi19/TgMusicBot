@@ -1,5 +1,5 @@
 import { chatCache } from '../core/cache/chat-cache.js';
-import { Downloader } from '../core/dl/downloader.js';
+import { cleanupTrackDownload, cleanupTrackDownloads, ensureTrackDownloaded } from '../core/dl/queue-downloads.js';
 import { addSongToPlaylist, createPlaylist, listPlaylists } from '../core/db/playlists.js';
 import { getUserLanguage } from '../core/db/user-settings.js';
 import { requesterKey, voicePlayer } from '../core/player/player.js';
@@ -26,10 +26,7 @@ async function editPlaybackControls(ctx, language, state = '', track = null) {
 
 
 async function ensureDownloaded(track) {
-  if (track.filePath) return track.filePath;
-  const downloader = new Downloader(track.url);
-  track.filePath = await downloader.download(track, Boolean(track.isVideo));
-  return track.filePath;
+  return ensureTrackDownloaded(track, Boolean(track.isVideo));
 }
 
 async function startNextTrack(chatId, next) {
@@ -105,10 +102,12 @@ export async function vcPlayCallbackHandler(ctx) {
           return;
         }
         if (!next) {
+          cleanupTrackDownload(skipped, { chatId });
           await answer(ctx, t(language, 'callbacks.trackSkipped'));
           return;
         }
         const activeTrack = reusedTrack ?? await startNextTrack(chatId, next);
+        cleanupTrackDownload(skipped, { chatId });
         await answer(ctx, t(language, 'callbacks.trackSkipped'));
         await editPlaybackControls(ctx, language, '', activeTrack);
         return;
@@ -126,10 +125,12 @@ export async function vcPlayCallbackHandler(ctx) {
             await answer(ctx, t(language, 'callbacks.noActivePlayback'));
             return;
           }
+          cleanupTrackDownloads(queue, { chatId });
           await answer(ctx, t(language, 'callbacks.playbackStopped'));
           return;
         }
         const activeTrack = reusedTrack ?? await startNextTrack(chatId, next);
+        cleanupTrackDownload(stopped, { chatId });
         await answer(ctx, t(language, 'callbacks.trackSkipped'));
         await editPlaybackControls(ctx, language, '', activeTrack);
         return;
