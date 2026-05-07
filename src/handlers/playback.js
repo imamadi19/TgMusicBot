@@ -80,15 +80,38 @@ function formatTrack(language, track, queueLength = 1) {
   return `<u><b>${heading}</b></u>\n\n<b>${t(language, 'playback.title')}:</b> <a href="${htmlEscape(track.url)}">${htmlEscape(track.name)}</a>\n\n<b>${t(language, 'playback.duration')}:</b> ${secondsToClock(track.duration)}\n<b>${t(language, 'playback.requestedBy')}:</b> ${htmlEscape(track.user)}`;
 }
 
-async function editStatus(ctx, message, text, options = {}) {
-  return ctx.api.editMessageText(ctx.chat.id, message.message_id, text, options);
+function captionEditOptions(text, options = {}) {
+  const { disable_web_page_preview: _disableWebPagePreview, link_preview_options: _linkPreviewOptions, ...captionOptions } = options;
+  return { caption: text, ...captionOptions };
 }
 
+async function editStatus(ctx, message, text, options = {}) {
+  try {
+    return await ctx.api.editMessageText(ctx.chat.id, message.message_id, text, options);
+  } catch (error) {
+    try {
+      return await ctx.api.editMessageCaption(ctx.chat.id, message.message_id, captionEditOptions(text, options));
+    } catch {
+      throw error;
+    }
+  }
+}
 
-function formatSearchResult(language, track, index) {
+function selectedTrackIndex(tracks, index = 0) {
+  const total = Math.max(1, tracks.length);
+  return Math.max(0, Math.min(Number.parseInt(index, 10) || 0, total - 1));
+}
+
+function youtubeThumbnail(track) {
+  const value = String(track?.thumbnail ?? '').trim();
+  return /^https?:\/\//i.test(value) ? value : '';
+}
+
+function formatSearchResult(language, track, index, total) {
   const channel = track.channel || track.channelUrl || '-';
   const lines = [
-    `${index + 1}.`,
+    `🎵 <b>${t(language, 'playback.chooseTrack')}</b> (${index + 1}/${total})`,
+    '',
     `<b>${t(language, 'playback.title')}:</b> ${htmlEscape(track.title ?? track.name)}`,
     `<b>ChannelId:</b> ${htmlEscape(channel)}`,
     `<b>${t(language, 'playback.duration')}:</b> ${secondsToClock(track.duration)}`,
@@ -99,25 +122,51 @@ function formatSearchResult(language, track, index) {
   return lines.join('\n');
 }
 
-function formatYouTubeSelection(language, tracks, page = 0, pageSize = 10) {
-  const totalPages = Math.max(1, Math.ceil(tracks.length / pageSize));
-  const safePage = Math.max(0, Math.min(page, totalPages - 1));
-  const start = safePage * pageSize;
-  const visible = tracks.slice(start, start + pageSize);
-  const header = `🎵 <b>${t(language, 'playback.chooseTrack')}</b> (${safePage + 1}/${totalPages})`;
-  return [header, ...visible.map((track, index) => formatSearchResult(language, track, start + index))].join('\n\n');
+function formatYouTubeSelection(language, tracks, index = 0) {
+  const safeIndex = selectedTrackIndex(tracks, index);
+  return formatSearchResult(language, tracks[safeIndex], safeIndex, tracks.length);
 }
 
-async function showYouTubeSelection(ctx, statusMessage, tracks, isVideo, language, page = 0) {
-  chatCache.setYouTubeSelection(ctx.chat.id, statusMessage.message_id, {
+async function sendSelectionPhoto(ctx, statusMessage, thumbnail, caption) {
+  try {
+    const message = await ctx.replyWithPhoto(thumbnail, { caption, parse_mode: 'HTML' });
+    await ctx.api.deleteMessage(ctx.chat.id, statusMessage.message_id).catch(() => {});
+    return message;
+  } catch (error) {
+    console.warn('Failed to send YouTube thumbnail photo, falling back to text selection:', error.message);
+    return statusMessage;
+  }
+}
+
+async function showYouTubeSelection(ctx, statusMessage, tracks, isVideo, language, index = 0) {
+  const safeIndex = selectedTrackIndex(tracks, index);
+  const caption = formatYouTubeSelection(language, tracks, safeIndex);
+  const thumbnail = youtubeThumbnail(tracks[safeIndex]);
+  const selectionMessage = thumbnail
+    ? await sendSelectionPhoto(ctx, statusMessage, thumbnail, caption)
+    : statusMessage;
+  const hasPhoto = selectionMessage.message_id !== statusMessage.message_id && Boolean(thumbnail);
+
+  chatCache.setYouTubeSelection(ctx.chat.id, selectionMessage.message_id, {
     tracks,
     userId: ctx.from?.id,
     isVideo,
     language,
+    hasPhoto,
   });
-  await editStatus(ctx, statusMessage, formatYouTubeSelection(language, tracks, page), {
+
+  if (hasPhoto) {
+    await ctx.api.editMessageCaption(ctx.chat.id, selectionMessage.message_id, {
+      caption,
+      parse_mode: 'HTML',
+      reply_markup: youtubeSelectionKeyboard(selectionMessage.message_id, tracks, safeIndex),
+    });
+    return;
+  }
+
+  await editStatus(ctx, selectionMessage, caption, {
     parse_mode: 'HTML',
-    reply_markup: youtubeSelectionKeyboard(statusMessage.message_id, tracks, page),
+    reply_markup: youtubeSelectionKeyboard(selectionMessage.message_id, tracks, safeIndex),
     disable_web_page_preview: true,
   });
 }
@@ -332,11 +381,29 @@ export async function youtubeSelectionPageHandler(ctx) {
     await ctx.answerCallbackQuery({ text: t(selection.language, 'playback.selectionOwnerOnly') }).catch(() => {});
     return;
   }
-  const page = Number.parseInt(pageText, 10) || 0;
+  const index = selectedTrackIndex(selection.tracks, pageText);
+  const track = selection.tracks[index];
+  const caption = formatYouTubeSelection(selection.language, selection.tracks, index);
+  const replyMarkup = youtubeSelectionKeyboard(messageId, selection.tracks, index);
   await ctx.answerCallbackQuery().catch(() => {});
-  await ctx.editMessageText(formatYouTubeSelection(selection.language, selection.tracks, page), {
+
+  if (selection.hasPhoto) {
+    const thumbnail = youtubeThumbnail(track);
+    if (thumbnail) {
+      try {
+        await ctx.editMessageMedia({ type: 'photo', media: thumbnail, caption, parse_mode: 'HTML' }, { reply_markup: replyMarkup });
+        return;
+      } catch (error) {
+        console.warn('Failed to update YouTube selection thumbnail, falling back to caption edit:', error.message);
+      }
+    }
+    await ctx.editMessageCaption({ caption, parse_mode: 'HTML', reply_markup: replyMarkup });
+    return;
+  }
+
+  await ctx.editMessageText(caption, {
     parse_mode: 'HTML',
-    reply_markup: youtubeSelectionKeyboard(messageId, selection.tracks, page),
+    reply_markup: replyMarkup,
     disable_web_page_preview: true,
   });
 }
