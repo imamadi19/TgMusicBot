@@ -6,7 +6,11 @@ import { isUrl } from '../../utils/telegram.js';
 import { parseDuration } from '../../utils/duration.js';
 import { downloadNexRayYtMp3, searchNexRayYouTube } from './nexray.js';
 
-const SUPPORTED_HOSTS = ['youtube.com', 'youtu.be', 'open.spotify.com', 'saavn', 'jiosaavn.com', 'music.apple.com', 'soundcloud.com'];
+const SUPPORTED_HOSTS = ['youtube.com', 'youtu.be', 'open.spotify.com', 'saavn.com', 'jiosaavn.com', 'music.apple.com', 'soundcloud.com'];
+
+function isSupportedHost(host, supportedHost) {
+  return host === supportedHost || host.endsWith(`.${supportedHost}`);
+}
 const MAX_ERROR_LENGTH = 700;
 
 function timeoutSignal(timeoutMs) {
@@ -88,8 +92,8 @@ export class Downloader {
 
   isValid() {
     if (!this.isUrl()) return true;
-    const host = new URL(this.input).hostname.replace(/^www\./, '');
-    return SUPPORTED_HOSTS.some((supported) => host.includes(supported));
+    const host = new URL(this.input).hostname.toLowerCase().replace(/^www\./, '');
+    return SUPPORTED_HOSTS.some((supported) => isSupportedHost(host, supported));
   }
 
   async getInfo() {

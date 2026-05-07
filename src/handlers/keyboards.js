@@ -45,7 +45,16 @@ function clock(totalSeconds = 0) {
   return `${String(minutes).padStart(2, '0')}:${String(rest).padStart(2, '0')}`;
 }
 
-function progressLabel(track = {}) {
+const PROGRESS_BAR_WIDTH = 12;
+
+function progressBar(elapsed, duration) {
+  if (!duration) return '◉'.padEnd(PROGRESS_BAR_WIDTH, '━');
+  const ratio = Math.max(0, Math.min(1, elapsed / duration));
+  const position = Math.round(ratio * (PROGRESS_BAR_WIDTH - 1));
+  return Array.from({ length: PROGRESS_BAR_WIDTH }, (_, index) => (index === position ? '◉' : '━')).join('');
+}
+
+export function progressLabel(track = {}) {
   const duration = Math.max(0, Math.floor(Number(track.duration) || 0));
   const startedAt = track.startedAt ? new Date(track.startedAt).getTime() : 0;
   const pausedRemaining = Number(track.remainingMs);
@@ -55,7 +64,7 @@ function progressLabel(track = {}) {
   const elapsed = pausedElapsed ?? (startedAt ? Math.max(0, Math.floor((Date.now() - startedAt) / 1000)) : 0);
   const safeElapsed = duration ? Math.min(elapsed, duration) : elapsed;
   const remaining = duration ? Math.max(0, duration - safeElapsed) : 0;
-  return `${clock(safeElapsed)} | ━━━━━━━━◉ | -${clock(remaining)}`;
+  return `${clock(safeElapsed)} | ${progressBar(safeElapsed, duration)} | -${clock(remaining)}`;
 }
 
 export function controlKeyboard(language = 'en', state = '', track = {}) {

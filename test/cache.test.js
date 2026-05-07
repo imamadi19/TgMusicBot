@@ -72,12 +72,14 @@ test('broadcast options and targets mirror Go handler flags', async () => {
   assert.equal(getFloodWait(new Error('boom')), 0);
 });
 
-test('control keyboard exposes player-style progress and transport controls', async () => {
-  const { controlKeyboard } = await import('../src/handlers/keyboards.js');
+test('control keyboard exposes moving progress and transport controls', async () => {
+  const { controlKeyboard, progressLabel } = await import('../src/handlers/keyboards.js');
+
+  assert.equal(progressLabel({ duration: 100, remainingMs: 50000 }), '00:50 | ━━━━━━◉━━━━━ | -00:50');
 
   const rows = controlKeyboard('en', '', { duration: 65 }).inline_keyboard;
   assert.equal(rows[0][0].callback_data, 'play_progress');
-  assert.equal(rows[0][0].text, '00:00 | ━━━━━━━━◉ | -01:05');
+  assert.equal(rows[0][0].text, '00:00 | ◉━━━━━━━━━━━ | -01:05');
   assert.deepEqual(rows[1].map((button) => button.callback_data), ['play_resume', 'play_pause', 'play_replay', 'play_skip', 'play_stop']);
   assert.deepEqual(rows[1].map((button) => button.text), ['▷', 'Ⅱ', '↻', '▸▸▏', '▢']);
 });
@@ -98,6 +100,18 @@ test('youtube selection keyboard uses carousel navigation with top result select
     ['ytpage:99:0', 'ytpage:99:2'],
     ['ytpick:99:1'],
   ]);
+});
+
+
+test('downloader URL validation only allows exact supported hosts or subdomains', async () => {
+  const { Downloader } = await import('../src/core/dl/downloader.js');
+
+  assert.equal(new Downloader('https://youtube.com/watch?v=abc').isValid(), true);
+  assert.equal(new Downloader('https://music.youtube.com/watch?v=abc').isValid(), true);
+  assert.equal(new Downloader('https://open.spotify.com/track/abc').isValid(), true);
+  assert.equal(new Downloader('https://example-youtube.com/watch?v=abc').isValid(), false);
+  assert.equal(new Downloader('https://youtube.com.evil.example/watch?v=abc').isValid(), false);
+  assert.equal(new Downloader('https://evilopen.spotify.com/track/abc').isValid(), false);
 });
 
 test('new auth broadcast callback keys are localized beyond English', async () => {
