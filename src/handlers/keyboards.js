@@ -82,7 +82,7 @@ export function controlKeyboard(language = 'en', state = '', track = {}) {
     .text('▷', 'play_resume')
     .text('Ⅱ', 'play_pause')
     .text('↻', 'play_replay')
-    .text('▸▸', 'play_skip')
+    .text('▸▸▏', 'play_skip')
     .text('▢', 'play_stop');
 }
 
