@@ -9,7 +9,7 @@ import { parseDuration } from '../../utils/duration.js';
 const SEARCH_ENDPOINT = 'https://api.nexray.eu.cc/search/youtube';
 const YTMP3_ENDPOINT = 'https://api.nexray.eu.cc/downloader/v1/ytmp3';
 const YTMP4_ENDPOINT = 'https://api.nexray.eu.cc/downloader/v1/ytmp4';
-const YTMP4_RESOLUTION = '1080';
+const YTMP4_RESOLUTION = '720';
 const NDIKZ_YTMP3_ENDPOINT = 'https://ndikz-api.vercel.app/download/ytmp3';
 const MAX_SEARCH_RESULTS = 50;
 
