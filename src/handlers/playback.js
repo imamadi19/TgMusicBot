@@ -18,10 +18,26 @@ const PROGRESS_UPDATE_INTERVAL_MS = 10000;
 
 const progressUpdaters = new Map();
 const playbackPanels = new Map();
+const chatTasks = new Map();
 
 function appendUniqueInviteLink(links, link) {
   const value = String(link ?? '').trim();
   if (value && !links.includes(value)) links.push(value);
+}
+
+
+function enqueueChatTask(chatId, label, task) {
+  const key = String(chatId);
+  const previous = chatTasks.get(key) ?? Promise.resolve();
+  const next = previous
+    .catch(() => {})
+    .then(task)
+    .catch((error) => console.warn(`${label} gagal untuk chat ${key}`, error))
+    .finally(() => {
+      if (chatTasks.get(key) === next) chatTasks.delete(key);
+    });
+  chatTasks.set(key, next);
+  return next;
 }
 
 async function ensureDownloaded(track, isVideo) {
@@ -355,26 +371,12 @@ async function queueAndMaybePlay(ctx, statusMessage, track, isVideo, language) {
   startProgressUpdater(ctx, playbackMessage ?? statusMessage, language);
 }
 
-export async function playHandler(ctx, isVideo = false) {
-  const language = await getUserLanguage(ctx.from?.id);
-  if (!(await playMode(ctx))) return;
+async function processPlayRequest(ctx, status, input, isVideo, language) {
   const chatId = ctx.chat.id;
   if (chatCache.getQueueLength(chatId) >= MAX_QUEUE) {
-    await ctx.reply(t(language, 'playback.queueFull'));
+    await editStatus(ctx, status, t(language, 'playback.queueFull'));
     return;
   }
-
-  const input = commandArgs(ctx);
-  if (!input) {
-    await ctx.reply(t(language, 'playback.playUsage'), {
-      parse_mode: 'HTML',
-      reply_markup: supportKeyboard(language),
-    });
-    return;
-  }
-
-  const status = await ctx.reply(input.startsWith('tgpl_') ? t(language, 'playback.searchingPlaylist') : t(language, 'playback.searchingDownload'));
-  prepareAssistantJoin(ctx);
 
   if (input.startsWith('tgpl_')) {
     const playlist = await getPlaylist(input);
@@ -436,6 +438,29 @@ export async function playHandler(ctx, isVideo = false) {
     return;
   }
   await queueAndMaybePlay(ctx, status, track, isVideo, language);
+}
+
+export async function playHandler(ctx, isVideo = false) {
+  const language = await getUserLanguage(ctx.from?.id);
+  if (!(await playMode(ctx))) return;
+  const chatId = ctx.chat.id;
+  if (chatCache.getQueueLength(chatId) >= MAX_QUEUE) {
+    await ctx.reply(t(language, 'playback.queueFull'));
+    return;
+  }
+
+  const input = commandArgs(ctx);
+  if (!input) {
+    await ctx.reply(t(language, 'playback.playUsage'), {
+      parse_mode: 'HTML',
+      reply_markup: supportKeyboard(language),
+    });
+    return;
+  }
+
+  const status = await ctx.reply(input.startsWith('tgpl_') ? t(language, 'playback.searchingPlaylist') : t(language, 'playback.searchingDownload'));
+  prepareAssistantJoin(ctx);
+  enqueueChatTask(chatId, 'Proses /play', () => processPlayRequest(ctx, status, input, isVideo, language));
 }
 
 export async function queueHandler(ctx) {
@@ -638,5 +663,5 @@ export async function youtubeSelectionPickHandler(ctx) {
   await ctx.answerCallbackQuery({ text: t(selection.language, 'playback.trackSelected', { number: index + 1 }) }).catch(() => {});
   const statusMessage = ctx.callbackQuery.message;
   await editStatus(ctx, statusMessage, t(selection.language, 'playback.downloadingSelected', { title: htmlEscape(track.name) }), { parse_mode: 'HTML' });
-  await queueAndMaybePlay(ctx, statusMessage, track, Boolean(selection.isVideo), selection.language);
+  enqueueChatTask(ctx.chat.id, 'Proses pilihan YouTube', () => queueAndMaybePlay(ctx, statusMessage, track, Boolean(selection.isVideo), selection.language));
 }
