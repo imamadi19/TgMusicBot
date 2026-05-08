@@ -19,7 +19,7 @@ import traceback
 from pyrogram.raw import functions, types
 
 READY_MARKER = "TGMB_READY"
-DEFAULT_VIDEO_QUALITY = "hd_720p"
+DEFAULT_VIDEO_QUALITY = "sd_360p"
 VIDEO_FFMPEG_REALTIME_PARAMETERS = "---start -re"
 
 stop_event = threading.Event()
