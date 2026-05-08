@@ -123,6 +123,16 @@
       "required": false,
       "value": "python3 scripts/pytgcalls_adapter.py"
     },
+    "VOICE_VIDEO_QUALITY": {
+      "description": "Video quality for /vplay streams. Use hd_720p by default for smoother Telegram video chats.",
+      "required": false,
+      "value": "hd_720p"
+    },
+    "VOICE_VIDEO_REALTIME": {
+      "description": "Throttle FFmpeg video input in real time so group-call video keeps moving instead of being consumed too quickly.",
+      "required": false,
+      "value": "true"
+    },
     "SUPPORT_GROUP": {
       "description": "Link to the support group.",
       "required": false,
