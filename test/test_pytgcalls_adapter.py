@@ -108,6 +108,8 @@ class AdapterControlSignalTest(unittest.IsolatedAsyncioTestCase):
         action, chat_id, stream = self.fake_call_client.calls[0]
         self.assertEqual((action, chat_id), ("play", -100123))
         self.assertEqual(getattr(stream, "_media_path", None), "/tmp/next.mp4")
+        self.assertEqual(getattr(stream, "_audio_path", None), "/tmp/next.mp4")
+        self.assertIsNotNone(getattr(stream, "microphone", None))
         self.assertIsNotNone(getattr(stream, "camera", None))
         self.assertEqual(getattr(stream, "_ffmpeg_parameters", None), "---start -re")
         self.assertEqual(getattr(stream, "_video_parameters", None).width, 1280)
