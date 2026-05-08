@@ -471,6 +471,22 @@ test('Ndikz ytmp3 response exposes direct download URL', async () => {
   );
 });
 
+test('NexRay ytmp4 response exposes direct video download URL', async () => {
+  const { extractVideoDownloadUrl } = await import('../src/core/dl/nexray.js');
+  const payload = {
+    status: true,
+    result: {
+      title: 'Example video',
+      download_url: 'https://cdn.example.com/download/video-file.mp4?token=abc',
+    },
+  };
+
+  assert.equal(
+    extractVideoDownloadUrl(payload),
+    'https://cdn.example.com/download/video-file.mp4?token=abc',
+  );
+});
+
 test('download cleanup only removes managed downloaded files', async () => {
   const fs = await import('node:fs/promises');
   const os = await import('node:os');
