@@ -4,7 +4,7 @@ import path from 'node:path';
 import { config } from '../../config/index.js';
 import { isUrl } from '../../utils/telegram.js';
 import { parseDuration } from '../../utils/duration.js';
-import { downloadNdikzYtMp3, downloadNexRayYtMp3, searchNexRayYouTube } from './nexray.js';
+import { downloadNdikzYtMp3, downloadNexRayYtMp3, downloadNexRayYtMp4, searchNexRayYouTube } from './nexray.js';
 
 const SUPPORTED_HOSTS = ['youtube.com', 'youtu.be', 'open.spotify.com', 'saavn.com', 'jiosaavn.com', 'music.apple.com', 'soundcloud.com'];
 
@@ -117,7 +117,16 @@ export class Downloader {
   }
 
   async download(track, isVideo = false) {
-    if (!isVideo && this.detectPlatformFor(track?.url ?? this.input) === 'YouTube') {
+    const platform = this.detectPlatformFor(track?.url ?? this.input);
+    if (isVideo && platform === 'YouTube') {
+      try {
+        return await downloadNexRayYtMp4(track ?? { url: this.input });
+      } catch (error) {
+        console.warn('NexRay YouTube video download failed, falling back to yt-dlp:', error.message);
+      }
+    }
+
+    if (!isVideo && platform === 'YouTube') {
       try {
         return await downloadNexRayYtMp3(track ?? { url: this.input });
       } catch (error) {
