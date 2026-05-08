@@ -118,7 +118,7 @@ export class Downloader {
 
   async download(track, isVideo = false) {
     const platform = this.detectPlatformFor(track?.url ?? this.input);
-    if (isVideo && platform === 'YouTube') {
+    /*if (isVideo && platform === 'YouTube') {
       try {
         return await downloadNexRayYtMp4(track ?? { url: this.input });
       } catch (error) {
@@ -137,7 +137,7 @@ export class Downloader {
           console.warn('Ndikz YouTube download failed, falling back to yt-dlp:', fallbackError.message);
         }
       }
-    }
+    }*/
 
     const outputTemplate = path.join(config.downloadsDir, '%(id)s.%(ext)s');
     const args = [
