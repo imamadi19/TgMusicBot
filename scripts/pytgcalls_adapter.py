@@ -207,6 +207,7 @@ def media_stream_for(file_path: str, is_video: bool):
         file_path,
         audio_parameters=AudioQuality.HIGH,
         video_parameters=video_quality_from_env(),
+        audio_path=file_path,
         audio_flags=MediaStream.Flags.REQUIRED,
         video_flags=MediaStream.Flags.REQUIRED,
         ffmpeg_parameters=video_ffmpeg_parameters(),
