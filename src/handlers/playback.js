@@ -74,7 +74,7 @@ function panelKey(chatId, track) {
   return `${String(chatId)}:${String(track?.trackId ?? track?.url ?? track?.name ?? '')}`;
 }
 
-function rememberPlaybackPanel(ctx, message, language, track) {
+export function rememberPlaybackPanel(ctx, message, language, track) {
   const chatId = ctx.chat?.id;
   if (!chatId || !message?.message_id || !track) return;
   playbackPanels.set(panelKey(chatId, track), {
@@ -91,40 +91,44 @@ function forgetPlaybackPanel(chatId, track) {
 }
 
 async function editPanelMarkup(panel, replyMarkup) {
-  if (!panel?.api || !panel?.messageId) return;
+  if (!panel?.api || !panel?.messageId) return false;
   try {
     await panel.api.editMessageReplyMarkup(panel.chatId, panel.messageId, { reply_markup: replyMarkup });
+    return true;
   } catch (error) {
     const description = String(error?.description ?? error?.message ?? error).toLowerCase();
-    if (!description.includes('message is not modified')) {
-      console.warn(`Failed to edit playback controls for chat ${panel.chatId}`, error);
-    }
+    if (description.includes('message is not modified')) return true;
+    console.warn(`Failed to edit playback controls for chat ${panel.chatId}`, error);
+    return false;
   }
 }
 
 async function markPlaybackPanelCompleted(chatId, track) {
   const panel = playbackPanels.get(panelKey(chatId, track));
-  if (!panel) return;
-  await editPanelMarkup(panel, completedProgressKeyboard(track));
+  if (!panel) return false;
+  const edited = await editPanelMarkup(panel, completedProgressKeyboard(track));
   forgetPlaybackPanel(chatId, track);
+  return edited;
 }
 
 async function activatePlaybackPanel(chatId, track, activeTrack) {
   const panel = playbackPanels.get(panelKey(chatId, track));
-  if (!panel) return;
+  if (!panel) return false;
   panel.track = track;
-  await editPanelTextAndMarkup(panel, formatTrack(panel.language, track), controlKeyboard(panel.language, '', activeTrack));
-  startProgressUpdaterFromPanel(panel);
+  const edited = await editPanelTextAndMarkup(panel, formatTrack(panel.language, track), controlKeyboard(panel.language, '', activeTrack));
+  if (edited) startProgressUpdaterFromPanel(panel);
+  return edited;
 }
 
 async function editPanelTextAndMarkup(panel, text, replyMarkup) {
-  if (!panel?.api || !panel?.messageId) return;
+  if (!panel?.api || !panel?.messageId) return false;
   try {
     await panel.api.editMessageText(panel.chatId, panel.messageId, text, {
       parse_mode: 'HTML',
       reply_markup: replyMarkup,
       disable_web_page_preview: true,
     });
+    return true;
   } catch (error) {
     try {
       await panel.api.editMessageCaption(panel.chatId, panel.messageId, {
@@ -132,13 +136,24 @@ async function editPanelTextAndMarkup(panel, text, replyMarkup) {
         parse_mode: 'HTML',
         reply_markup: replyMarkup,
       });
+      return true;
     } catch {
       const description = String(error?.description ?? error?.message ?? error).toLowerCase();
-      if (!description.includes('message is not modified')) {
-        console.warn(`Failed to edit playback panel for chat ${panel.chatId}`, error);
-      }
+      if (description.includes('message is not modified')) return true;
+      console.warn(`Failed to edit playback panel for chat ${panel.chatId}`, error);
+      return false;
     }
   }
+}
+
+export async function updatePlaybackPanelsForAdvance(chatId, finished, next, activeTrack) {
+  const completed = await markPlaybackPanelCompleted(chatId, finished);
+  if (!next) {
+    stopProgressUpdater(chatId);
+    return { completed, activated: false };
+  }
+  const activated = await activatePlaybackPanel(chatId, next, activeTrack);
+  return { completed, activated };
 }
 
 function startProgressUpdaterFromPanel(panel) {
@@ -183,10 +198,8 @@ function prepareAssistantJoin(ctx) {
 }
 
 voicePlayer.onTrackEnd(async ({ chatId, finished, next }) => {
-  await markPlaybackPanelCompleted(chatId, finished);
-
   if (!next) {
-    stopProgressUpdater(chatId);
+    await updatePlaybackPanelsForAdvance(chatId, finished, null, null);
     cleanupTrackDownload(finished, { chatId });
     return;
   }
@@ -194,7 +207,7 @@ voicePlayer.onTrackEnd(async ({ chatId, finished, next }) => {
   try {
     const activeTrack = await startCachedTrack(chatId, next);
     next.startedAt = activeTrack?.startedAt;
-    await activatePlaybackPanel(chatId, next, activeTrack);
+    await updatePlaybackPanelsForAdvance(chatId, finished, next, activeTrack);
     cleanupTrackDownload(finished, { chatId });
   } catch (error) {
     const failedNext = chatCache.shift(chatId);
@@ -452,13 +465,14 @@ export async function skipHandler(ctx) {
     return;
   }
   if (!next) {
-    stopProgressUpdater(ctx.chat.id);
+    await updatePlaybackPanelsForAdvance(ctx.chat.id, skipped, null, null);
     cleanupTrackDownload(skipped, { chatId: ctx.chat.id });
     await ctx.reply(t(language, 'playback.skippedEnded', { skipped: skipped.name }));
     return;
   }
   try {
-    if (!reusedTrack) await startQueuedTrack(ctx, next, next.isVideo);
+    const activeTrack = reusedTrack ?? await startQueuedTrack(ctx, next, next.isVideo);
+    await updatePlaybackPanelsForAdvance(ctx.chat.id, skipped, next, activeTrack);
     cleanupTrackDownload(skipped, { chatId: ctx.chat.id });
     await ctx.reply(t(language, 'playback.skippedNow', { skipped: skipped.name, next: next.name }));
   } catch (error) {
@@ -491,7 +505,8 @@ export async function stopHandler(ctx) {
   }
 
   try {
-    if (!reusedTrack) await startQueuedTrack(ctx, next, next.isVideo);
+    const activeTrack = reusedTrack ?? await startQueuedTrack(ctx, next, next.isVideo);
+    await updatePlaybackPanelsForAdvance(ctx.chat.id, stopped, next, activeTrack);
     cleanupTrackDownload(stopped, { chatId: ctx.chat.id });
     await ctx.reply(t(language, 'playback.skippedNow', { skipped: stopped.name, next: next.name }));
   } catch (error) {

@@ -6,6 +6,7 @@ import { requesterKey, voicePlayer } from '../core/player/player.js';
 import { config } from '../config/index.js';
 import { t } from '../i18n/index.js';
 import { controlKeyboard, progressLabel } from './keyboards.js';
+import { updatePlaybackPanelsForAdvance } from './playback.js';
 
 const requesterOnlyActions = new Set(['skip', 'stop', 'pause', 'resume', 'replay', 'mute', 'unmute']);
 
@@ -101,21 +102,19 @@ export async function vcPlayCallbackHandler(ctx) {
       }
       case 'skip': {
         const queuedNext = chatCache.getQueue(chatId)[1] ?? null;
+        await answer(ctx, t(language, 'callbacks.trackSkipped'));
         if (queuedNext) await ensureDownloaded(queuedNext);
         const { skipped, next, activeTrack: reusedTrack } = await voicePlayer.skip(chatId, { reuseActive: true });
-        if (!skipped) {
-          await answer(ctx, t(language, 'callbacks.noActivePlayback'));
-          return;
-        }
+        if (!skipped) return;
         if (!next) {
+          await updatePlaybackPanelsForAdvance(chatId, skipped, null, null);
           cleanupTrackDownload(skipped, { chatId });
-          await answer(ctx, t(language, 'callbacks.trackSkipped'));
           return;
         }
         const activeTrack = reusedTrack ?? await startNextTrack(chatId, next);
         cleanupTrackDownload(skipped, { chatId });
-        await answer(ctx, t(language, 'callbacks.trackSkipped'));
-        await editPlaybackControls(ctx, language, '', activeTrack);
+        const { activated } = await updatePlaybackPanelsForAdvance(chatId, skipped, next, activeTrack);
+        if (!activated) await editPlaybackControls(ctx, language, '', activeTrack);
         return;
       }
       case 'stop': {
@@ -138,7 +137,8 @@ export async function vcPlayCallbackHandler(ctx) {
         const activeTrack = reusedTrack ?? await startNextTrack(chatId, next);
         cleanupTrackDownload(stopped, { chatId });
         await answer(ctx, t(language, 'callbacks.trackSkipped'));
-        await editPlaybackControls(ctx, language, '', activeTrack);
+        const { activated } = await updatePlaybackPanelsForAdvance(chatId, stopped, next, activeTrack);
+        if (!activated) await editPlaybackControls(ctx, language, '', activeTrack);
         return;
       }
       case 'pause': {

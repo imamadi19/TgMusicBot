@@ -169,6 +169,77 @@ test('playback control callbacks are limited to the track requester', async () =
   assert.equal(answers[0]?.text, 'Only the user who requested this track can use these buttons.');
 });
 
+
+test('skip callback acknowledges before slow playback work', async () => {
+  const { chatCache } = await import('../src/core/cache/chat-cache.js');
+  const { vcPlayCallbackHandler } = await import('../src/handlers/callbacks.js');
+  const { voicePlayer } = await import('../src/core/player/player.js');
+  const chatId = -9103;
+  const answers = [];
+  let answeredBeforeSkip = false;
+  const originalSkip = voicePlayer.skip;
+
+  chatCache.clear(chatId);
+  chatCache.addSong(chatId, { trackId: 'skip-current', name: 'Current', duration: 65, url: 'https://example.com/current', userId: 321 });
+  chatCache.addSong(chatId, { trackId: 'skip-next', name: 'Next', duration: 65, url: 'https://example.com/next', filePath: '/tmp/next.mp3', userId: 321 });
+  voicePlayer.skip = async () => {
+    answeredBeforeSkip = answers.length > 0;
+    return { skipped: { trackId: 'skip-current' }, next: null, activeTrack: null };
+  };
+
+  try {
+    await vcPlayCallbackHandler({
+      chat: { id: chatId, type: 'supergroup' },
+      from: { id: 321 },
+      callbackQuery: { data: 'play_skip', message: { message_id: 13 } },
+      async answerCallbackQuery(payload) { answers.push(payload); },
+      async editMessageReplyMarkup() {},
+      api: {
+        async editMessageReplyMarkup() {},
+      },
+    });
+  } finally {
+    voicePlayer.skip = originalSkip;
+    chatCache.clear(chatId);
+  }
+
+  assert.equal(answeredBeforeSkip, true);
+  assert.equal(answers[0]?.text, 'Track skipped.');
+});
+
+
+test('track advance updates queued playback panel instead of old controls', async () => {
+  const { rememberPlaybackPanel, updatePlaybackPanelsForAdvance } = await import('../src/handlers/playback.js');
+  const chatId = -9104;
+  const calls = [];
+  const api = {
+    async editMessageReplyMarkup(targetChatId, messageId, options) {
+      calls.push({ method: 'markup', targetChatId, messageId, options });
+    },
+    async editMessageText(targetChatId, messageId, text, options) {
+      calls.push({ method: 'text', targetChatId, messageId, text, options });
+    },
+  };
+  const current = { trackId: 'panel-current', name: 'Current Panel', duration: 65, url: 'https://example.com/current', user: 'Alice' };
+  const next = { trackId: 'panel-next', name: 'Next Panel', duration: 90, url: 'https://example.com/next', user: 'Bob' };
+  const activeTrack = { ...next, startedAt: new Date() };
+
+  rememberPlaybackPanel({ chat: { id: chatId }, api }, { message_id: 20 }, 'en', current);
+  rememberPlaybackPanel({ chat: { id: chatId }, api }, { message_id: 21 }, 'en', next);
+
+  const result = await updatePlaybackPanelsForAdvance(chatId, current, next, activeTrack);
+
+  assert.deepEqual(result, { completed: true, activated: true });
+  assert.equal(calls[0]?.method, 'markup');
+  assert.equal(calls[0]?.messageId, 20);
+  assert.equal(calls[0]?.options.reply_markup.inline_keyboard.length, 1);
+  assert.equal(calls[1]?.method, 'text');
+  assert.equal(calls[1]?.messageId, 21);
+  assert.match(calls[1]?.text, /Now playing/);
+  assert.match(calls[1]?.text, /Next Panel/);
+  assert.deepEqual(calls[1]?.options.reply_markup.inline_keyboard[1].map((button) => button.callback_data), ['play_resume', 'play_pause', 'play_replay', 'play_skip', 'play_stop']);
+});
+
 test('progress callback only answers progress without restoring controls on old panels', async () => {
   const { chatCache } = await import('../src/core/cache/chat-cache.js');
   const { vcPlayCallbackHandler } = await import('../src/handlers/callbacks.js');
