@@ -69,6 +69,7 @@ class AdapterControlSignalTest(unittest.IsolatedAsyncioTestCase):
         self.adapter.chat_id = -100123
         self.adapter.paused = False
         self.adapter.stream_started = False
+        self.adapter.current_stream_is_video = False
 
     async def test_pause_and_resume_schedule_async_pytgcalls_methods(self):
         self.adapter.pause()
@@ -88,6 +89,35 @@ class AdapterControlSignalTest(unittest.IsolatedAsyncioTestCase):
 
         self.assertFalse(self.adapter.paused)
         self.assertTrue(self.adapter.stream_started)
+        self.assertEqual(
+            self.fake_call_client.calls,
+            [("play", -100123, "/tmp/next.mp3")],
+        )
+
+    async def test_video_play_control_command_uses_media_stream(self):
+        await self.adapter.handle_stdin_command({
+            "action": "play",
+            "file_path": "/tmp/next.mp4",
+            "is_video": True,
+        })
+
+        self.assertFalse(self.adapter.paused)
+        self.assertTrue(self.adapter.stream_started)
+        self.assertTrue(self.adapter.current_stream_is_video)
+        self.assertEqual(len(self.fake_call_client.calls), 1)
+        action, chat_id, stream = self.fake_call_client.calls[0]
+        self.assertEqual((action, chat_id), ("play", -100123))
+        self.assertEqual(getattr(stream, "_media_path", None), "/tmp/next.mp4")
+        self.assertIsNotNone(getattr(stream, "camera", None))
+
+    async def test_string_false_video_flag_stays_audio_only(self):
+        await self.adapter.handle_stdin_command({
+            "action": "play",
+            "file_path": "/tmp/next.mp3",
+            "is_video": "0",
+        })
+
+        self.assertFalse(self.adapter.current_stream_is_video)
         self.assertEqual(
             self.fake_call_client.calls,
             [("play", -100123, "/tmp/next.mp3")],

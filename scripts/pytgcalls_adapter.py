@@ -28,6 +28,7 @@ call_client = None
 chat_id = None
 client = None
 stream_started = False
+current_stream_is_video = False
 
 
 def require_env(name: str) -> str:
@@ -54,11 +55,11 @@ async def call_method_with_optional_chat(method):
         return await call_method(method)
 
 
-async def call_method_with_optional_chat_and_file(method, file_path: str):
+async def call_method_with_optional_chat_and_stream(method, stream):
     try:
-        return await call_method(method, chat_id, file_path)
+        return await call_method(method, chat_id, stream)
     except TypeError:
-        return await call_method(method, file_path)
+        return await call_method(method, stream)
 
 
 async def maybe_call_async(obj, *names):
@@ -122,7 +123,7 @@ def resume(*_args):
     schedule_control("resume", resume_async())
 
 
-async def switch_stream_in_current_call(file_path: str) -> bool:
+async def switch_stream_in_current_call(stream) -> bool:
     """Switch media source without asking PyTgCalls to join the call again.
 
     PyTgCalls releases expose different method names for in-call source
@@ -134,24 +135,57 @@ async def switch_stream_in_current_call(file_path: str) -> bool:
         method = getattr(call_client, name, None)
         if not callable(method):
             continue
-        await call_method_with_optional_chat_and_file(method, file_path)
+        await call_method_with_optional_chat_and_stream(method, stream)
         return True
     return False
 
 
-async def play_file_async(file_path: str):
-    global paused, stream_started
+def bool_value(value, fallback: bool = False) -> bool:
+    if value is None:
+        return fallback
+    if isinstance(value, bool):
+        return value
+    text = str(value).strip().lower()
+    if text == "":
+        return fallback
+    return text in {"1", "true", "yes", "on"}
+
+
+def env_flag(name: str, fallback: bool = False) -> bool:
+    return bool_value(os.environ.get(name), fallback)
+
+
+def media_stream_for(file_path: str, is_video: bool):
+    if not is_video:
+        return file_path
+
+    from pytgcalls.types import MediaStream
+    from pytgcalls.types.stream import AudioQuality, VideoQuality
+
+    return MediaStream(
+        file_path,
+        audio_parameters=AudioQuality.HIGH,
+        video_parameters=VideoQuality.FHD_1080p,
+        audio_flags=MediaStream.Flags.REQUIRED,
+        video_flags=MediaStream.Flags.REQUIRED,
+    )
+
+
+async def play_file_async(file_path: str, is_video: bool = False):
+    global paused, stream_started, current_stream_is_video
     if call_client is None or chat_id is None:
         raise RuntimeError("voice call belum aktif")
     if not file_path:
         raise RuntimeError("file_path kosong")
+    stream = media_stream_for(file_path, is_video)
     if paused:
         await resume_async()
-    if stream_started and await switch_stream_in_current_call(file_path):
+    if stream_started and current_stream_is_video == is_video and await switch_stream_in_current_call(stream):
         paused = False
         return
-    await call_method(call_client.play, chat_id, file_path)
+    await call_method(call_client.play, chat_id, stream)
     stream_started = True
+    current_stream_is_video = is_video
     paused = False
 
 
@@ -159,7 +193,7 @@ async def handle_stdin_command(command: dict):
     action = str(command.get("action", "")).strip().lower()
     command_id = str(command.get("id", "")).strip() or "-"
     if action in {"play", "replay", "switch"}:
-        await play_file_async(str(command.get("file_path", "")))
+        await play_file_async(str(command.get("file_path", "")), bool_value(command.get("is_video")))
         print(f"TGMB_CONTROL_OK {command_id} play", flush=True)
         return
     if action == "pause":
@@ -476,6 +510,7 @@ async def main_async() -> int:
     assistant_index = os.environ.get("TGMB_ASSISTANT_INDEX", "?").strip() or "?"
     action = os.environ.get("TGMB_ACTION", "play").strip().lower()
     file_path = os.environ.get("TGMB_FILE_PATH", "").strip()
+    is_video = env_flag("TGMB_IS_VIDEO")
     invite_links = parse_invite_links()
 
     if session_type != "pyrogram":
@@ -525,7 +560,7 @@ async def main_async() -> int:
 
         call_client = PyTgCalls(client)
         await maybe_call_async(call_client, "start")
-        await play_file_async(file_path)
+        await play_file_async(file_path, is_video)
         print(READY_MARKER, flush=True)
 
         command_task = asyncio.create_task(stdin_command_loop())
