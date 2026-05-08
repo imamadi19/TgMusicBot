@@ -109,6 +109,42 @@ class AdapterControlSignalTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((action, chat_id), ("play", -100123))
         self.assertEqual(getattr(stream, "_media_path", None), "/tmp/next.mp4")
         self.assertIsNotNone(getattr(stream, "camera", None))
+        self.assertEqual(getattr(stream, "_ffmpeg_parameters", None), "---start -re")
+        self.assertEqual(getattr(stream, "_video_parameters", None).width, 1280)
+        self.assertEqual(getattr(stream, "_video_parameters", None).height, 720)
+        self.assertEqual(getattr(stream, "_video_parameters", None).frame_rate, 30)
+
+    async def test_video_quality_env_can_lower_resolution(self):
+        import os
+
+        old_quality = os.environ.get("VOICE_VIDEO_QUALITY")
+        os.environ["VOICE_VIDEO_QUALITY"] = "480p"
+        try:
+            stream = self.adapter.media_stream_for("/tmp/next.mp4", True)
+        finally:
+            if old_quality is None:
+                os.environ.pop("VOICE_VIDEO_QUALITY", None)
+            else:
+                os.environ["VOICE_VIDEO_QUALITY"] = old_quality
+
+        self.assertEqual(getattr(stream, "_video_parameters", None).width, 854)
+        self.assertEqual(getattr(stream, "_video_parameters", None).height, 480)
+        self.assertEqual(getattr(stream, "_video_parameters", None).frame_rate, 30)
+
+    async def test_video_realtime_can_be_disabled_for_custom_adapters(self):
+        import os
+
+        old_value = os.environ.get("VOICE_VIDEO_REALTIME")
+        os.environ["VOICE_VIDEO_REALTIME"] = "0"
+        try:
+            stream = self.adapter.media_stream_for("/tmp/next.mp4", True)
+        finally:
+            if old_value is None:
+                os.environ.pop("VOICE_VIDEO_REALTIME", None)
+            else:
+                os.environ["VOICE_VIDEO_REALTIME"] = old_value
+
+        self.assertIsNone(getattr(stream, "_ffmpeg_parameters", None))
 
     async def test_string_false_video_flag_stays_audio_only(self):
         await self.adapter.handle_stdin_command({

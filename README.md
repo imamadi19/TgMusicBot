@@ -282,6 +282,8 @@ docker stop tgmusicbot && docker rm tgmusicbot
 | `SESSION_STRINGS` | Opsional | Alternatif multi session dalam satu variabel, dipisah spasi atau koma. |
 | `SESSION_TYPE` | Opsional | Default `pyrogram`. |
 | `VOICE_ADAPTER_COMMAND` | Ya untuk voice | Default `python3 scripts/pytgcalls_adapter.py`. |
+| `VOICE_VIDEO_QUALITY` | Opsional | Kualitas video PyTgCalls untuk `/vplay`; default `hd_720p` agar video lebih stabil. Nilai: `360p`, `480p`, `720p`, `1080p`, `2k`, `4k`. |
+| `VOICE_VIDEO_REALTIME` | Opsional | Default `true`; menambahkan mode real-time FFmpeg (`-re`) supaya video tidak terkirim terlalu cepat dan tampak freeze. |
 | `DB_NAME` | Opsional | Nama database, default `MusicBot`. |
 | `DOWNLOADS_DIR` | Opsional | Folder download, default `downloads`. |
 | `DEFAULT_SERVICE` | Opsional | Default `youtube`. |

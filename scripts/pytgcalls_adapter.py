@@ -19,6 +19,8 @@ import traceback
 from pyrogram.raw import functions, types
 
 READY_MARKER = "TGMB_READY"
+DEFAULT_VIDEO_QUALITY = "hd_720p"
+VIDEO_FFMPEG_REALTIME_PARAMETERS = "---start -re"
 
 stop_event = threading.Event()
 async_stop_event = None
@@ -155,19 +157,59 @@ def env_flag(name: str, fallback: bool = False) -> bool:
     return bool_value(os.environ.get(name), fallback)
 
 
+def env_text(name: str, fallback: str = "") -> str:
+    value = os.environ.get(name)
+    if value is None or str(value).strip() == "":
+        return fallback
+    return str(value).strip()
+
+
+def video_quality_from_env():
+    from pytgcalls.types.stream import VideoQuality
+
+    aliases = {
+        "4k": VideoQuality.UHD_4K,
+        "uhd_4k": VideoQuality.UHD_4K,
+        "2160p": VideoQuality.UHD_4K,
+        "2k": VideoQuality.QHD_2K,
+        "qhd_2k": VideoQuality.QHD_2K,
+        "1440p": VideoQuality.QHD_2K,
+        "1080p": VideoQuality.FHD_1080p,
+        "fhd_1080p": VideoQuality.FHD_1080p,
+        "720p": VideoQuality.HD_720p,
+        "hd_720p": VideoQuality.HD_720p,
+        "480p": VideoQuality.SD_480p,
+        "sd_480p": VideoQuality.SD_480p,
+        "360p": VideoQuality.SD_360p,
+        "sd_360p": VideoQuality.SD_360p,
+    }
+    requested = env_text("TGMB_VIDEO_QUALITY", env_text("VOICE_VIDEO_QUALITY", DEFAULT_VIDEO_QUALITY)).lower()
+    return aliases.get(requested, aliases[DEFAULT_VIDEO_QUALITY])
+
+
+def video_ffmpeg_parameters() -> str | None:
+    custom = env_text("TGMB_FFMPEG_PARAMETERS", env_text("VOICE_FFMPEG_PARAMETERS"))
+    if custom:
+        return custom
+    if env_flag("TGMB_VIDEO_REALTIME", env_flag("VOICE_VIDEO_REALTIME", True)):
+        return VIDEO_FFMPEG_REALTIME_PARAMETERS
+    return None
+
+
 def media_stream_for(file_path: str, is_video: bool):
     if not is_video:
         return file_path
 
     from pytgcalls.types import MediaStream
-    from pytgcalls.types.stream import AudioQuality, VideoQuality
+    from pytgcalls.types.stream import AudioQuality
 
     return MediaStream(
         file_path,
         audio_parameters=AudioQuality.HIGH,
-        video_parameters=VideoQuality.FHD_1080p,
+        video_parameters=video_quality_from_env(),
         audio_flags=MediaStream.Flags.REQUIRED,
         video_flags=MediaStream.Flags.REQUIRED,
+        ffmpeg_parameters=video_ffmpeg_parameters(),
     )
 
 
