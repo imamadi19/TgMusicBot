@@ -15,6 +15,13 @@ export class ChatCache {
     return data.queue.length;
   }
 
+  addSongAt(chatId, track, index = 1) {
+    const data = this.#get(chatId);
+    const safeIndex = Math.max(0, Math.min(Number(index) || 0, data.queue.length));
+    data.queue.splice(safeIndex, 0, track);
+    return data.queue.length;
+  }
+
   addSongs(chatId, tracks) {
     const data = this.#get(chatId);
     data.queue.push(...tracks);

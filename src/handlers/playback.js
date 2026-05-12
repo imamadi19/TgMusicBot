@@ -3,6 +3,8 @@ import { Downloader } from '../core/dl/downloader.js';
 import { cleanupTrackDownload, cleanupTrackDownloads, ensureTrackDownloaded, preloadTrack, preloadTracks } from '../core/dl/queue-downloads.js';
 import { requesterKey, voicePlayer } from '../core/player/player.js';
 import { getPlaylist } from '../core/db/playlists.js';
+import { isPremiumActive } from '../core/db/premium.js';
+import { getPremiumSettings } from '../core/db/premium-settings.js';
 import { getUserLanguage } from '../core/db/user-settings.js';
 import { config } from '../config/index.js';
 import { t } from '../i18n/index.js';
@@ -11,14 +13,18 @@ import { firstName } from '../utils/extras.js';
 import { secondsToClock } from '../utils/duration.js';
 import { completedProgressKeyboard, controlKeyboard, supportKeyboard, youtubeSelectionKeyboard } from './keyboards.js';
 import { playMode } from './filters.js';
+import { isAuthUser } from '../core/db/auth.js';
 
 const MAX_QUEUE = 10;
+const PREMIUM_MAX_QUEUE = 50;
 const ASSISTANT_INVITE_EXPIRE_SECONDS = 60 * 60;
 const PROGRESS_UPDATE_INTERVAL_MS = 10000;
 
 const progressUpdaters = new Map();
 const playbackPanels = new Map();
 const chatTasks = new Map();
+const recentPlayRequests = new Map();
+const FREE_PLAY_COOLDOWN_MS = 5000;
 
 function appendUniqueInviteLink(links, link) {
   const value = String(link ?? '').trim();
@@ -221,6 +227,15 @@ function cleanupInactiveChatDownloads() {
   }
 }
 
+function markPlayRequest(chatId, userId) {
+  recentPlayRequests.set(`${chatId}:${userId}`, Date.now());
+}
+
+function getPlayCooldownLeft(chatId, userId) {
+  const last = recentPlayRequests.get(`${chatId}:${userId}`) ?? 0;
+  return Math.max(0, FREE_PLAY_COOLDOWN_MS - (Date.now() - last));
+}
+
 async function hasActiveVoiceChat(ctx) {
   try {
     const chat = await ctx.api.getChat(ctx.chat.id);
@@ -229,6 +244,24 @@ async function hasActiveVoiceChat(ctx) {
     console.warn(`Gagal memeriksa status voice chat untuk chat ${ctx.chat?.id}`, error);
     return true;
   }
+}
+
+async function queueLimitFor(ctx) {
+  const chatId = Number(ctx.chat?.id);
+  const userId = Number(ctx.from?.id);
+  const [chatPremium, userPremium] = await Promise.all([
+    isPremiumActive('chat', chatId),
+    isPremiumActive('user', userId),
+  ]);
+  return chatPremium || userPremium ? PREMIUM_MAX_QUEUE : MAX_QUEUE;
+}
+
+async function isPremiumRequester(ctx) {
+  const [chatPremium, userPremium] = await Promise.all([
+    isPremiumActive('chat', Number(ctx.chat?.id)),
+    isPremiumActive('user', Number(ctx.from?.id)),
+  ]);
+  return chatPremium || userPremium;
 }
 
 voicePlayer.onTrackEnd(async ({ chatId, finished, next }) => {
@@ -260,7 +293,8 @@ function formatError(error) {
 
 function formatTrack(language, track, queueLength = 1) {
   const heading = queueLength > 1 ? t(language, 'playback.addedToQueue', { count: queueLength }) : t(language, 'playback.nowPlaying');
-  return `<u><b>${heading}</b></u>\n\n<b>${t(language, 'playback.title')}:</b> <a href="${htmlEscape(track.url)}">${htmlEscape(track.name)}</a>\n\n<b>${t(language, 'playback.duration')}:</b> ${secondsToClock(track.duration)}\n<b>${t(language, 'playback.requestedBy')}:</b> ${htmlEscape(track.user)}`;
+  const preset = track.audioPreset ? `\n<b>Preset:</b> ${htmlEscape(track.audioPreset)}` : '';
+  return `<u><b>${heading}</b></u>\n\n<b>${t(language, 'playback.title')}:</b> <a href="${htmlEscape(track.url)}">${htmlEscape(track.name)}</a>\n\n<b>${t(language, 'playback.duration')}:</b> ${secondsToClock(track.duration)}\n<b>${t(language, 'playback.requestedBy')}:</b> ${htmlEscape(track.user)}${preset}`;
 }
 
 function captionEditOptions(text, options = {}) {
@@ -357,11 +391,16 @@ async function showYouTubeSelection(ctx, statusMessage, tracks, isVideo, languag
 async function queueAndMaybePlay(ctx, statusMessage, track, isVideo, language) {
   const chatId = ctx.chat.id;
   const saveTrack = { ...track, user: firstName(ctx), userId: ctx.from?.id, isVideo, filePath: '', platform: track.platform ?? config.defaultService };
+  const premiumSettings = await getPremiumSettings(chatId);
+  saveTrack.audioPreset = premiumSettings.audioPreset;
   if (chatCache.getTrackIfExists(chatId, saveTrack.trackId)) {
     await editStatus(ctx, statusMessage, t(language, 'playback.duplicate'));
     return;
   }
-  const length = chatCache.addSong(chatId, saveTrack);
+  const premiumRequester = await isPremiumRequester(ctx);
+  const length = premiumRequester && chatCache.getQueueLength(chatId) > 0
+    ? chatCache.addSongAt(chatId, saveTrack, 1)
+    : chatCache.addSong(chatId, saveTrack);
   if (length > 1) {
     preloadTrack(saveTrack, isVideo, { chatId });
     const queueMessage = await editStatus(ctx, statusMessage, formatTrack(language, saveTrack, length), { parse_mode: 'HTML', disable_web_page_preview: true });
@@ -391,8 +430,9 @@ async function queueAndMaybePlay(ctx, statusMessage, track, isVideo, language) {
 
 async function processPlayRequest(ctx, status, input, isVideo, language) {
   const chatId = ctx.chat.id;
-  if (chatCache.getQueueLength(chatId) >= MAX_QUEUE) {
-    await editStatus(ctx, status, t(language, 'playback.queueFull'));
+  const queueLimit = await queueLimitFor(ctx);
+  if (chatCache.getQueueLength(chatId) >= queueLimit) {
+    await editStatus(ctx, status, t(language, 'playback.queueFull', { max: queueLimit }));
     return;
   }
 
@@ -406,10 +446,10 @@ async function processPlayRequest(ctx, status, input, isVideo, language) {
       await editStatus(ctx, status, t(language, 'playback.playlistEmpty'));
       return;
     }
-    const remaining = MAX_QUEUE - chatCache.getQueueLength(chatId);
+    const remaining = queueLimit - chatCache.getQueueLength(chatId);
     const tracks = playlist.songs.slice(0, remaining).map((track) => ({ ...track, user: firstName(ctx), userId: ctx.from?.id, isVideo, filePath: track.filePath ?? '', platform: track.platform ?? config.defaultService }));
     if (tracks.length === 0) {
-      await editStatus(ctx, status, t(language, 'playback.queueFull'));
+      await editStatus(ctx, status, t(language, 'playback.queueFull', { max: queueLimit }));
       return;
     }
     const queueWasEmpty = chatCache.getQueueLength(chatId) === 0;
@@ -462,8 +502,26 @@ export async function playHandler(ctx, isVideo = false) {
   const language = await getUserLanguage(ctx.from?.id);
   if (!(await playMode(ctx))) return;
   const chatId = ctx.chat.id;
-  if (chatCache.getQueueLength(chatId) >= MAX_QUEUE) {
-    await ctx.reply(t(language, 'playback.queueFull'));
+  const premiumSettings = await getPremiumSettings(chatId);
+  if (premiumSettings.djMode) {
+    const isOwner = Number(ctx.from?.id) === Number(config.ownerId) || config.devs.includes(Number(ctx.from?.id));
+    const auth = await isAuthUser(chatId, ctx.from?.id);
+    if (!isOwner && !auth) {
+      await ctx.reply('DJ mode is enabled: only owner/dev/auth users can add tracks.');
+      return;
+    }
+  }
+  const premiumRequester = await isPremiumRequester(ctx);
+  if (!premiumRequester) {
+    const cooldownLeft = getPlayCooldownLeft(chatId, ctx.from?.id);
+    if (cooldownLeft > 0) {
+      await ctx.reply(`Please wait ${Math.ceil(cooldownLeft / 1000)}s before sending another /play request.`);
+      return;
+    }
+  }
+  const queueLimit = await queueLimitFor(ctx);
+  if (chatCache.getQueueLength(chatId) >= queueLimit) {
+    await ctx.reply(t(language, 'playback.queueFull', { max: queueLimit }));
     return;
   }
 
@@ -481,6 +539,7 @@ export async function playHandler(ctx, isVideo = false) {
   }
 
   cleanupInactiveChatDownloads();
+  markPlayRequest(chatId, ctx.from?.id);
   const status = await ctx.reply(input.startsWith('tgpl_') ? t(language, 'playback.searchingPlaylist') : t(language, 'playback.searchingDownload'));
   prepareAssistantJoin(ctx);
   enqueueChatTask(chatId, 'Proses /play', () => processPlayRequest(ctx, status, input, isVideo, language));
@@ -670,8 +729,9 @@ export async function youtubeSelectionPickHandler(ctx) {
     await ctx.answerCallbackQuery({ text: t(selection.language, 'playback.selectionOwnerOnly') }).catch(() => {});
     return;
   }
-  if (chatCache.getQueueLength(ctx.chat.id) >= MAX_QUEUE) {
-    await ctx.answerCallbackQuery({ text: t(selection.language, 'playback.queueFull') }).catch(() => {});
+  const queueLimit = await queueLimitFor(ctx);
+  if (chatCache.getQueueLength(ctx.chat.id) >= queueLimit) {
+    await ctx.answerCallbackQuery({ text: t(selection.language, 'playback.queueFull', { max: queueLimit }) }).catch(() => {});
     return;
   }
 
