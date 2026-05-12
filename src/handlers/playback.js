@@ -236,16 +236,6 @@ function getPlayCooldownLeft(chatId, userId) {
   return Math.max(0, FREE_PLAY_COOLDOWN_MS - (Date.now() - last));
 }
 
-async function hasActiveVoiceChat(ctx) {
-  try {
-    const chat = await ctx.api.getChat(ctx.chat.id);
-    return Boolean(chat?.video_chat_active);
-  } catch (error) {
-    console.warn(`Gagal memeriksa status voice chat untuk chat ${ctx.chat?.id}`, error);
-    return true;
-  }
-}
-
 async function queueLimitFor(ctx) {
   const chatId = Number(ctx.chat?.id);
   const userId = Number(ctx.from?.id);
@@ -289,6 +279,17 @@ voicePlayer.onTrackEnd(async ({ chatId, finished, next }) => {
 
 function formatError(error) {
   return htmlEscape(error?.message ?? error);
+}
+
+
+function isVoiceChatInactiveError(error) {
+  const message = String(error?.message ?? error).toLowerCase();
+  return [
+    'no active group call',
+    'groupcallnotmodified',
+    'voice/video chat grup belum aktif',
+    'voice call belum aktif',
+  ].some((marker) => message.includes(marker));
 }
 
 function formatTrack(language, track, queueLength = 1) {
@@ -420,6 +421,10 @@ async function queueAndMaybePlay(ctx, statusMessage, track, isVideo, language) {
     saveTrack.startedAt = activeTrack?.startedAt;
   } catch (error) {
     chatCache.shift(chatId);
+    if (isVoiceChatInactiveError(error)) {
+      await editStatus(ctx, statusMessage, t(language, 'playback.voiceChatInactiveWarning'));
+      return;
+    }
     await editStatus(ctx, statusMessage, t(language, 'playback.voiceFailed', { error: formatError(error) }));
     return;
   }
@@ -533,11 +538,6 @@ export async function playHandler(ctx, isVideo = false) {
     });
     return;
   }
-  if (!(await hasActiveVoiceChat(ctx))) {
-    await ctx.reply(t(language, 'playback.voiceChatInactiveWarning'));
-    return;
-  }
-
   cleanupInactiveChatDownloads();
   markPlayRequest(chatId, ctx.from?.id);
   const status = await ctx.reply(input.startsWith('tgpl_') ? t(language, 'playback.searchingPlaylist') : t(language, 'playback.searchingDownload'));
