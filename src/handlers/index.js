@@ -6,6 +6,7 @@ import { clearAssistantsHandler, devActiveVcHandler, leaveAllHandler, loggerTogg
 import { helpCallback, languageMenuHandler, languageSelectHandler, startHandler } from './help.js';
 import { loopHandler, muteHandler, pauseHandler, playHandler, queueHandler, removeHandler, resumeHandler, skipHandler, speedHandler, stopHandler, unmuteHandler, youtubeSelectionPageHandler, youtubeSelectionPickHandler } from './playback.js';
 import { addToPlaylistHandler, createPlaylistHandler, deletePlaylistHandler, myPlaylistsHandler, playlistInfoHandler, removeFromPlaylistHandler } from './playlists.js';
+import { premiumDjModeHandler, premiumFeaturesHandler, premiumGrantHandler, premiumInfoHandler, premiumProfileHandler, premiumQueueMoveHandler, premiumRevokeHandler, premiumSetPresetHandler } from './premium.js';
 import { noopHandler, pingHandler, privacyHandler, settingsHandler, shellHandler, statsHandler } from './misc.js';
 
 export function loadHandlers(bot) {
@@ -34,6 +35,14 @@ export function loadHandlers(bot) {
   bot.command(['removefromplaylist', 'rmplist'], removeFromPlaylistHandler);
   bot.command(['plistinfo', 'playlistinfo'], playlistInfoHandler);
   bot.command(['myplaylists', 'myplist'], myPlaylistsHandler);
+  bot.command('premiumfeatures', premiumFeaturesHandler);
+  bot.command('premiumgrant', premiumGrantHandler);
+  bot.command('premiumrevoke', premiumRevokeHandler);
+  bot.command('premiuminfo', premiumInfoHandler);
+  bot.command('qmove', premiumQueueMoveHandler);
+  bot.command('setpreset', premiumSetPresetHandler);
+  bot.command('djmode', premiumDjModeHandler);
+  bot.command('premiumprofile', premiumProfileHandler);
   bot.command('stats', statsHandler);
   bot.command('settings', settingsHandler);
   bot.command('privacy', privacyHandler);

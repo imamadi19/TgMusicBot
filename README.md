@@ -16,6 +16,7 @@ Repo ini cocok untuk menjalankan bot musik mandiri di VPS, Docker, atau platform
 - Menu bahasa, bantuan, statistik, pengaturan, dan privacy.
 - Health server HTTP sederhana untuk deployment container.
 - Siap dijalankan lewat Docker/Docker Compose.
+- Blueprint fitur premium tersedia di `PREMIUM_FEATURES.md` (prioritas performa, audio experience, queue/playlist lanjutan, dan fitur community).
 
 ## Alur logic aplikasi
 
