@@ -4,7 +4,7 @@ import path from 'node:path';
 import { config } from '../../config/index.js';
 import { isUrl } from '../../utils/telegram.js';
 import { parseDuration } from '../../utils/duration.js';
-import { downloadNdikzYtMp3, downloadNexRayYtMp3, downloadNexRayYtMp4, searchNexRayYouTube } from './nexray.js';
+import { searchNexRayYouTube } from './nexray.js';
 
 const SUPPORTED_HOSTS = ['youtube.com', 'youtu.be', 'open.spotify.com', 'saavn.com', 'jiosaavn.com', 'music.apple.com', 'soundcloud.com'];
 
@@ -116,8 +116,25 @@ export class Downloader {
     };
   }
 
+
+  async directStreamUrl(track, isVideo = false) {
+    const args = [
+      ...(await ytDlpBaseArgs()),
+      '-f', isVideo ? 'bv*+ba/best' : 'bestaudio/best',
+      '-g',
+      track?.url ?? this.input,
+    ];
+    const output = await run('yt-dlp', args);
+    const lines = output.split('\n').map((line) => line.trim()).filter(Boolean);
+    return lines.at(-1) ?? '';
+  }
+
   async download(track, isVideo = false) {
-    const platform = this.detectPlatformFor(track?.url ?? this.input);
+    if (config.streamDirect) {
+      const streamUrl = await this.directStreamUrl(track, isVideo);
+      if (streamUrl) return streamUrl;
+    }
+
     /*if (isVideo && platform === 'YouTube') {
       try {
         return await downloadNexRayYtMp4(track ?? { url: this.input });
@@ -146,7 +163,7 @@ export class Downloader {
       '--print', 'after_move:filepath',
     ];
     if (!isVideo) args.push('-x', '--audio-format', 'mp3');
-    args.push(track.url);
+    args.push(track?.url ?? this.input);
     const output = await run('yt-dlp', args);
     return output.trim().split('\n').at(-1);
   }

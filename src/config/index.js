@@ -47,6 +47,8 @@ export const config = {
   ytdlpTimeoutMs: toInt(process.env.YTDLP_TIMEOUT_MS, 180000),
   songDurationLimit: toInt(process.env.SONG_DURATION_LIMIT, 3600),
   downloadsDir: process.env.DOWNLOADS_DIR || path.resolve('downloads'),
+  downloadRetentionHours: toInt(process.env.DOWNLOAD_RETENTION_HOURS, 24),
+  downloadCleanupIntervalMinutes: toInt(process.env.DOWNLOAD_CLEANUP_INTERVAL_MINUTES, 30),
   supportGroup: process.env.SUPPORT_GROUP ?? '',
   supportChannel: process.env.SUPPORT_CHANNEL ?? '',
   devs: splitList(process.env.DEVS).map((id) => toInt(id)).filter(Boolean),
@@ -56,6 +58,7 @@ export const config = {
   startImg: process.env.START_IMG ?? '',
   port: process.env.PORT ?? '8080',
   autoLeave: toBool(process.env.AUTO_LEAVE, true),
+  streamDirect: toBool(process.env.STREAM_DIRECT, false),
 };
 
 export function validateConfig() {

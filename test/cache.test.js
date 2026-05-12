@@ -523,3 +523,45 @@ test('download cleanup only removes managed downloaded files', async () => {
     await fs.rm(tempRoot, { recursive: true, force: true });
   }
 });
+
+test('scheduled cleanup removes old downloads and keeps cookie file', async () => {
+  const fs = await import('node:fs/promises');
+  const os = await import('node:os');
+  const path = await import('node:path');
+  const { config } = await import('../src/config/index.js');
+  const { cleanupOldDownloads } = await import('../src/core/dl/download-cleanup.js');
+
+  const originalDownloadsDir = config.downloadsDir;
+  const originalRetentionHours = config.downloadRetentionHours;
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'tgmb-download-retention-'));
+  const downloadsDir = path.join(tempRoot, 'downloads');
+  await fs.mkdir(downloadsDir, { recursive: true });
+  config.downloadsDir = downloadsDir;
+  config.downloadRetentionHours = 1;
+
+  try {
+    const oldTrack = path.join(downloadsDir, 'old.mp3');
+    const freshTrack = path.join(downloadsDir, 'fresh.mp3');
+    const cookie = path.join(downloadsDir, 'yt-dlp-cookies.txt');
+
+    await fs.writeFile(oldTrack, 'old');
+    await fs.writeFile(freshTrack, 'new');
+    await fs.writeFile(cookie, 'cookie');
+
+    const now = Date.now();
+    const oldTime = new Date(now - (2 * 60 * 60 * 1000));
+    await fs.utimes(oldTrack, oldTime, oldTime);
+
+    const result = await cleanupOldDownloads({ now });
+    assert.equal(result.scanned, 2);
+    assert.equal(result.removed, 1);
+
+    await assert.rejects(fs.access(oldTrack));
+    await fs.access(freshTrack);
+    await fs.access(cookie);
+  } finally {
+    config.downloadsDir = originalDownloadsDir;
+    config.downloadRetentionHours = originalRetentionHours;
+    await fs.rm(tempRoot, { recursive: true, force: true });
+  }
+});
