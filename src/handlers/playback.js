@@ -224,7 +224,10 @@ function cleanupInactiveChatDownloads() {
 async function hasActiveVoiceChat(ctx) {
   try {
     const chat = await ctx.api.getChat(ctx.chat.id);
-    return Boolean(chat?.video_chat_active);
+    if (Object.prototype.hasOwnProperty.call(chat ?? {}, 'video_chat_active')) {
+      return Boolean(chat.video_chat_active);
+    }
+    return true;
   } catch (error) {
     console.warn(`Gagal memeriksa status voice chat untuk chat ${ctx.chat?.id}`, error);
     return true;
