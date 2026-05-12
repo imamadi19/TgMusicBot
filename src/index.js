@@ -5,6 +5,7 @@ import { connectDatabase, closeDatabase } from './core/db/mongo.js';
 import { rememberChat } from './core/db/chat-registry.js';
 import { getLoggerStatus } from './core/db/system.js';
 import { loadHandlers } from './handlers/index.js';
+import { scheduleDownloadCleanup } from './core/dl/download-cleanup.js';
 
 function startHealthServer() {
   const server = http.createServer((_, response) => {
@@ -19,6 +20,8 @@ async function main() {
   validateConfig();
   const server = startHealthServer();
   await connectDatabase();
+
+  const stopDownloadCleanup = scheduleDownloadCleanup();
 
   const bot = new Bot(config.token);
   bot.api.config.use((prev, method, payload, signal) => {
@@ -46,6 +49,7 @@ async function main() {
   const stop = async () => {
     console.log('The bot is shutting down...');
     server.close();
+    stopDownloadCleanup();
     await closeDatabase();
     await bot.stop();
   };
