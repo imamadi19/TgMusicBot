@@ -213,6 +213,24 @@ function prepareAssistantJoin(ctx) {
     .catch((error) => console.warn(`Assistant gagal join awal untuk chat ${chatId}`, error));
 }
 
+function cleanupInactiveChatDownloads() {
+  for (const { chatId, queue } of chatCache.chats()) {
+    if (!queue?.length) continue;
+    if (voicePlayer.activeTrack(chatId)) continue;
+    cleanupTrackDownloads(queue, { chatId });
+  }
+}
+
+async function hasActiveVoiceChat(ctx) {
+  try {
+    const chat = await ctx.api.getChat(ctx.chat.id);
+    return Boolean(chat?.video_chat_active);
+  } catch (error) {
+    console.warn(`Gagal memeriksa status voice chat untuk chat ${ctx.chat?.id}`, error);
+    return true;
+  }
+}
+
 voicePlayer.onTrackEnd(async ({ chatId, finished, next }) => {
   if (!next) {
     await updatePlaybackPanelsForAdvance(chatId, finished, null, null);
@@ -457,7 +475,12 @@ export async function playHandler(ctx, isVideo = false) {
     });
     return;
   }
+  if (!(await hasActiveVoiceChat(ctx))) {
+    await ctx.reply(t(language, 'playback.voiceChatInactiveWarning'));
+    return;
+  }
 
+  cleanupInactiveChatDownloads();
   const status = await ctx.reply(input.startsWith('tgpl_') ? t(language, 'playback.searchingPlaylist') : t(language, 'playback.searchingDownload'));
   prepareAssistantJoin(ctx);
   enqueueChatTask(chatId, 'Proses /play', () => processPlayRequest(ctx, status, input, isVideo, language));
