@@ -130,8 +130,11 @@ export class Downloader {
   }
 
   async download(track, isVideo = false) {
-    if (config.streamDirect) {
-      const streamUrl = await this.directStreamUrl(track, isVideo);
+    // Direct stream URLs from yt-dlp (-g) are often short-lived for video
+    // and can fail in PyTgCalls/FFmpeg with NoVideoSourceFound.
+    // Keep direct mode for audio only, and always download video to a local file.
+    if (config.streamDirect && !isVideo) {
+      const streamUrl = await this.directStreamUrl(track, false);
       if (streamUrl) return streamUrl;
     }
 
