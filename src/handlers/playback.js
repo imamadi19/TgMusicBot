@@ -278,7 +278,9 @@ voicePlayer.onTrackEnd(async ({ chatId, finished, next }) => {
 });
 
 function formatError(error) {
-  return htmlEscape(error?.message ?? error);
+  const raw = String(error?.message ?? error ?? 'Unknown error').replace(/\s+/g, ' ').trim();
+  const shortened = raw.length > 280 ? `${raw.slice(0, 277)}...` : raw;
+  return htmlEscape(shortened);
 }
 
 
@@ -304,13 +306,14 @@ function captionEditOptions(text, options = {}) {
 }
 
 async function editStatus(ctx, message, text, options = {}) {
+  const safeText = String(text ?? '').trim() || '⚠️ Unable to update status.';
   try {
-    return await ctx.api.editMessageText(ctx.chat.id, message.message_id, text, options);
+    return await ctx.api.editMessageText(ctx.chat.id, message.message_id, safeText.slice(0, 4096), options);
   } catch (error) {
     try {
-      return await ctx.api.editMessageCaption(ctx.chat.id, message.message_id, captionEditOptions(text, options));
-    } catch {
-      throw error;
+      return await ctx.api.editMessageCaption(ctx.chat.id, message.message_id, captionEditOptions(safeText.slice(0, 1024), options));
+    } catch (captionError) {
+      throw captionError;
     }
   }
 }
