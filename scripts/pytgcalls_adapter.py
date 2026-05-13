@@ -196,6 +196,12 @@ def video_ffmpeg_parameters() -> str | None:
     return None
 
 
+
+
+def is_remote_media_path(file_path: str) -> bool:
+    value = str(file_path or '').strip().lower()
+    return value.startswith('http://') or value.startswith('https://')
+
 def media_stream_for(file_path: str, is_video: bool):
     if not is_video:
         return file_path
@@ -560,7 +566,7 @@ async def main_async() -> int:
         raise RuntimeError("Adapter bawaan hanya mendukung SESSION_TYPE=pyrogram")
     if action == "play" and not file_path:
         raise RuntimeError("TGMB_FILE_PATH belum diisi")
-    if action == "play" and not os.path.exists(file_path):
+    if action == "play" and not is_remote_media_path(file_path) and not os.path.exists(file_path):
         raise RuntimeError(f"File tidak ditemukan: {file_path}")
 
     patch_pyrogram_groupcall_error()
