@@ -220,6 +220,32 @@ def media_stream_for(file_path: str, is_video: bool):
     )
 
 
+async def start_stream_with_fallback(stream):
+    play_method = getattr(call_client, "play", None)
+    if not callable(play_method):
+        raise RuntimeError("PyTgCalls play() tidak tersedia")
+
+    try:
+        await call_method(play_method, chat_id, stream)
+        return
+    except Exception as exc:  # noqa: BLE001 - inspect runtime compatibility errors.
+        text = " ".join(str(exc).split()).lower()
+        not_in_call_markers = ("not in a call", "userbot is not in a call")
+        if not any(marker in text for marker in not_in_call_markers):
+            raise
+
+    for join_name in ("join_group_call", "join_call"):
+        join_method = getattr(call_client, join_name, None)
+        if callable(join_method):
+            await call_method(join_method, chat_id, stream)
+            return
+
+    raise RuntimeError(
+        "PyTgCalls gagal play karena assistant belum ada di call, "
+        "dan adapter ini tidak menemukan method join_group_call/join_call."
+    )
+
+
 async def play_file_async(file_path: str, is_video: bool = False):
     global paused, stream_started, current_stream_is_video
     if call_client is None or chat_id is None:
@@ -232,7 +258,7 @@ async def play_file_async(file_path: str, is_video: bool = False):
     if stream_started and current_stream_is_video == is_video and await switch_stream_in_current_call(stream):
         paused = False
         return
-    await call_method(call_client.play, chat_id, stream)
+    await start_stream_with_fallback(stream)
     stream_started = True
     current_stream_is_video = is_video
     paused = False

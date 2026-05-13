@@ -35,6 +35,16 @@ class FakeSwitchCallClient(FakeCallClient):
         return True
 
 
+
+
+class FakeJoinAfterPlayFailureClient(FakeCallClient):
+    async def play(self, chat_id, file_path):
+        raise RuntimeError("The userbot is not in a call")
+
+    async def join_group_call(self, chat_id, file_path):
+        await asyncio.sleep(0)
+        self.calls.append(("join_group_call", chat_id, file_path))
+        return True
 class FakeChatAccessClient:
     def __init__(self, *, chat=None, get_chat_error=None, dialogs=None):
         self.chat = chat
@@ -93,6 +103,19 @@ class AdapterControlSignalTest(unittest.IsolatedAsyncioTestCase):
             self.fake_call_client.calls,
             [("play", -100123, "/tmp/next.mp3")],
         )
+
+    async def test_play_fallback_joins_group_call_when_userbot_not_in_call(self):
+        self.fake_call_client = FakeJoinAfterPlayFailureClient()
+        self.adapter.call_client = self.fake_call_client
+
+        await self.adapter.handle_stdin_command({"action": "play", "file_path": "/tmp/next.mp3"})
+
+        self.assertTrue(self.adapter.stream_started)
+        self.assertEqual(
+            self.fake_call_client.calls,
+            [("join_group_call", -100123, "/tmp/next.mp3")],
+        )
+
 
     async def test_video_play_control_command_uses_media_stream(self):
         await self.adapter.handle_stdin_command({
