@@ -444,12 +444,12 @@ function formatSearchResult(language, track, index, total) {
     `🎵 <b>${t(language, 'playback.chooseTrack')}</b> (${index + 1}/${total})`,
     '',
     `<b>${t(language, 'playback.title')}:</b> ${htmlEscape(track.title ?? track.name)}`,
-    `<b>ChannelId:</b> ${htmlEscape(channel)}`,
+    `<b>${t(language, 'playback.channel')}:</b> ${htmlEscape(channel)}`,
     `<b>${t(language, 'playback.duration')}:</b> ${secondsToClock(track.duration)}`,
   ];
-  if (track.views) lines.push(`<b>Views:</b> ${htmlEscape(track.views)}`);
-  if (track.uploadAt) lines.push(`<b>Upload:</b> ${htmlEscape(track.uploadAt)}`);
-  lines.push(`<b>URL:</b> <a href="${htmlEscape(track.url)}">${htmlEscape(track.url)}</a>`);
+  if (track.views) lines.push(`<b>${t(language, 'playback.views')}:</b> ${htmlEscape(track.views)}`);
+  if (track.uploadAt) lines.push(`<b>${t(language, 'playback.upload')}:</b> ${htmlEscape(track.uploadAt)}`);
+  lines.push(`<b>${t(language, 'playback.url')}:</b> <a href="${htmlEscape(track.url)}">${htmlEscape(track.url)}</a>`);
   return lines.join('\n');
 }
 
