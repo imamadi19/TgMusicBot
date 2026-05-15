@@ -105,6 +105,7 @@ export function rememberPlaybackPanel(ctx, message, language, track) {
     messageId: message.message_id,
     language,
     track,
+    prefersCaption: Boolean(message.photo?.length || message.video || message.audio || message.document || message.animation),
   });
 }
 
@@ -161,25 +162,47 @@ async function activatePlaybackPanel(chatId, track, activeTrack) {
 
 async function editPanelTextAndMarkup(panel, text, replyMarkup) {
   if (!panel?.api || !panel?.messageId) return false;
+  const safeText = String(text ?? '').slice(0, 4096);
+  const safeCaption = safeText.slice(0, 1024);
+
+  const editText = () => panel.api.editMessageText(panel.chatId, panel.messageId, safeText, {
+    parse_mode: 'HTML',
+    reply_markup: replyMarkup,
+    disable_web_page_preview: true,
+  });
+  const editCaption = () => panel.api.editMessageCaption(panel.chatId, panel.messageId, {
+    caption: safeCaption,
+    parse_mode: 'HTML',
+    reply_markup: replyMarkup,
+  });
+
   try {
-    await panel.api.editMessageText(panel.chatId, panel.messageId, text, {
-      parse_mode: 'HTML',
-      reply_markup: replyMarkup,
-      disable_web_page_preview: true,
-    });
+    if (panel.prefersCaption) {
+      await editCaption();
+    } else {
+      await editText();
+    }
     return true;
   } catch (error) {
+    const description = String(error?.description ?? error?.message ?? error).toLowerCase();
+    if (description.includes('message is not modified')) return true;
+
     try {
-      await panel.api.editMessageCaption(panel.chatId, panel.messageId, {
-        caption: text,
-        parse_mode: 'HTML',
-        reply_markup: replyMarkup,
-      });
+      if (panel.prefersCaption || description.includes('there is no text in the message')) {
+        await editCaption();
+        panel.prefersCaption = true;
+      } else {
+        await editText();
+        panel.prefersCaption = false;
+      }
       return true;
-    } catch {
-      const description = String(error?.description ?? error?.message ?? error).toLowerCase();
-      if (description.includes('message is not modified')) return true;
-      console.warn(`Failed to edit playback panel for chat ${panel.chatId}`, error);
+    } catch (fallbackError) {
+      const fallbackDescription = String(fallbackError?.description ?? fallbackError?.message ?? fallbackError).toLowerCase();
+      if (fallbackDescription.includes('message is not modified')) return true;
+      console.warn(`Failed to edit playback panel for chat ${panel.chatId}`, {
+        primaryError: error,
+        fallbackError,
+      });
       return false;
     }
   }
