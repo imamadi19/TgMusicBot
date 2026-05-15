@@ -1,6 +1,7 @@
 import { getUserLanguage, setUserLanguage } from '../core/db/user-settings.js';
 import fs from 'node:fs';
 import path from 'node:path';
+import { InputFile } from 'grammy';
 import { isSupportedLanguage, languageName, t } from '../i18n/index.js';
 import { backKeyboard, helpKeyboard, languageKeyboard, mainKeyboard } from './keyboards.js';
 import { config } from '../config/index.js';
@@ -27,7 +28,8 @@ export async function startHandler(ctx) {
     reply_markup: mainKeyboard(language),
   };
   if (startImage) {
-    await ctx.replyWithPhoto(startImage, { caption, ...options });
+    const photo = startImage.startsWith('http') ? startImage : new InputFile(startImage);
+    await ctx.replyWithPhoto(photo, { caption, ...options });
     return;
   }
   await ctx.reply(caption, options);
