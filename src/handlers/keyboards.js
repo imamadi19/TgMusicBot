@@ -10,10 +10,20 @@ export function supportKeyboard(language = 'en') {
 }
 
 export function mainKeyboard(language = 'en') {
+  const username = config.token?.split(':')[0] || '';
+  const addToGroupUrl = username ? `https://t.me/${username}?startgroup=true` : 'https://t.me';
+  const sourceUrl = config.sourceUrl || 'https://github.com/';
   return new InlineKeyboard()
-    .text(t(language, 'buttons.help'), 'help_all')
-    .text(t(language, 'buttons.language'), 'language_menu')
+    .url(`🟦 ${t(language, 'buttons.addToGroup')}`, addToGroupUrl)
     .row()
+    .text(`⬛ ${t(language, 'buttons.help')}`, 'help_all')
+    .row()
+    .url(`⬛ ${t(language, 'buttons.support')}`, config.supportGroup || 'https://t.me')
+    .url(`⬛ ${t(language, 'buttons.channel')}`, config.supportChannel || 'https://t.me')
+    .row()
+    .url(`🟥 ${t(language, 'buttons.source')}`, sourceUrl)
+    .row()
+    .text(t(language, 'buttons.language'), 'language_menu')
     .text(t(language, 'buttons.settings'), 'settings_menu');
 }
 
