@@ -41,7 +41,20 @@ export async function languageMenuHandler(ctx) {
   const options = { parse_mode: 'HTML', reply_markup: languageKeyboard() };
   if (ctx.callbackQuery) {
     await ctx.answerCallbackQuery(t(language, 'buttons.chooseLanguage'));
-    await ctx.editMessageText(text, options);
+    const currentMessage = ctx.callbackQuery.message;
+    if (currentMessage?.text) {
+      await ctx.editMessageText(text, options);
+      return;
+    }
+    if (currentMessage?.caption) {
+      await ctx.editMessageCaption({ caption: text, ...options });
+      return;
+    }
+    if (!currentMessage) {
+      await ctx.reply(text, options);
+      return;
+    }
+    await ctx.reply(text, options);
     return;
   }
   await ctx.reply(text, options);
