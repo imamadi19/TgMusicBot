@@ -653,9 +653,11 @@ async function processPlayRequest(ctx, status, input, isVideo, language) {
     return;
   }
 
+  const looksLikePlaylistUrl = downloader.isUrl() && /[?&]list=/.test(normalizedInput);
+
   let info;
   try {
-    info = await downloader.getInfo({ mode: parsedMode, allowPlaylist: parsedMode === 'url' });
+    info = await downloader.getInfo({ mode: parsedMode, allowPlaylist: parsedMode === 'url' || looksLikePlaylistUrl });
   } catch (error) {
     await editStatus(ctx, status, t(language, 'playback.fetchError', { error: formatError(error) }));
     return;
@@ -667,7 +669,7 @@ async function processPlayRequest(ctx, status, input, isVideo, language) {
     await editStatus(ctx, status, t(language, 'playback.noTracks'));
     return;
   }
-  if (parsedMode === 'url' && results.length > 1) {
+  if ((parsedMode === 'url' || looksLikePlaylistUrl) && results.length > 1) {
     const queueLimitAfter = await queueLimitFor(ctx);
     const remaining = queueLimitAfter - chatCache.getQueueLength(chatId);
     const tracks = results.slice(0, remaining).map((item) => ({
