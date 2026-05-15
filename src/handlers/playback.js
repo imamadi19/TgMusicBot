@@ -202,10 +202,25 @@ export async function markPlaybackPanelStatus(chatId, track, state = 'playing', 
 async function activatePlaybackPanel(chatId, track, activeTrack) {
   const panel = playbackPanels.get(panelKey(chatId, track));
   if (!panel) return false;
-  panel.track = track;
-  const edited = await editPanelTextAndMarkup(panel, formatTrack(panel.language, track, 1, 'playing'), controlKeyboard(panel.language, '', activeTrack));
-  if (edited) startProgressUpdaterFromPanel(panel);
-  return edited;
+  const sentMessage = await panel.api.sendMessage(panel.chatId, formatTrack(panel.language, track, 1, 'playing'), {
+    parse_mode: 'HTML',
+    disable_web_page_preview: true,
+    reply_markup: controlKeyboard(panel.language, '', activeTrack),
+  }).catch((error) => {
+    console.warn(`Failed to send new playback panel for chat ${panel.chatId}`, error);
+    return null;
+  });
+  if (!sentMessage?.message_id) return false;
+
+  const oldKey = panelKey(chatId, track);
+  playbackPanels.set(oldKey, {
+    ...panel,
+    messageId: sentMessage.message_id,
+    track,
+    prefersCaption: false,
+  });
+  startProgressUpdater({ chat: { id: panel.chatId }, api: panel.api }, { message_id: sentMessage.message_id }, panel.language);
+  return true;
 }
 
 async function editPanelTextAndMarkup(panel, text, replyMarkup) {
@@ -386,6 +401,9 @@ function isVoiceChatInactiveError(error) {
   return [
     'no active group call',
     'groupcallnotmodified',
+    'voice_adapter_error: the userbot is not in a call',
+    'userbot is not in a call',
+    'not in a call',
     'voice/video chat grup belum aktif',
     'voice call belum aktif',
   ].some((marker) => message.includes(marker));
@@ -583,6 +601,10 @@ async function processPlayRequest(ctx, status, input, isVideo, language) {
         startProgressUpdater(ctx, playbackMessage ?? status, language);
       } catch (error) {
         chatCache.shift(chatId);
+        if (isVoiceChatInactiveError(error)) {
+          await ctx.reply(t(language, 'playback.voiceChatInactiveWarning'));
+          return;
+        }
         await ctx.reply(t(language, 'playback.voiceFailed', { error: formatError(error) }));
       }
     }
@@ -699,6 +721,10 @@ export async function skipHandler(ctx) {
   } catch (error) {
     const failedNext = chatCache.shift(ctx.chat.id);
     cleanupTrackDownload(failedNext, { chatId: ctx.chat.id });
+    if (isVoiceChatInactiveError(error)) {
+      await ctx.reply(t(language, 'playback.voiceChatInactiveWarning'));
+      return;
+    }
     await ctx.reply(t(language, 'playback.voiceFailed', { error: formatError(error) }));
   }
 }
@@ -734,6 +760,10 @@ export async function stopHandler(ctx) {
   } catch (error) {
     const failedNext = chatCache.shift(ctx.chat.id);
     cleanupTrackDownload(failedNext, { chatId: ctx.chat.id });
+    if (isVoiceChatInactiveError(error)) {
+      await ctx.reply(t(language, 'playback.voiceChatInactiveWarning'));
+      return;
+    }
     await ctx.reply(t(language, 'playback.voiceFailed', { error: formatError(error) }));
   }
 }
