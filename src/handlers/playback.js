@@ -178,7 +178,7 @@ async function setPlaybackPanelState(chatId, track, state = 'playing', { activeT
   const panel = playbackPanels.get(panelKey(chatId, track));
   if (!panel) return false;
   panel.track = track;
-  const replyMarkup = completed
+  const replyMarkup = (completed || state === 'stopped')
     ? completedProgressKeyboard(track)
     : controlKeyboard(panel.language, state, activeTrack ?? track);
   const edited = await editPanelTextAndMarkup(panel, formatTrack(panel.language, track, 1, state), replyMarkup);
