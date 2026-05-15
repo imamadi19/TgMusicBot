@@ -6,7 +6,7 @@ import { requesterKey, voicePlayer } from '../core/player/player.js';
 import { config } from '../config/index.js';
 import { t } from '../i18n/index.js';
 import { controlKeyboard, progressLabel } from './keyboards.js';
-import { updatePlaybackPanelsForAdvance } from './playback.js';
+import { markPlaybackPanelStatus, updatePlaybackPanelsForAdvance } from './playback.js';
 
 const requesterOnlyActions = new Set(['skip', 'stop', 'pause', 'resume', 'replay', 'mute', 'unmute']);
 
@@ -108,6 +108,7 @@ export async function vcPlayCallbackHandler(ctx) {
         if (!skipped) return;
         if (!next) {
           await updatePlaybackPanelsForAdvance(chatId, skipped, null, null);
+          await markPlaybackPanelStatus(chatId, skipped, 'skipped').catch(() => {});
           cleanupTrackDownload(skipped, { chatId });
           return;
         }
@@ -132,6 +133,9 @@ export async function vcPlayCallbackHandler(ctx) {
           }
           cleanupTrackDownloads(queue, { chatId });
           await answer(ctx, t(language, 'callbacks.playbackStopped'));
+          if (stopped ?? queuedCurrent ?? currentTrack) {
+            await markPlaybackPanelStatus(chatId, stopped ?? queuedCurrent ?? currentTrack, 'stopped').catch(() => {});
+          }
           return;
         }
         const activeTrack = reusedTrack ?? await startNextTrack(chatId, next);
@@ -148,6 +152,7 @@ export async function vcPlayCallbackHandler(ctx) {
         }
         await answer(ctx, t(language, 'callbacks.playbackPaused'));
         await editPlaybackControls(ctx, language, 'pause');
+        await markPlaybackPanelStatus(chatId, currentTrack, 'paused', currentTrack);
         return;
       }
       case 'resume': {
@@ -157,6 +162,7 @@ export async function vcPlayCallbackHandler(ctx) {
         }
         await answer(ctx, t(language, 'callbacks.playbackResumed'));
         await editPlaybackControls(ctx, language, 'resume');
+        await markPlaybackPanelStatus(chatId, currentTrack, 'playing', currentTrack);
         return;
       }
       case 'replay': {
@@ -186,6 +192,7 @@ export async function vcPlayCallbackHandler(ctx) {
       }
       default: {
         await editPlaybackControls(ctx, language, 'resume');
+        await markPlaybackPanelStatus(chatId, currentTrack, 'playing', currentTrack);
       }
     }
   } catch (error) {
