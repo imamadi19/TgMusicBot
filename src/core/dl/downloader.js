@@ -41,8 +41,9 @@ async function cookieArgs() {
   return ['--cookies', cookieFile];
 }
 
-async function ytDlpBaseArgs() {
-  return ['--no-playlist', '--js-runtimes', 'node', ...(await cookieArgs())];
+async function ytDlpBaseArgs({ allowPlaylist = false } = {}) {
+  const playlistArgs = allowPlaylist ? [] : ['--no-playlist'];
+  return [...playlistArgs, '--js-runtimes', 'node', ...(await cookieArgs())];
 }
 
 function run(command, args, { timeoutMs = config.ytdlpTimeoutMs } = {}) {
@@ -96,8 +97,10 @@ export class Downloader {
     return SUPPORTED_HOSTS.some((supported) => isSupportedHost(host, supported));
   }
 
-  async getInfo() {
-    if (!this.isUrl() && config.defaultService.toLowerCase().includes('youtube')) {
+  async getInfo(options = {}) {
+    const { mode = 'auto', allowPlaylist = false } = options;
+    const shouldSearch = mode === 'request' || (mode === 'auto' && !this.isUrl());
+    if (shouldSearch && config.defaultService.toLowerCase().includes('youtube')) {
       try {
         const results = await searchNexRayYouTube(this.input);
         if (results.length > 0) return { platform: 'YouTube', results, selectionRequired: true };
@@ -107,7 +110,7 @@ export class Downloader {
     }
 
     const query = this.isUrl() ? this.input : `ytsearch10:${this.input}`;
-    const output = await run('yt-dlp', ['--dump-single-json', ...(await ytDlpBaseArgs()), query]);
+    const output = await run('yt-dlp', ['--dump-single-json', ...(await ytDlpBaseArgs({ allowPlaylist })), query]);
     const parsed = JSON.parse(output);
     const entries = parsed.entries ?? [parsed];
     return {
