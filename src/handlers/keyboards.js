@@ -10,7 +10,8 @@ export function supportKeyboard(language = 'en') {
 }
 
 export function mainKeyboard(language = 'en') {
-  const addToGroupUrl = `https://t.me/@TgMusikGlobalBot?startgroup=true`
+  const botUsername = String(config.botUsername || 'TgMusikGlobalBot').replace(/^@+/, '');
+  const addToGroupUrl = `https://t.me/${botUsername}?startgroup=true`;
   const sourceUrl = config.sourceUrl || 'https://github.com/';
   return new InlineKeyboard()
     .url(`➕ ${t(language, 'buttons.addToGroup')}`, addToGroupUrl)

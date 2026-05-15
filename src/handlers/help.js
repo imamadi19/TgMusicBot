@@ -6,6 +6,20 @@ import { isSupportedLanguage, languageName, t } from '../i18n/index.js';
 import { backKeyboard, helpKeyboard, languageKeyboard, mainKeyboard } from './keyboards.js';
 import { config } from '../config/index.js';
 
+
+async function editOrReplyCallbackMessage(ctx, text, options = {}) {
+  const currentMessage = ctx.callbackQuery?.message;
+  if (currentMessage?.text) {
+    await ctx.editMessageText(text, options);
+    return;
+  }
+  if (currentMessage?.caption) {
+    await ctx.editMessageCaption({ caption: text, ...options });
+    return;
+  }
+  await ctx.reply(text, options);
+}
+
 function helpCategories(language) {
   return {
     help_user: [t(language, 'help.userTitle'), t(language, 'help.userContent')],
@@ -41,20 +55,7 @@ export async function languageMenuHandler(ctx) {
   const options = { parse_mode: 'HTML', reply_markup: languageKeyboard() };
   if (ctx.callbackQuery) {
     await ctx.answerCallbackQuery(t(language, 'buttons.chooseLanguage'));
-    const currentMessage = ctx.callbackQuery.message;
-    if (currentMessage?.text) {
-      await ctx.editMessageText(text, options);
-      return;
-    }
-    if (currentMessage?.caption) {
-      await ctx.editMessageCaption({ caption: text, ...options });
-      return;
-    }
-    if (!currentMessage) {
-      await ctx.reply(text, options);
-      return;
-    }
-    await ctx.reply(text, options);
+    await editOrReplyCallbackMessage(ctx, text, options);
     return;
   }
   await ctx.reply(text, options);
@@ -69,7 +70,7 @@ export async function languageSelectHandler(ctx) {
   }
   await setUserLanguage(ctx.from?.id, selected);
   await ctx.answerCallbackQuery(t(selected, 'language.saved', { language: languageName(selected) }));
-  await ctx.editMessageText(`${t(selected, 'language.saved', { language: languageName(selected) })}\n\n${t(selected, 'start.text', { name: ctx.from?.first_name ?? t(selected, 'general.user'), botName: ctx.me.first_name })}`, {
+  await editOrReplyCallbackMessage(ctx, `${t(selected, 'language.saved', { language: languageName(selected) })}\n\n${t(selected, 'start.text', { name: ctx.from?.first_name ?? t(selected, 'general.user'), botName: ctx.me.first_name })}`, {
     parse_mode: 'HTML',
     reply_markup: mainKeyboard(selected),
   });
@@ -80,7 +81,7 @@ export async function helpCallback(ctx) {
   const data = ctx.callbackQuery.data;
   if (data === 'help_all') {
     await ctx.answerCallbackQuery(t(language, 'general.openingHelp'));
-    await ctx.editMessageText(t(language, 'general.chooseHelp'), { reply_markup: helpKeyboard(language) });
+    await editOrReplyCallbackMessage(ctx, t(language, 'general.chooseHelp'), { reply_markup: helpKeyboard(language) });
     return;
   }
   const category = helpCategories(language)[data];
@@ -90,7 +91,7 @@ export async function helpCallback(ctx) {
   }
   const [title, content] = category;
   await ctx.answerCallbackQuery(title);
-  await ctx.editMessageText(`<b>${title}</b>\n\n${content}\n\n<i>${t(language, 'general.useBack')}</i>`, {
+  await editOrReplyCallbackMessage(ctx, `<b>${title}</b>\n\n${content}\n\n<i>${t(language, 'general.useBack')}</i>`, {
     parse_mode: 'HTML',
     reply_markup: backKeyboard(language),
   });
