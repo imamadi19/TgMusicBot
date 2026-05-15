@@ -487,6 +487,19 @@ async function sendSelectionPhoto(ctx, statusMessage, thumbnail, caption) {
   }
 }
 
+async function sendPlaybackPhoto(ctx, statusMessage, track, caption, options = {}) {
+  const thumbnail = youtubeThumbnail(track);
+  if (!thumbnail) return null;
+  try {
+    const message = await ctx.replyWithPhoto(thumbnail, { caption, parse_mode: 'HTML', ...captionEditOptions(caption, options) });
+    await ctx.api.deleteMessage(ctx.chat.id, statusMessage.message_id).catch(() => {});
+    return message;
+  } catch (error) {
+    console.warn('Failed to send playback thumbnail photo, falling back to status edit:', error.message);
+    return null;
+  }
+}
+
 async function showYouTubeSelection(ctx, statusMessage, tracks, isVideo, language, index = 0) {
   const safeIndex = selectedTrackIndex(tracks, index);
   const caption = formatYouTubeSelection(language, tracks, safeIndex);
@@ -535,7 +548,9 @@ async function queueAndMaybePlay(ctx, statusMessage, track, isVideo, language) {
     : chatCache.addSong(chatId, saveTrack);
   if (length > 1) {
     preloadTrack(saveTrack, isVideo, { chatId });
-    const queueMessage = await editStatus(ctx, statusMessage, formatTrack(language, saveTrack, length), { parse_mode: 'HTML', disable_web_page_preview: true });
+    const queueCaption = formatTrack(language, saveTrack, length);
+    const queueMessage = await sendPlaybackPhoto(ctx, statusMessage, saveTrack, queueCaption, { disable_web_page_preview: true })
+      ?? await editStatus(ctx, statusMessage, queueCaption, { parse_mode: 'HTML', disable_web_page_preview: true });
     rememberPlaybackPanel(ctx, queueMessage ?? statusMessage, language, saveTrack);
     return;
   }
