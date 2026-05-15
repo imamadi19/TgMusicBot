@@ -52,6 +52,7 @@ export const config = {
   supportGroup: process.env.SUPPORT_GROUP ?? '',
   supportChannel: process.env.SUPPORT_CHANNEL ?? '',
   sourceUrl: process.env.SOURCE_URL ?? '',
+  botUsername: String(process.env.BOT_USERNAME ?? '').replace(/^@+/, ''),
   devs: splitList(process.env.DEVS).map((id) => toInt(id)).filter(Boolean),
   cookiesPath: splitList(process.env.COOKIES_PATH),
   cookiesUrl: splitList(process.env.COOKIES_URL),
