@@ -82,7 +82,7 @@ test('control keyboard exposes moving progress and transport controls', async ()
   assert.equal(rows[0][0].callback_data, 'play_progress');
   assert.equal(rows[0][0].text, '00:00 | ◉━━━━━━━━━━━ | -01:05');
   assert.deepEqual(rows[1].map((button) => button.callback_data), ['play_resume', 'play_pause', 'play_replay', 'play_skip', 'play_stop']);
-  assert.deepEqual(rows[1].map((button) => button.text), ['▷', 'Ⅱ', '↻', '▸▸▏', '▢']);
+  assert.deepEqual(rows[1].map((button) => button.text), ['▷', 'Ⅱ', '↻', '▸▸', '▢']);
 
   const progressRows = progressKeyboard({ duration: 65 }).inline_keyboard;
   assert.equal(progressRows.length, 1);
@@ -208,7 +208,7 @@ test('skip callback acknowledges before slow playback work', async () => {
 });
 
 
-test('track advance updates queued playback panel instead of old controls', async () => {
+test('track advance sends a new playback panel message for next queue item', async () => {
   const { rememberPlaybackPanel, updatePlaybackPanelsForAdvance } = await import('../src/handlers/playback.js');
   const chatId = -9104;
   const calls = [];
@@ -218,6 +218,10 @@ test('track advance updates queued playback panel instead of old controls', asyn
     },
     async editMessageText(targetChatId, messageId, text, options) {
       calls.push({ method: 'text', targetChatId, messageId, text, options });
+    },
+    async sendMessage(targetChatId, text, options) {
+      calls.push({ method: 'send', targetChatId, text, options });
+      return { message_id: 22 };
     },
   };
   const current = { trackId: 'panel-current', name: 'Current Panel', duration: 65, url: 'https://example.com/current', user: 'Alice' };
@@ -233,8 +237,8 @@ test('track advance updates queued playback panel instead of old controls', asyn
   assert.equal(calls[0]?.method, 'markup');
   assert.equal(calls[0]?.messageId, 20);
   assert.equal(calls[0]?.options.reply_markup.inline_keyboard.length, 1);
-  assert.equal(calls[1]?.method, 'text');
-  assert.equal(calls[1]?.messageId, 21);
+  assert.equal(calls[1]?.method, 'send');
+  assert.equal(calls[1]?.targetChatId, chatId);
   assert.match(calls[1]?.text, /Now playing/);
   assert.match(calls[1]?.text, /Next Panel/);
   assert.deepEqual(calls[1]?.options.reply_markup.inline_keyboard[1].map((button) => button.callback_data), ['play_resume', 'play_pause', 'play_replay', 'play_skip', 'play_stop']);
