@@ -1,6 +1,9 @@
 import { getUserLanguage, setUserLanguage } from '../core/db/user-settings.js';
+import fs from 'node:fs';
+import path from 'node:path';
 import { isSupportedLanguage, languageName, t } from '../i18n/index.js';
 import { backKeyboard, helpKeyboard, languageKeyboard, mainKeyboard } from './keyboards.js';
+import { config } from '../config/index.js';
 
 function helpCategories(language) {
   return {
@@ -16,10 +19,18 @@ export async function startHandler(ctx) {
   const language = await getUserLanguage(ctx.from?.id);
   const name = ctx.from?.first_name ?? t(language, 'general.user');
   const botName = ctx.me.first_name;
-  await ctx.reply(t(language, 'start.text', { name, botName }), {
+  const caption = t(language, 'start.text', { name, botName });
+  const localStartImage = path.resolve('src/core/db/logo.jpg');
+  const startImage = config.startImg || (fs.existsSync(localStartImage) ? localStartImage : '');
+  const options = {
     parse_mode: 'HTML',
     reply_markup: mainKeyboard(language),
-  });
+  };
+  if (startImage) {
+    await ctx.replyWithPhoto(startImage, { caption, ...options });
+    return;
+  }
+  await ctx.reply(caption, options);
 }
 
 export async function languageMenuHandler(ctx) {

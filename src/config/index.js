@@ -51,6 +51,7 @@ export const config = {
   downloadCleanupIntervalMinutes: toInt(process.env.DOWNLOAD_CLEANUP_INTERVAL_MINUTES, 30),
   supportGroup: process.env.SUPPORT_GROUP ?? '',
   supportChannel: process.env.SUPPORT_CHANNEL ?? '',
+  sourceUrl: process.env.SOURCE_URL ?? '',
   devs: splitList(process.env.DEVS).map((id) => toInt(id)).filter(Boolean),
   cookiesPath: splitList(process.env.COOKIES_PATH),
   cookiesUrl: splitList(process.env.COOKIES_URL),
