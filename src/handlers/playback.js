@@ -202,22 +202,34 @@ export async function markPlaybackPanelStatus(chatId, track, state = 'playing', 
 async function activatePlaybackPanel(chatId, track, activeTrack) {
   const panel = playbackPanels.get(panelKey(chatId, track));
   if (!panel) return false;
-  const sentMessage = await panel.api.sendMessage(panel.chatId, formatTrack(panel.language, track, 1, 'playing'), {
-    parse_mode: 'HTML',
-    disable_web_page_preview: true,
-    reply_markup: controlKeyboard(panel.language, '', activeTrack),
-  }).catch((error) => {
+  const text = formatTrack(panel.language, track, 1, 'playing');
+  const replyMarkup = controlKeyboard(panel.language, '', activeTrack);
+  const thumbnail = youtubeThumbnail(track);
+  const sentMessage = await (thumbnail
+    ? panel.api.sendPhoto(panel.chatId, thumbnail, {
+      caption: String(text).slice(0, 1024),
+      parse_mode: 'HTML',
+      reply_markup: replyMarkup,
+    })
+    : panel.api.sendMessage(panel.chatId, text, {
+      parse_mode: 'HTML',
+      disable_web_page_preview: true,
+      reply_markup: replyMarkup,
+    })).catch((error) => {
     console.warn(`Failed to send new playback panel for chat ${panel.chatId}`, error);
     return null;
   });
   if (!sentMessage?.message_id) return false;
+  if (panel.messageId && typeof panel.api.deleteMessage === 'function') {
+    await panel.api.deleteMessage(panel.chatId, panel.messageId).catch(() => {});
+  }
 
   const oldKey = panelKey(chatId, track);
   playbackPanels.set(oldKey, {
     ...panel,
     messageId: sentMessage.message_id,
     track,
-    prefersCaption: false,
+    prefersCaption: Boolean(sentMessage.photo?.length),
   });
   startProgressUpdater({ chat: { id: panel.chatId }, api: panel.api }, { message_id: sentMessage.message_id }, panel.language);
   return true;
@@ -419,7 +431,7 @@ function playbackHeading(language, state = 'playing', queueLength = 1) {
   if (state === 'completed') return fromKey('playback.queueEnded', 'Music finished');
   if (state === 'stopped') return fromKey('callbacks.playbackStopped', 'Music stopped');
   if (state === 'skipped') return fromKey('callbacks.trackSkipped', 'Music skipped');
-  return t(language, 'playback.nowPlaying');
+  return `${t(language, 'playback.nowPlaying')}.`;
 }
 
 function formatTrack(language, track, queueLength = 1, state = 'playing') {
