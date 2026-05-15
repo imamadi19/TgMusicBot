@@ -19,10 +19,13 @@ const MAX_QUEUE = 10;
 const PREMIUM_MAX_QUEUE = 50;
 const ASSISTANT_INVITE_EXPIRE_SECONDS = 60 * 60;
 const PROGRESS_UPDATE_INTERVAL_MS = 10000;
+const PANEL_EDIT_MIN_INTERVAL_MS = 1200;
 
 const progressUpdaters = new Map();
 const playbackPanels = new Map();
 const chatTasks = new Map();
+const panelEditTasks = new Map();
+const panelEditLastAt = new Map();
 const recentPlayRequests = new Map();
 const FREE_PLAY_COOLDOWN_MS = 5000;
 
@@ -96,6 +99,43 @@ function panelKey(chatId, track) {
   return `${String(chatId)}:${String(track?.trackId ?? track?.url ?? track?.name ?? '')}`;
 }
 
+function panelMessageKey(panel) {
+  return `${String(panel?.chatId ?? '')}:${String(panel?.messageId ?? '')}`;
+}
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function parseRetryAfterSeconds(error) {
+  const retryAfter = Number(error?.parameters?.retry_after);
+  if (Number.isFinite(retryAfter) && retryAfter > 0) return retryAfter;
+  const description = String(error?.description ?? error?.message ?? '');
+  const matched = description.match(/retry after\s+(\d+)/i);
+  return matched ? Number(matched[1]) : 0;
+}
+
+function enqueuePanelEdit(panel, task) {
+  const key = panelMessageKey(panel);
+  if (!key || !panel?.messageId) return task();
+  const previous = panelEditTasks.get(key) ?? Promise.resolve();
+  const next = previous
+    .catch(() => {})
+    .then(async () => {
+      const lastAt = panelEditLastAt.get(key) ?? 0;
+      const waitMs = Math.max(0, PANEL_EDIT_MIN_INTERVAL_MS - (Date.now() - lastAt));
+      if (waitMs > 0) await delay(waitMs);
+      const result = await task();
+      panelEditLastAt.set(key, Date.now());
+      return result;
+    })
+    .finally(() => {
+      if (panelEditTasks.get(key) === next) panelEditTasks.delete(key);
+    });
+  panelEditTasks.set(key, next);
+  return next;
+}
+
 export function rememberPlaybackPanel(ctx, message, language, track) {
   const chatId = ctx.chat?.id;
   if (!chatId || !message?.message_id || !track) return;
@@ -115,15 +155,23 @@ function forgetPlaybackPanel(chatId, track) {
 
 async function editPanelMarkup(panel, replyMarkup) {
   if (!panel?.api || !panel?.messageId) return false;
-  try {
-    await panel.api.editMessageReplyMarkup(panel.chatId, panel.messageId, { reply_markup: replyMarkup });
-    return true;
-  } catch (error) {
-    const description = String(error?.description ?? error?.message ?? error).toLowerCase();
-    if (description.includes('message is not modified')) return true;
-    console.warn(`Failed to edit playback controls for chat ${panel.chatId}`, error);
-    return false;
-  }
+  return enqueuePanelEdit(panel, async () => {
+    try {
+      await panel.api.editMessageReplyMarkup(panel.chatId, panel.messageId, { reply_markup: replyMarkup });
+      return true;
+    } catch (error) {
+      const description = String(error?.description ?? error?.message ?? error).toLowerCase();
+      if (description.includes('message is not modified')) return true;
+      const retryAfter = parseRetryAfterSeconds(error);
+      if (retryAfter > 0) {
+        await delay((retryAfter * 1000) + 250);
+        await panel.api.editMessageReplyMarkup(panel.chatId, panel.messageId, { reply_markup: replyMarkup });
+        return true;
+      }
+      console.warn(`Failed to edit playback controls for chat ${panel.chatId}`, error);
+      return false;
+    }
+  });
 }
 
 async function setPlaybackPanelState(chatId, track, state = 'playing', { activeTrack = null, completed = false } = {}) {
@@ -176,36 +224,45 @@ async function editPanelTextAndMarkup(panel, text, replyMarkup) {
     reply_markup: replyMarkup,
   });
 
-  try {
-    if (panel.prefersCaption) {
-      await editCaption();
-    } else {
-      await editText();
-    }
-    return true;
-  } catch (error) {
-    const description = String(error?.description ?? error?.message ?? error).toLowerCase();
-    if (description.includes('message is not modified')) return true;
-
+  return enqueuePanelEdit(panel, async () => {
     try {
-      if (panel.prefersCaption || description.includes('there is no text in the message')) {
+      if (panel.prefersCaption) {
         await editCaption();
-        panel.prefersCaption = true;
       } else {
         await editText();
-        panel.prefersCaption = false;
       }
       return true;
-    } catch (fallbackError) {
-      const fallbackDescription = String(fallbackError?.description ?? fallbackError?.message ?? fallbackError).toLowerCase();
-      if (fallbackDescription.includes('message is not modified')) return true;
-      console.warn(`Failed to edit playback panel for chat ${panel.chatId}`, {
-        primaryError: error,
-        fallbackError,
-      });
-      return false;
+    } catch (error) {
+      const description = String(error?.description ?? error?.message ?? error).toLowerCase();
+      if (description.includes('message is not modified')) return true;
+
+      try {
+        if (panel.prefersCaption || description.includes('there is no text in the message')) {
+          await editCaption();
+          panel.prefersCaption = true;
+        } else {
+          await editText();
+          panel.prefersCaption = false;
+        }
+        return true;
+      } catch (fallbackError) {
+        const fallbackDescription = String(fallbackError?.description ?? fallbackError?.message ?? fallbackError).toLowerCase();
+        if (fallbackDescription.includes('message is not modified')) return true;
+        const retryAfter = parseRetryAfterSeconds(fallbackError);
+        if (retryAfter > 0) {
+          await delay((retryAfter * 1000) + 250);
+          if (panel.prefersCaption) await editCaption();
+          else await editText();
+          return true;
+        }
+        console.warn(`Failed to edit playback panel for chat ${panel.chatId}`, {
+          primaryError: error,
+          fallbackError,
+        });
+        return false;
+      }
     }
-  }
+  });
 }
 
 export async function updatePlaybackPanelsForAdvance(chatId, finished, next, activeTrack) {
