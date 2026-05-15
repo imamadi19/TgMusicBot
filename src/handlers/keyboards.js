@@ -10,18 +10,15 @@ export function supportKeyboard(language = 'en') {
 }
 
 export function mainKeyboard(language = 'en') {
-  const username = config.token?.split(':')[0] || '';
-  const addToGroupUrl = username ? `https://t.me/${username}?startgroup=true` : 'https://t.me';
+  const addToGroupUrl = `https://t.me/@TgMusikGlobalBot?startgroup=true`
   const sourceUrl = config.sourceUrl || 'https://github.com/';
   return new InlineKeyboard()
-    .url(`🟦 ${t(language, 'buttons.addToGroup')}`, addToGroupUrl)
+    .url(`➕ ${t(language, 'buttons.addToGroup')}`, addToGroupUrl)
     .row()
-    .text(`🟥 ${t(language, 'buttons.help')}`, 'help_all')
+    .text(`${t(language, 'buttons.help')}`, 'help_all')
     .row()
-    .url(`🟦 ${t(language, 'buttons.support')}`, config.supportGroup || 'https://t.me')
-    .url(`🟥 ${t(language, 'buttons.channel')}`, config.supportChannel || 'https://t.me')
-    .row()
-    .url(`🟦 ${t(language, 'buttons.source')}`, sourceUrl)
+    .url(`${t(language, 'buttons.support')}`, config.supportGroup || 'https://t.me')
+    .url(`${t(language, 'buttons.channel')}`, config.supportChannel || 'https://t.me')
     .row()
     .text(t(language, 'buttons.language'), 'language_menu')
     .text(t(language, 'buttons.settings'), 'settings_menu');
@@ -92,7 +89,7 @@ export function controlKeyboard(language = 'en', state = '', track = {}) {
     .text('▷', 'play_resume')
     .text('Ⅱ', 'play_pause')
     .text('↻', 'play_replay')
-    .text('▸▸▏', 'play_skip')
+    .text('▸▸', 'play_skip')
     .text('▢', 'play_stop');
 }
 
