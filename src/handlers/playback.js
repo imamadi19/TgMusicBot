@@ -638,15 +638,24 @@ async function processPlayRequest(ctx, status, input, isVideo, language) {
     return;
   }
 
-  const downloader = new Downloader(input);
-  if (isUrl(input) && !downloader.isValid()) {
+  const parsedMode = /^url\s+/i.test(input)
+    ? 'url'
+    : (/^request\s+/i.test(input) ? 'request' : 'auto');
+  const normalizedInput = parsedMode === 'auto' ? input : input.replace(/^(url|request)\s+/i, '').trim();
+  if (!normalizedInput) {
+    await editStatus(ctx, status, t(language, 'playback.playUsage'));
+    return;
+  }
+
+  const downloader = new Downloader(normalizedInput);
+  if ((parsedMode === 'url' || isUrl(normalizedInput)) && !downloader.isValid()) {
     await editStatus(ctx, status, t(language, 'playback.invalidUrl'));
     return;
   }
 
   let info;
   try {
-    info = await downloader.getInfo();
+    info = await downloader.getInfo({ mode: parsedMode, allowPlaylist: parsedMode === 'url' });
   } catch (error) {
     await editStatus(ctx, status, t(language, 'playback.fetchError', { error: formatError(error) }));
     return;
@@ -656,6 +665,44 @@ async function processPlayRequest(ctx, status, input, isVideo, language) {
   const [track] = results;
   if (!track) {
     await editStatus(ctx, status, t(language, 'playback.noTracks'));
+    return;
+  }
+  if (parsedMode === 'url' && results.length > 1) {
+    const queueLimitAfter = await queueLimitFor(ctx);
+    const remaining = queueLimitAfter - chatCache.getQueueLength(chatId);
+    const tracks = results.slice(0, remaining).map((item) => ({
+      ...item,
+      user: firstName(ctx),
+      userId: ctx.from?.id,
+      isVideo,
+      filePath: '',
+      platform: item.platform ?? config.defaultService,
+    }));
+    if (tracks.length === 0) {
+      await editStatus(ctx, status, t(language, 'playback.queueFull', { max: queueLimitAfter }));
+      return;
+    }
+    const queueWasEmpty = chatCache.getQueueLength(chatId) === 0;
+    const length = chatCache.addSongs(chatId, tracks);
+    preloadTracks(queueWasEmpty ? tracks.slice(1) : tracks, { chatId });
+    await editStatus(ctx, status, t(language, 'playback.addedPlaylistTracks', { count: tracks.length, length }));
+    if (queueWasEmpty) {
+      try {
+        await ensureDownloaded(tracks[0], isVideo);
+        const activeTrack = await startQueuedTrack(ctx, tracks[0], isVideo);
+        tracks[0].startedAt = activeTrack?.startedAt;
+        const playbackMessage = await editStatus(ctx, status, formatTrack(language, tracks[0]), { parse_mode: 'HTML', reply_markup: controlKeyboard(language, '', tracks[0]), disable_web_page_preview: true });
+        rememberPlaybackPanel(ctx, playbackMessage ?? status, language, tracks[0]);
+        startProgressUpdater(ctx, playbackMessage ?? status, language);
+      } catch (error) {
+        chatCache.shift(chatId);
+        if (isVoiceChatInactiveError(error)) {
+          await ctx.reply(t(language, 'playback.voiceChatInactiveWarning'));
+          return;
+        }
+        await ctx.reply(t(language, 'playback.voiceFailed', { error: formatError(error) }));
+      }
+    }
     return;
   }
   if (info.selectionRequired && results.length > 1) {
