@@ -763,9 +763,29 @@ export async function queueHandler(ctx) {
     await ctx.reply(t(language, 'playback.queueEmpty'));
     return;
   }
-  const lines = queue.map((track, index) => `${index + 1}. ${track.name} (${secondsToClock(track.duration)}) — ${track.user}`);
-  await ctx.reply(`<b>${t(language, 'playback.queueTitle')}</b>\n${htmlEscape(lines.join('\n'))}`, { parse_mode: 'HTML' });
+
+  const previewTracks = queue.slice(0, MAX_QUEUE);
+  const hiddenCount = Math.max(0, queue.length - previewTracks.length);
+  const lines = previewTracks.map((track, index) => {
+    const title = htmlEscape(track.name);
+    const duration = secondsToClock(track.duration);
+    const requester = htmlEscape(track.user || '-');
+    return `${index + 1}. <a href="${htmlEscape(track.url)}">${title}</a> (${duration}) — ${requester}`;
+  });
+  if (hiddenCount > 0) {
+    lines.push('');
+    lines.push(`… +${hiddenCount} lagu lagi`);
+  }
+
+  const text = `<b>${t(language, 'playback.queueTitle')}</b> (${previewTracks.length}/${queue.length})\n\n${lines.join('\n')}`;
+  const thumbnail = youtubeThumbnail(previewTracks[0]);
+  if (thumbnail) {
+    await ctx.replyWithPhoto(thumbnail, { caption: text.slice(0, 1024), parse_mode: 'HTML' });
+    return;
+  }
+  await ctx.reply(text, { parse_mode: 'HTML', disable_web_page_preview: true });
 }
+
 
 export async function skipHandler(ctx) {
   const language = await getUserLanguage(ctx.from?.id);
