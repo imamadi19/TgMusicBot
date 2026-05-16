@@ -618,14 +618,16 @@ async function processPlayRequest(ctx, status, input, isVideo, language) {
     const queueWasEmpty = chatCache.getQueueLength(chatId) === 0;
     const length = chatCache.addSongs(chatId, tracks);
     preloadTracks(queueWasEmpty ? tracks.slice(1) : tracks, { chatId });
-    await editStatus(ctx, status, t(language, 'playback.addedPlaylistTracks', { count: tracks.length, length }));
+    const playlistNotice = `${t(language, 'playback.addedPlaylistTracks', { count: tracks.length, length })}\n\n${formatTrack(language, tracks[0], length)}`;
+    const queueMessage = await sendPlaybackPhoto(ctx, status, tracks[0], playlistNotice, { disable_web_page_preview: true })
+      ?? await editStatus(ctx, status, playlistNotice, { parse_mode: 'HTML', disable_web_page_preview: true });
     if (queueWasEmpty) {
       try {
         const activeTrack = await startQueuedTrack(ctx, tracks[0], isVideo);
         tracks[0].startedAt = activeTrack?.startedAt;
-        const playbackMessage = await editStatus(ctx, status, formatTrack(language, tracks[0]), { parse_mode: 'HTML', reply_markup: controlKeyboard(language, '', tracks[0]), disable_web_page_preview: true });
-        rememberPlaybackPanel(ctx, playbackMessage ?? status, language, tracks[0]);
-        startProgressUpdater(ctx, playbackMessage ?? status, language);
+        const playbackMessage = await editStatus(ctx, queueMessage ?? status, formatTrack(language, tracks[0]), { parse_mode: 'HTML', reply_markup: controlKeyboard(language, '', tracks[0]), disable_web_page_preview: true });
+        rememberPlaybackPanel(ctx, playbackMessage ?? queueMessage ?? status, language, tracks[0]);
+        startProgressUpdater(ctx, playbackMessage ?? queueMessage ?? status, language);
       } catch (error) {
         chatCache.shift(chatId);
         if (isVoiceChatInactiveError(error)) {
@@ -687,15 +689,17 @@ async function processPlayRequest(ctx, status, input, isVideo, language) {
     const queueWasEmpty = chatCache.getQueueLength(chatId) === 0;
     const length = chatCache.addSongs(chatId, tracks);
     preloadTracks(queueWasEmpty ? tracks.slice(1) : tracks, { chatId });
-    await editStatus(ctx, status, t(language, 'playback.addedPlaylistTracks', { count: tracks.length, length }));
+    const playlistNotice = `${t(language, 'playback.addedPlaylistTracks', { count: tracks.length, length })}\n\n${formatTrack(language, tracks[0], length)}`;
+    const queueMessage = await sendPlaybackPhoto(ctx, status, tracks[0], playlistNotice, { disable_web_page_preview: true })
+      ?? await editStatus(ctx, status, playlistNotice, { parse_mode: 'HTML', disable_web_page_preview: true });
     if (queueWasEmpty) {
       try {
         await ensureDownloaded(tracks[0], isVideo);
         const activeTrack = await startQueuedTrack(ctx, tracks[0], isVideo);
         tracks[0].startedAt = activeTrack?.startedAt;
-        const playbackMessage = await editStatus(ctx, status, formatTrack(language, tracks[0]), { parse_mode: 'HTML', reply_markup: controlKeyboard(language, '', tracks[0]), disable_web_page_preview: true });
-        rememberPlaybackPanel(ctx, playbackMessage ?? status, language, tracks[0]);
-        startProgressUpdater(ctx, playbackMessage ?? status, language);
+        const playbackMessage = await editStatus(ctx, queueMessage ?? status, formatTrack(language, tracks[0]), { parse_mode: 'HTML', reply_markup: controlKeyboard(language, '', tracks[0]), disable_web_page_preview: true });
+        rememberPlaybackPanel(ctx, playbackMessage ?? queueMessage ?? status, language, tracks[0]);
+        startProgressUpdater(ctx, playbackMessage ?? queueMessage ?? status, language);
       } catch (error) {
         chatCache.shift(chatId);
         if (isVoiceChatInactiveError(error)) {
