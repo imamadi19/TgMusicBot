@@ -591,6 +591,16 @@ async function queueAndMaybePlay(ctx, statusMessage, track, isVideo, language) {
   startProgressUpdater(ctx, playbackMessage ?? statusMessage, language);
 }
 
+async function sendPlaylistQueuePanels(ctx, tracks, language, queueStartLength, fallbackMessage) {
+  for (const [index, queuedTrack] of tracks.entries()) {
+    const queuePosition = queueStartLength + index + 1;
+    const caption = formatTrack(language, queuedTrack, queuePosition);
+    const sent = await sendPlaybackPhoto(ctx, fallbackMessage, queuedTrack, caption, { disable_web_page_preview: true })
+      ?? await ctx.reply(caption, { parse_mode: 'HTML', disable_web_page_preview: true }).catch(() => null);
+    if (sent) rememberPlaybackPanel(ctx, sent, language, queuedTrack);
+  }
+}
+
 async function processPlayRequest(ctx, status, input, isVideo, language) {
   const chatId = ctx.chat.id;
   const queueLimit = await queueLimitFor(ctx);
@@ -615,12 +625,14 @@ async function processPlayRequest(ctx, status, input, isVideo, language) {
       await editStatus(ctx, status, t(language, 'playback.queueFull', { max: queueLimit }));
       return;
     }
-    const queueWasEmpty = chatCache.getQueueLength(chatId) === 0;
+    const queueBefore = chatCache.getQueueLength(chatId);
+    const queueWasEmpty = queueBefore === 0;
     const length = chatCache.addSongs(chatId, tracks);
     preloadTracks(queueWasEmpty ? tracks.slice(1) : tracks, { chatId });
     const playlistNotice = `${t(language, 'playback.addedPlaylistTracks', { count: tracks.length, length })}\n\n${formatTrack(language, tracks[0], length)}`;
     const queueMessage = await sendPlaybackPhoto(ctx, status, tracks[0], playlistNotice, { disable_web_page_preview: true })
       ?? await editStatus(ctx, status, playlistNotice, { parse_mode: 'HTML', disable_web_page_preview: true });
+    await sendPlaylistQueuePanels(ctx, tracks.slice(1), language, queueBefore + 1, queueMessage ?? status);
     if (queueWasEmpty) {
       try {
         const activeTrack = await startQueuedTrack(ctx, tracks[0], isVideo);
@@ -686,12 +698,14 @@ async function processPlayRequest(ctx, status, input, isVideo, language) {
       await editStatus(ctx, status, t(language, 'playback.queueFull', { max: queueLimitAfter }));
       return;
     }
-    const queueWasEmpty = chatCache.getQueueLength(chatId) === 0;
+    const queueBefore = chatCache.getQueueLength(chatId);
+    const queueWasEmpty = queueBefore === 0;
     const length = chatCache.addSongs(chatId, tracks);
     preloadTracks(queueWasEmpty ? tracks.slice(1) : tracks, { chatId });
     const playlistNotice = `${t(language, 'playback.addedPlaylistTracks', { count: tracks.length, length })}\n\n${formatTrack(language, tracks[0], length)}`;
     const queueMessage = await sendPlaybackPhoto(ctx, status, tracks[0], playlistNotice, { disable_web_page_preview: true })
       ?? await editStatus(ctx, status, playlistNotice, { parse_mode: 'HTML', disable_web_page_preview: true });
+    await sendPlaylistQueuePanels(ctx, tracks.slice(1), language, queueBefore + 1, queueMessage ?? status);
     if (queueWasEmpty) {
       try {
         await ensureDownloaded(tracks[0], isVideo);
