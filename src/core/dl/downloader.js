@@ -46,6 +46,14 @@ async function ytDlpBaseArgs({ allowPlaylist = false } = {}) {
   return [...playlistArgs, '--js-runtimes', 'node', ...(await cookieArgs())];
 }
 
+async function ytDlpInfoArgs({ allowPlaylist = false } = {}) {
+  const args = ['--dump-single-json', ...(await ytDlpBaseArgs({ allowPlaylist }))];
+  if (allowPlaylist) {
+    args.push('--ignore-errors', '--no-abort-on-error', '--flat-playlist');
+  }
+  return args;
+}
+
 function run(command, args, { timeoutMs = config.ytdlpTimeoutMs } = {}) {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, { stdio: ['ignore', 'pipe', 'pipe'] });
@@ -110,7 +118,7 @@ export class Downloader {
     }
 
     const query = this.isUrl() ? this.input : `ytsearch10:${this.input}`;
-    const output = await run('yt-dlp', ['--dump-single-json', ...(await ytDlpBaseArgs({ allowPlaylist })), query]);
+    const output = await run('yt-dlp', [...(await ytDlpInfoArgs({ allowPlaylist })), query]);
     const parsed = JSON.parse(output);
     const entries = parsed.entries ?? [parsed];
     return {
