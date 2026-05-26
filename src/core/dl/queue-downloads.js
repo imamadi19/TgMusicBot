@@ -56,7 +56,9 @@ export async function ensureTrackDownloaded(track, isVideo = Boolean(track?.isVi
   let downloadPromise = downloadPromises.get(track);
   if (!downloadPromise) {
     downloadPromise = (async () => {
-      const downloader = new Downloader(track.url);
+      const downloader = new Downloader(track.url, {
+        defaultService: track.defaultService ?? track.platform ?? config.defaultService,
+      });
       const filePath = await downloader.download(track, isVideo);
       track.filePath = filePath;
       return filePath;
