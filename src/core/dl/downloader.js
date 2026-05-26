@@ -4,9 +4,9 @@ import path from 'node:path';
 import { config } from '../../config/index.js';
 import { isUrl } from '../../utils/telegram.js';
 import { parseDuration } from '../../utils/duration.js';
-import { searchNexRayYouTube } from './nexray.js';
+import { searchNexRayByService, searchNexRayYouTube } from './nexray.js';
 
-const SUPPORTED_HOSTS = ['youtube.com', 'youtu.be', 'open.spotify.com', 'saavn.com', 'jiosaavn.com', 'music.apple.com', 'soundcloud.com'];
+const SUPPORTED_HOSTS = ['youtube.com', 'youtu.be', 'open.spotify.com', 'music.apple.com', 'soundcloud.com'];
 const INVALID_PLAYLIST_TITLE_PATTERNS = [/^\[private video\]$/i, /^\[deleted video\]$/i, /\b(private|deleted|unavailable|blocked|age[-\s]?restricted)\b/i];
 
 function isSupportedHost(host, supportedHost) {
@@ -130,12 +130,18 @@ export class Downloader {
   async getInfo(options = {}) {
     const { mode = 'auto', allowPlaylist = false } = options;
     const shouldSearch = mode === 'request' || (mode === 'auto' && !this.isUrl());
-    if (shouldSearch && String(this.defaultService).toLowerCase().includes('youtube')) {
-      try {
-        const results = await searchNexRayYouTube(this.input);
-        if (results.length > 0) return { platform: 'YouTube', results, selectionRequired: true };
-      } catch (error) {
-        console.warn('API YouTube search failed, falling back to yt-dlp:', error.message);
+    if (shouldSearch) {
+      const service = String(this.defaultService).toLowerCase().replace(/\s+/g, '_');
+      if (service.includes('youtube')) {
+        try {
+          const results = await searchNexRayYouTube(this.input);
+          if (results.length > 0) return { platform: 'YouTube', results, selectionRequired: true };
+        } catch (error) {
+          console.warn('API YouTube search failed, falling back to yt-dlp:', error.message);
+        }
+      } else if (['spotify', 'soundcloud', 'apple_music'].includes(service)) {
+        const results = await searchNexRayByService(service, this.input);
+        return { platform: this.defaultService, results, selectionRequired: true };
       }
     }
 
@@ -243,7 +249,6 @@ export class Downloader {
     if (!isUrl(value)) return this.defaultService;
     const host = new URL(value).hostname;
     if (host.includes('spotify')) return 'Spotify';
-    if (host.includes('saavn')) return 'JioSaavn';
     if (host.includes('apple')) return 'Apple Music';
     if (host.includes('soundcloud')) return 'SoundCloud';
     return 'YouTube';

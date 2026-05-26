@@ -9,7 +9,7 @@ Repo ini cocok untuk menjalankan bot musik mandiri di VPS, Docker, atau platform
 - Putar audio dengan `/play` atau `/p`.
 - Putar video dengan `/vplay` atau `/v`.
 - Pencarian metadata via YouTube Music, lalu fallback ke `yt-dlp` jika diperlukan.
-- Mendukung URL YouTube, YouTube Music, Spotify, JioSaavn, Apple Music, dan SoundCloud selama dapat diproses `yt-dlp`.
+- Mendukung URL YouTube, YouTube Music, Spotify, Apple Music, dan SoundCloud selama dapat diproses `yt-dlp`.
 - Queue per grup dengan batas 10 lagu.
 - Kontrol playback: skip, pause, resume, stop, remove, loop, mute, unmute, dan speed.
 - Playlist pengguna berbasis MongoDB.

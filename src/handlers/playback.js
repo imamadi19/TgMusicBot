@@ -11,7 +11,7 @@ import { t } from '../i18n/index.js';
 import { commandArgs, htmlEscape, isUrl } from '../utils/telegram.js';
 import { firstName } from '../utils/extras.js';
 import { secondsToClock } from '../utils/duration.js';
-import { completedProgressKeyboard, controlKeyboard, supportKeyboard, youtubeSelectionKeyboard } from './keyboards.js';
+import { completedProgressKeyboard, controlKeyboard, supportKeyboard, searchSelectionKeyboard } from './keyboards.js';
 import { playMode } from './filters.js';
 import { isAuthUser } from '../core/db/auth.js';
 
@@ -483,18 +483,26 @@ function formatSearchResult(language, track, index, total) {
   return lines.join('\n');
 }
 
-function formatYouTubeSelection(language, tracks, index = 0) {
+function formatSearchSelection(language, tracks, index = 0) {
   const safeIndex = selectedTrackIndex(tracks, index);
   return formatSearchResult(language, tracks[safeIndex], safeIndex, tracks.length);
 }
 
+
+function searchServiceLabel(service) {
+  const normalized = String(service ?? '').toLowerCase();
+  if (normalized.includes('spotify')) return 'Spotify';
+  if (normalized.includes('soundcloud')) return 'SoundCloud';
+  if (normalized.includes('apple')) return 'Apple Music';
+  return 'YouTube';
+}
 async function sendSelectionPhoto(ctx, statusMessage, thumbnail, caption) {
   try {
     const message = await ctx.replyWithPhoto(thumbnail, { caption, parse_mode: 'HTML' });
     await ctx.api.deleteMessage(ctx.chat.id, statusMessage.message_id).catch(() => {});
     return message;
   } catch (error) {
-    console.warn('Failed to send YouTube thumbnail photo, falling back to text selection:', error.message);
+    console.warn('Failed to send search thumbnail photo, falling back to text selection:', error.message);
     return statusMessage;
   }
 }
@@ -515,16 +523,16 @@ async function sendPlaybackPhoto(ctx, statusMessage, track, caption, options = {
   }
 }
 
-async function showYouTubeSelection(ctx, statusMessage, tracks, isVideo, language, index = 0) {
+async function showSearchSelection(ctx, statusMessage, tracks, isVideo, language, index = 0) {
   const safeIndex = selectedTrackIndex(tracks, index);
-  const caption = formatYouTubeSelection(language, tracks, safeIndex);
+  const caption = formatSearchSelection(language, tracks, safeIndex);
   const thumbnail = youtubeThumbnail(tracks[safeIndex]);
   const selectionMessage = thumbnail
     ? await sendSelectionPhoto(ctx, statusMessage, thumbnail, caption)
     : statusMessage;
   const hasPhoto = selectionMessage.message_id !== statusMessage.message_id && Boolean(thumbnail);
 
-  chatCache.setYouTubeSelection(ctx.chat.id, selectionMessage.message_id, {
+  chatCache.setSearchSelection(ctx.chat.id, selectionMessage.message_id, {
     tracks,
     userId: ctx.from?.id,
     isVideo,
@@ -536,14 +544,14 @@ async function showYouTubeSelection(ctx, statusMessage, tracks, isVideo, languag
     await ctx.api.editMessageCaption(ctx.chat.id, selectionMessage.message_id, {
       caption,
       parse_mode: 'HTML',
-      reply_markup: youtubeSelectionKeyboard(selectionMessage.message_id, tracks, safeIndex),
+      reply_markup: searchSelectionKeyboard(selectionMessage.message_id, tracks, safeIndex),
     });
     return;
   }
 
   await editStatus(ctx, selectionMessage, caption, {
     parse_mode: 'HTML',
-    reply_markup: youtubeSelectionKeyboard(selectionMessage.message_id, tracks, safeIndex),
+    reply_markup: searchSelectionKeyboard(selectionMessage.message_id, tracks, safeIndex),
     disable_web_page_preview: true,
   });
 }
@@ -762,14 +770,23 @@ async function processPlayRequest(ctx, status, input, isVideo, language, default
   try {
     info = await downloader.getInfo({ mode: parsedMode, allowPlaylist: parsedMode === 'url' || looksLikePlaylistUrl });
   } catch (error) {
-    await editStatus(ctx, status, t(language, 'playback.fetchError', { error: formatError(error) }));
+    const serviceLabel = searchServiceLabel(defaultService);
+    if (!isUrl(normalizedInput) && !String(defaultService).toLowerCase().includes('youtube')) {
+      await editStatus(ctx, status, `Gagal mencari lagu di ${serviceLabel}. Coba lagi nanti atau pilih layanan lain.`);
+    } else {
+      await editStatus(ctx, status, t(language, 'playback.fetchError', { error: formatError(error) }));
+    }
     return;
   }
 
   const results = info.results ?? [];
   const [track] = results;
   if (!track) {
-    await editStatus(ctx, status, t(language, 'playback.noTracks'));
+    if (!isUrl(normalizedInput) && !String(defaultService).toLowerCase().includes('youtube')) {
+      await editStatus(ctx, status, `Tidak ada hasil ditemukan di ${searchServiceLabel(defaultService)}.`);
+    } else {
+      await editStatus(ctx, status, t(language, 'playback.noTracks'));
+    }
     return;
   }
   if ((parsedMode === 'url' || looksLikePlaylistUrl) && results.length > 1) {
@@ -825,7 +842,7 @@ async function processPlayRequest(ctx, status, input, isVideo, language, default
     return;
   }
   if (info.selectionRequired && results.length > 1) {
-    await showYouTubeSelection(ctx, status, results, isVideo, language);
+    await showSearchSelection(ctx, status, results, isVideo, language);
     return;
   }
   await queueAndMaybePlay(ctx, status, track, isVideo, language, defaultService);
@@ -1060,10 +1077,10 @@ export async function speedHandler(ctx) {
 }
 
 
-export async function youtubeSelectionPageHandler(ctx) {
+export async function searchSelectionPageHandler(ctx) {
   const data = ctx.callbackQuery?.data ?? '';
   const [, messageId, pageText] = data.split(':');
-  const selection = chatCache.getYouTubeSelection(ctx.chat.id, messageId);
+  const selection = chatCache.getSearchSelection(ctx.chat.id, messageId);
   if (!selection) {
     await ctx.answerCallbackQuery({ text: t(await getUserLanguage(ctx.from?.id), 'playback.selectionExpired') }).catch(() => {});
     return;
@@ -1074,8 +1091,8 @@ export async function youtubeSelectionPageHandler(ctx) {
   }
   const index = selectedTrackIndex(selection.tracks, pageText);
   const track = selection.tracks[index];
-  const caption = formatYouTubeSelection(selection.language, selection.tracks, index);
-  const replyMarkup = youtubeSelectionKeyboard(messageId, selection.tracks, index);
+  const caption = formatSearchSelection(selection.language, selection.tracks, index);
+  const replyMarkup = searchSelectionKeyboard(messageId, selection.tracks, index);
   await ctx.answerCallbackQuery().catch(() => {});
 
   if (selection.hasPhoto) {
@@ -1085,7 +1102,7 @@ export async function youtubeSelectionPageHandler(ctx) {
         await ctx.editMessageMedia({ type: 'photo', media: thumbnail, caption, parse_mode: 'HTML' }, { reply_markup: replyMarkup });
         return;
       } catch (error) {
-        console.warn('Failed to update YouTube selection thumbnail, falling back to caption edit:', error.message);
+        console.warn('Failed to update search selection thumbnail, falling back to caption edit:', error.message);
       }
     }
     await ctx.editMessageCaption({ caption, parse_mode: 'HTML', reply_markup: replyMarkup });
@@ -1099,10 +1116,10 @@ export async function youtubeSelectionPageHandler(ctx) {
   });
 }
 
-export async function youtubeSelectionPickHandler(ctx) {
+export async function searchSelectionPickHandler(ctx) {
   const data = ctx.callbackQuery?.data ?? '';
   const [, messageId, indexText] = data.split(':');
-  const selection = chatCache.getYouTubeSelection(ctx.chat.id, messageId);
+  const selection = chatCache.getSearchSelection(ctx.chat.id, messageId);
   if (!selection) {
     await ctx.answerCallbackQuery({ text: t(await getUserLanguage(ctx.from?.id), 'playback.selectionExpired') }).catch(() => {});
     return;
@@ -1124,10 +1141,10 @@ export async function youtubeSelectionPickHandler(ctx) {
     return;
   }
 
-  chatCache.deleteYouTubeSelection(ctx.chat.id, messageId);
+  chatCache.deleteSearchSelection(ctx.chat.id, messageId);
   await ctx.answerCallbackQuery({ text: t(selection.language, 'playback.trackSelected', { number: index + 1 }) }).catch(() => {});
   const statusMessage = ctx.callbackQuery.message;
   await editStatus(ctx, statusMessage, t(selection.language, 'playback.downloadingSelected', { title: htmlEscape(track.name) }), { parse_mode: 'HTML' });
   const defaultService = await getUserDefaultService(ctx.from?.id);
-  enqueueChatTask(ctx.chat.id, 'Proses pilihan YouTube', () => queueAndMaybePlay(ctx, statusMessage, track, Boolean(selection.isVideo), selection.language, defaultService));
+  enqueueChatTask(ctx.chat.id, 'Proses pilihan search', () => queueAndMaybePlay(ctx, statusMessage, track, Boolean(selection.isVideo), selection.language, defaultService));
 }
