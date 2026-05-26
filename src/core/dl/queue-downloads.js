@@ -86,10 +86,12 @@ export function preloadTracks(tracks, context = {}) {
 
   Promise.resolve().then(async () => {
     for (const track of queue) {
-      await ensureTrackDownloaded(track, Boolean(track.isVideo));
+      try {
+        await ensureTrackDownloaded(track, Boolean(track.isVideo));
+      } catch (error) {
+        const chatInfo = context.chatId ? ` untuk chat ${context.chatId}` : '';
+        console.warn(`Gagal preload ${trackLabel(track)}${chatInfo}`, error);
+      }
     }
-  }).catch((error) => {
-    const chatInfo = context.chatId ? ` untuk chat ${context.chatId}` : '';
-    console.warn(`Gagal preload queue${chatInfo}`, error);
   });
 }

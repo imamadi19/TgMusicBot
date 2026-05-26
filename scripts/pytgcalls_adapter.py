@@ -279,6 +279,27 @@ async def handle_stdin_command(command: dict):
         await resume_async()
         print(f"TGMB_CONTROL_OK {command_id} resume", flush=True)
         return
+    if action == "mute":
+        method = getattr(call_client, "mute_stream", None) or getattr(call_client, "mute", None)
+        if callable(method):
+            await call_method_with_optional_chat(method)
+        print(f"TGMB_CONTROL_OK {command_id} mute", flush=True)
+        return
+    if action == "unmute":
+        method = getattr(call_client, "unmute_stream", None) or getattr(call_client, "unmute", None)
+        if callable(method):
+            await call_method_with_optional_chat(method)
+        print(f"TGMB_CONTROL_OK {command_id} unmute", flush=True)
+        return
+    if action == "speed":
+        speed = float(command.get("speed", 1.0))
+        if speed < 0.25 or speed > 4:
+            raise RuntimeError("speed harus di antara 0.25 dan 4")
+        method = getattr(call_client, "set_speed", None) or getattr(call_client, "set_playback_speed", None)
+        if callable(method):
+            await call_method(method, chat_id, speed)
+        print(f"TGMB_CONTROL_OK {command_id} speed", flush=True)
+        return
     if action == "stop":
         cleanup()
         print(f"TGMB_CONTROL_OK {command_id} stop", flush=True)

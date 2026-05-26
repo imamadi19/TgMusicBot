@@ -601,6 +601,59 @@ async function sendPlaylistQueuePanels(ctx, tracks, language, queueStartLength, 
   }
 }
 
+function isBlockedPlaylistTitle(title) {
+  const value = String(title ?? '').trim();
+  if (!value) return true;
+  return /\[(deleted|private)\s+video\]|\b(deleted|private|unavailable|blocked|age[-\s]?restricted)\b/i.test(value);
+}
+
+function normalizePlaylistCandidate(item) {
+  if (!item || typeof item !== 'object') return null;
+  const name = String(item.name ?? item.title ?? '').trim();
+  if (isBlockedPlaylistTitle(name)) return null;
+  const url = String(item.url ?? '').trim();
+  const trackId = String(item.trackId ?? item.id ?? '').trim();
+  const resolvedUrl = url || (trackId ? `https://www.youtube.com/watch?v=${trackId}` : '');
+  if (!resolvedUrl || !isUrl(resolvedUrl)) return null;
+  if (!/youtube\.com|youtu\.be/i.test(resolvedUrl)) return null;
+  return { ...item, name, trackId: trackId || resolvedUrl, url: resolvedUrl };
+}
+
+async function validatePlaylistCandidates(downloader, items, chatId, isVideo, remaining) {
+  const validTracks = [];
+  const seenTrackIds = new Set();
+  let skippedCount = 0;
+  for (const candidate of items) {
+    if (validTracks.length >= remaining) break;
+    const normalized = normalizePlaylistCandidate(candidate);
+    if (!normalized) {
+      skippedCount += 1;
+      continue;
+    }
+    if (seenTrackIds.has(normalized.trackId) || chatCache.getTrackIfExists(chatId, normalized.trackId)) {
+      skippedCount += 1;
+      continue;
+    }
+    try {
+      const validated = await downloader.validatePlaylistItem(normalized, { isVideo });
+      if (!validated?.trackId || !validated?.name || !validated?.url || isBlockedPlaylistTitle(validated.name) || !isUrl(validated.url)) {
+        skippedCount += 1;
+        continue;
+      }
+      if (seenTrackIds.has(validated.trackId) || chatCache.getTrackIfExists(chatId, validated.trackId)) {
+        skippedCount += 1;
+        continue;
+      }
+      seenTrackIds.add(validated.trackId);
+      validTracks.push(validated);
+    } catch (error) {
+      skippedCount += 1;
+      console.warn(`Playlist item skipped in chat ${chatId}:`, error?.message ?? error);
+    }
+  }
+  return { validTracks, skippedCount };
+}
+
 async function processPlayRequest(ctx, status, input, isVideo, language, defaultService) {
   const chatId = ctx.chat.id;
   const queueLimit = await queueLimitFor(ctx);
@@ -686,30 +739,17 @@ async function processPlayRequest(ctx, status, input, isVideo, language, default
   if ((parsedMode === 'url' || looksLikePlaylistUrl) && results.length > 1) {
     const queueLimitAfter = await queueLimitFor(ctx);
     const remaining = queueLimitAfter - chatCache.getQueueLength(chatId);
-    const maxCandidates = Math.max(remaining, 0);
-    const tracks = [];
-    let skippedCount = 0;
-    for (const item of results) {
-      if (tracks.length >= maxCandidates) break;
-      try {
-        const validated = await downloader.validatePlaylistItem(item, { isVideo });
-        if (!validated) {
-          skippedCount += 1;
-          continue;
-        }
-        tracks.push({
-          ...validated,
-          user: firstName(ctx),
-          userId: ctx.from?.id,
-          isVideo,
-          filePath: '',
-          platform: validated.platform ?? defaultService,
-        });
-      } catch (error) {
-        skippedCount += 1;
-        console.warn(`Playlist item skipped in chat ${chatId}:`, error?.message ?? error);
-      }
-    }
+    const maxScan = Math.min(results.length, Math.max((remaining * 3), remaining + 5), 50);
+    const candidates = results.slice(0, Math.max(0, maxScan));
+    const { validTracks, skippedCount } = await validatePlaylistCandidates(downloader, candidates, chatId, isVideo, Math.max(0, remaining));
+    const tracks = validTracks.map((validated) => ({
+      ...validated,
+      user: firstName(ctx),
+      userId: ctx.from?.id,
+      isVideo,
+      filePath: '',
+      platform: validated.platform ?? defaultService,
+    }));
     if (tracks.length === 0) {
       const message = remaining <= 0
         ? t(language, 'playback.queueFull', { max: queueLimitAfter })
@@ -721,7 +761,8 @@ async function processPlayRequest(ctx, status, input, isVideo, language, default
     const queueWasEmpty = queueBefore === 0;
     const length = chatCache.addSongs(chatId, tracks);
     preloadTracks(queueWasEmpty ? tracks.slice(1) : tracks, { chatId });
-    const skipSummary = skippedCount > 0 ? `\n${skippedCount} item dilewati karena tidak tersedia.` : '';
+    const notScannedCount = Math.max(0, results.length - candidates.length);
+    const skipSummary = `${skippedCount > 0 ? `\n${skippedCount} item dilewati karena tidak tersedia/duplikat.` : ''}${notScannedCount > 0 ? '\nBeberapa item playlist tidak dicek agar proses tetap ringan.' : ''}`;
     const playlistNotice = `${t(language, 'playback.addedPlaylistTracks', { count: tracks.length, length })}${skipSummary}\n\n${formatTrack(language, tracks[0], length)}`;
     const queueMessage = await sendPlaybackPhoto(ctx, status, tracks[0], playlistNotice, { disable_web_page_preview: true })
       ?? await editStatus(ctx, status, playlistNotice, { parse_mode: 'HTML', disable_web_page_preview: true });
@@ -906,7 +947,11 @@ export async function stopHandler(ctx) {
 export async function pauseHandler(ctx) {
   const language = await getUserLanguage(ctx.from?.id);
   const current = chatCache.current(ctx.chat.id);
-  await voicePlayer.pause(ctx.chat.id);
+  const paused = await voicePlayer.pause(ctx.chat.id);
+  if (!paused || !current) {
+    await ctx.reply(t(language, 'playback.nothingPlaying'));
+    return;
+  }
   if (current) await markPlaybackPanelStatus(ctx.chat.id, current, 'paused', current);
   await ctx.reply(t(language, 'playback.paused'));
 }
@@ -914,7 +959,11 @@ export async function pauseHandler(ctx) {
 export async function resumeHandler(ctx) {
   const language = await getUserLanguage(ctx.from?.id);
   const current = chatCache.current(ctx.chat.id);
-  await voicePlayer.resume(ctx.chat.id);
+  const resumed = await voicePlayer.resume(ctx.chat.id);
+  if (!resumed || !current) {
+    await ctx.reply(t(language, 'playback.nothingPlaying'));
+    return;
+  }
   if (current) await markPlaybackPanelStatus(ctx.chat.id, current, 'playing', current);
   await ctx.reply(t(language, 'playback.resumed'));
 }
@@ -939,26 +988,37 @@ export async function loopHandler(ctx) {
 
 export async function muteHandler(ctx) {
   const language = await getUserLanguage(ctx.from?.id);
-  chatCache.setMuted(ctx.chat.id, true);
+  const muted = await voicePlayer.mute(ctx.chat.id);
+  if (!muted) {
+    await ctx.reply(t(language, 'playback.nothingPlaying'));
+    return;
+  }
   await ctx.reply(t(language, 'playback.muted'));
 }
 
 export async function unmuteHandler(ctx) {
   const language = await getUserLanguage(ctx.from?.id);
-  chatCache.setMuted(ctx.chat.id, false);
+  const unmuted = await voicePlayer.unmute(ctx.chat.id);
+  if (!unmuted) {
+    await ctx.reply(t(language, 'playback.nothingPlaying'));
+    return;
+  }
   await ctx.reply(t(language, 'playback.unmuted'));
 }
 
 export async function speedHandler(ctx) {
   const language = await getUserLanguage(ctx.from?.id);
-  const speed = chatCache.setSpeed(ctx.chat.id, commandArgs(ctx));
+  const requestedSpeed = Number(commandArgs(ctx));
+  if (!Number.isFinite(requestedSpeed)) {
+    await ctx.reply('Gunakan: /speed <angka 0.25 - 4>');
+    return;
+  }
+  const speed = await voicePlayer.setSpeed(ctx.chat.id, requestedSpeed);
+  if (!speed) {
+    await ctx.reply(t(language, 'playback.nothingPlaying'));
+    return;
+  }
   await ctx.reply(t(language, 'playback.speedSet', { speed }));
-}
-
-export async function activeVcHandler(ctx) {
-  const language = await getUserLanguage(ctx.from?.id);
-  const active = voicePlayer.activeCalls();
-  await ctx.reply(active.length ? active.map(({ chatId, track }) => `${chatId}: ${track.name}`).join('\n') : t(language, 'playback.noActive'));
 }
 
 

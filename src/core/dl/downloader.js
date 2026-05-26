@@ -14,6 +14,26 @@ function isSupportedHost(host, supportedHost) {
 }
 const MAX_ERROR_LENGTH = 700;
 
+function isValidHttpUrl(value) {
+  if (!value) return false;
+  try {
+    const parsed = new URL(String(value).trim());
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
+function bestThumbnail(entry, fallback = '') {
+  if (isValidHttpUrl(entry?.thumbnail)) return entry.thumbnail;
+  if (Array.isArray(entry?.thumbnails)) {
+    for (const candidate of [...entry.thumbnails].reverse()) {
+      if (isValidHttpUrl(candidate?.url)) return candidate.url;
+    }
+  }
+  return isValidHttpUrl(fallback) ? fallback : '';
+}
+
 function timeoutSignal(timeoutMs) {
   const value = Number(timeoutMs);
   return Number.isFinite(value) && value > 0 ? AbortSignal.timeout(value) : undefined;
@@ -154,7 +174,7 @@ export class Downloader {
       name: title,
       url,
       duration: Number(entry.duration) || parseDuration(entry.duration_string) || item.duration || 0,
-      thumbnail: entry.thumbnail ?? item.thumbnail ?? '',
+      thumbnail: bestThumbnail(entry, item.thumbnail),
       platform: item.platform ?? this.detectPlatformFor(url),
       isVideo,
     };
