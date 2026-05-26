@@ -1,9 +1,10 @@
 import os from 'node:os';
 import { performance } from 'node:perf_hooks';
-import { getUserLanguage } from '../core/db/user-settings.js';
+import { getUserDefaultService, getUserLanguage, isSupportedService, normalizeServiceName, setUserDefaultService } from '../core/db/user-settings.js';
 import { languageName, t } from '../i18n/index.js';
 import { htmlEscape, isOwner } from '../utils/telegram.js';
 import { config } from '../config/index.js';
+import { serviceSettingsKeyboard } from './keyboards.js';
 
 const startedAt = performance.now();
 
@@ -39,18 +40,21 @@ export async function privacyHandler(ctx) {
 
 export async function settingsHandler(ctx) {
   const language = await getUserLanguage(ctx.from?.id);
-  const text = t(language, 'misc.settings', {
-    service: config.defaultService,
+  const currentService = await getUserDefaultService(ctx.from?.id);
+  const text = `${t(language, 'misc.settings', {
+    service: currentService,
     limit: config.songDurationLimit,
     size: Math.round(config.maxFileSize / 1024 / 1024),
     language: languageName(language),
-  });
+  })}
+
+${language.startsWith('id') ? 'Pilih layanan default:' : 'Choose default service:'}`;
   if (ctx.callbackQuery) {
     await ctx.answerCallbackQuery(t(language, 'buttons.settings'));
-    await ctx.editMessageText(text);
+    await ctx.editMessageText(text, { reply_markup: serviceSettingsKeyboard(currentService, language) });
     return;
   }
-  await ctx.reply(text);
+  await ctx.reply(text, { reply_markup: serviceSettingsKeyboard(currentService, language) });
 }
 
 export async function shellHandler(ctx) {
@@ -65,4 +69,37 @@ export async function shellHandler(ctx) {
 export async function noopHandler(ctx) {
   const language = await getUserLanguage(ctx.from?.id);
   await ctx.reply(t(language, 'misc.noop'));
+}
+
+
+export async function serviceSelectHandler(ctx) {
+  const language = await getUserLanguage(ctx.from?.id);
+  const callback = String(ctx.callbackQuery?.data ?? '');
+  const requestedService = normalizeServiceName(callback.replace(/^service_/, ''));
+
+  if (!isSupportedService(requestedService)) {
+    await ctx.answerCallbackQuery('Layanan tidak didukung.');
+    return;
+  }
+
+  const currentService = await getUserDefaultService(ctx.from?.id);
+  if (currentService === requestedService) {
+    await ctx.answerCallbackQuery(`${requestedService} sudah menjadi layanan default.`);
+    return;
+  }
+
+  const savedService = await setUserDefaultService(ctx.from?.id, requestedService);
+  const text = `${t(language, 'misc.settings', {
+    service: savedService,
+    limit: config.songDurationLimit,
+    size: Math.round(config.maxFileSize / 1024 / 1024),
+    language: languageName(language),
+  })}
+
+${language.startsWith('id') ? 'Pilih layanan default:' : 'Choose default service:'}`;
+
+  await ctx.answerCallbackQuery(`${savedService} dipilih.`);
+  await ctx.editMessageText(text, {
+    reply_markup: serviceSettingsKeyboard(savedService, language),
+  });
 }

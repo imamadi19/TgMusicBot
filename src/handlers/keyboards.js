@@ -1,6 +1,7 @@
 import { InlineKeyboard } from 'grammy';
 import { config } from '../config/index.js';
 import { languages, t } from '../i18n/index.js';
+import { SUPPORTED_DEFAULT_SERVICES, normalizeServiceName } from '../core/db/user-settings.js';
 
 export function supportKeyboard(language = 'en') {
   const keyboard = new InlineKeyboard();
@@ -35,6 +36,22 @@ export function helpKeyboard(language = 'en') {
 
 export function backKeyboard(language = 'en') {
   return new InlineKeyboard().text(t(language, 'buttons.back'), 'help_all');
+}
+
+
+export function serviceSettingsKeyboard(currentService, language = 'en') {
+  const activeService = normalizeServiceName(currentService) || SUPPORTED_DEFAULT_SERVICES.youtube;
+  const keyboard = new InlineKeyboard()
+    .text(`${activeService === SUPPORTED_DEFAULT_SERVICES.youtube ? '✅ ' : ''}${SUPPORTED_DEFAULT_SERVICES.youtube}`, 'service_youtube')
+    .row()
+    .text(`${activeService === SUPPORTED_DEFAULT_SERVICES.spotify ? '✅ ' : ''}${SUPPORTED_DEFAULT_SERVICES.spotify}`, 'service_spotify')
+    .text(`${activeService === SUPPORTED_DEFAULT_SERVICES.apple_music ? '✅ ' : ''}${SUPPORTED_DEFAULT_SERVICES.apple_music}`, 'service_apple_music')
+    .row()
+    .text(`${activeService === SUPPORTED_DEFAULT_SERVICES.soundcloud ? '✅ ' : ''}${SUPPORTED_DEFAULT_SERVICES.soundcloud}`, 'service_soundcloud')
+    .row()
+    .text(t(language, 'buttons.back'), 'help_all');
+
+  return keyboard;
 }
 
 export function languageKeyboard() {

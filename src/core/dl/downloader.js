@@ -92,8 +92,9 @@ function run(command, args, { timeoutMs = config.ytdlpTimeoutMs } = {}) {
 }
 
 export class Downloader {
-  constructor(input) {
+  constructor(input, { defaultService = config.defaultService } = {}) {
     this.input = input;
+    this.defaultService = defaultService;
   }
 
   isUrl() {
@@ -109,7 +110,7 @@ export class Downloader {
   async getInfo(options = {}) {
     const { mode = 'auto', allowPlaylist = false } = options;
     const shouldSearch = mode === 'request' || (mode === 'auto' && !this.isUrl());
-    if (shouldSearch && config.defaultService.toLowerCase().includes('youtube')) {
+    if (shouldSearch && String(this.defaultService).toLowerCase().includes('youtube')) {
       try {
         const results = await searchNexRayYouTube(this.input);
         if (results.length > 0) return { platform: 'YouTube', results, selectionRequired: true };
@@ -219,7 +220,7 @@ export class Downloader {
   }
 
   detectPlatformFor(value) {
-    if (!isUrl(value)) return config.defaultService;
+    if (!isUrl(value)) return this.defaultService;
     const host = new URL(value).hostname;
     if (host.includes('spotify')) return 'Spotify';
     if (host.includes('saavn')) return 'JioSaavn';

@@ -7,7 +7,7 @@ import { helpCallback, languageMenuHandler, languageSelectHandler, startHandler 
 import { loopHandler, muteHandler, pauseHandler, playHandler, queueHandler, removeHandler, resumeHandler, skipHandler, speedHandler, stopHandler, unmuteHandler, youtubeSelectionPageHandler, youtubeSelectionPickHandler } from './playback.js';
 import { addToPlaylistHandler, createPlaylistHandler, deletePlaylistHandler, myPlaylistsHandler, playlistInfoHandler, removeFromPlaylistHandler } from './playlists.js';
 import { premiumDjModeHandler, premiumFeaturesHandler, premiumGrantHandler, premiumInfoHandler, premiumProfileHandler, premiumQueueMoveHandler, premiumRevokeHandler, premiumSetPresetHandler } from './premium.js';
-import { noopHandler, pingHandler, privacyHandler, settingsHandler, shellHandler, statsHandler } from './misc.js';
+import { noopHandler, pingHandler, privacyHandler, serviceSelectHandler, settingsHandler, shellHandler, statsHandler } from './misc.js';
 
 export function loadHandlers(bot) {
   bot.command('start', startHandler);
@@ -60,6 +60,7 @@ export function loadHandlers(bot) {
   bot.callbackQuery('language_menu', languageMenuHandler);
   bot.callbackQuery(/^lang_/, languageSelectHandler);
   bot.callbackQuery('settings_menu', settingsHandler);
+  bot.callbackQuery(/^service_/, serviceSelectHandler);
   bot.callbackQuery(/^help_/, helpCallback);
   bot.callbackQuery(/^ytpage:/, youtubeSelectionPageHandler);
   bot.callbackQuery(/^ytpick:/, youtubeSelectionPickHandler);
