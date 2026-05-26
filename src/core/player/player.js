@@ -209,6 +209,7 @@ export class VoicePlayer {
   #chatSessions = new Map();
 
   #chatInviteLinks = new Map();
+  #intentionalExits = new WeakSet();
 
   #onTrackEnd = null;
 
@@ -280,6 +281,7 @@ export class VoicePlayer {
     this.#clearFinishTimer(key);
     const active = this.#active.get(key);
     if (active?.process && !active.process.killed) {
+      this.#intentionalExits.add(active.process);
       signalProcess(active.process, 'SIGTERM');
       setTimeout(() => signalProcess(active.process, 'SIGKILL'), 5000).unref?.();
     }
@@ -494,11 +496,20 @@ export class VoicePlayer {
     }
 
     child.on('exit', () => {
-      const active = this.#active.get(String(chatId));
-      if (active?.process === child) {
-        this.#active.delete(String(chatId));
-        this.#clearFinishTimer(chatId);
+      const key = String(chatId);
+      const active = this.#active.get(key);
+      if (active?.process !== child) return;
+      this.#active.delete(key);
+      this.#clearFinishTimer(key);
+      if (this.#intentionalExits.has(child)) return;
+      const current = chatCache.current(key);
+      const hasQueue = chatCache.getQueueLength(key) > 0;
+      if (!current && !hasQueue) {
+        this.#scheduleLeaveChat(key);
+        return;
       }
+      console.warn(`Voice adapter keluar tidak terduga di chat ${key}, lanjutkan queue secara aman.`);
+      this.#finishCurrentTrack(key, 'adapter_exit');
     });
 
     return this.#setActiveTrack(key, track, child, assistantNumber);
@@ -556,6 +567,38 @@ export class VoicePlayer {
       }
     }
     return true;
+  }
+
+  async mute(chatId) {
+    const key = String(chatId);
+    const active = this.#active.get(key);
+    if (!active) return false;
+    const acknowledged = await sendAdapterCommand(active, { action: 'mute' });
+    if (!acknowledged) return false;
+    chatCache.setMuted(key, true);
+    return true;
+  }
+
+  async unmute(chatId) {
+    const key = String(chatId);
+    const active = this.#active.get(key);
+    if (!active) return false;
+    const acknowledged = await sendAdapterCommand(active, { action: 'unmute' });
+    if (!acknowledged) return false;
+    chatCache.setMuted(key, false);
+    return true;
+  }
+
+  async setSpeed(chatId, speed) {
+    const key = String(chatId);
+    const active = this.#active.get(key);
+    const value = Number(speed);
+    if (!active || !Number.isFinite(value)) return false;
+    const normalized = Math.max(0.25, Math.min(4, value));
+    const acknowledged = await sendAdapterCommand(active, { action: 'speed', speed: normalized });
+    if (!acknowledged) return false;
+    chatCache.setSpeed(key, normalized);
+    return normalized;
   }
 
   async stopOrAdvance(chatId, { reuseActive = false } = {}) {

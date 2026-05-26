@@ -12,19 +12,20 @@ export const SUPPORTED_DEFAULT_SERVICES = Object.freeze({
   soundcloud: 'SoundCloud',
 });
 
-export function normalizeServiceName(service) {
+export function normalizeDefaultService(service) {
   const input = String(service ?? '').trim();
   if (!input) return '';
   const normalized = input.toLowerCase().replace(/\s+/g, '_');
-  return SUPPORTED_DEFAULT_SERVICES[normalized] || (Object.values(SUPPORTED_DEFAULT_SERVICES).find((name) => name.toLowerCase() == input.toLowerCase()) ?? '');
+  return SUPPORTED_DEFAULT_SERVICES[normalized]
+    || (Object.values(SUPPORTED_DEFAULT_SERVICES).find((name) => name.toLowerCase() === input.toLowerCase()) ?? '');
 }
 
-export function isSupportedService(service) {
-  return Boolean(normalizeServiceName(service));
+export function isSupportedDefaultService(service) {
+  return Boolean(normalizeDefaultService(service));
 }
 
 function fallbackDefaultService() {
-  return normalizeServiceName(config.defaultService) || SUPPORTED_DEFAULT_SERVICES.youtube;
+  return normalizeDefaultService(config.defaultService) || SUPPORTED_DEFAULT_SERVICES.youtube;
 }
 
 export async function getUserLanguage(userId) {
@@ -64,7 +65,7 @@ export async function getUserDefaultService(userId) {
   if (!isDatabaseConnected()) return fallbackDefaultService();
 
   const settings = await db().collection('user_settings').findOne({ userId: Number(userId) });
-  const service = normalizeServiceName(settings?.defaultService);
+  const service = normalizeDefaultService(settings?.defaultService);
   if (service) {
     memoryDefaultServices.set(key, service);
     return service;
@@ -73,7 +74,7 @@ export async function getUserDefaultService(userId) {
 }
 
 export async function setUserDefaultService(userId, service) {
-  const normalizedService = normalizeServiceName(service);
+  const normalizedService = normalizeDefaultService(service);
   if (!normalizedService) return fallbackDefaultService();
 
   const key = String(userId ?? '');

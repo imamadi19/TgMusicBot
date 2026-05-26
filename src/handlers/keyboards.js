@@ -1,7 +1,7 @@
 import { InlineKeyboard } from 'grammy';
 import { config } from '../config/index.js';
 import { languages, t } from '../i18n/index.js';
-import { SUPPORTED_DEFAULT_SERVICES, normalizeServiceName } from '../core/db/user-settings.js';
+import { SUPPORTED_DEFAULT_SERVICES, normalizeDefaultService } from '../core/db/user-settings.js';
 
 export function supportKeyboard(language = 'en') {
   const keyboard = new InlineKeyboard();
@@ -40,7 +40,7 @@ export function backKeyboard(language = 'en') {
 
 
 export function serviceSettingsKeyboard(currentService, language = 'en') {
-  const activeService = normalizeServiceName(currentService) || SUPPORTED_DEFAULT_SERVICES.youtube;
+  const activeService = normalizeDefaultService(currentService) || SUPPORTED_DEFAULT_SERVICES.youtube;
   const keyboard = new InlineKeyboard()
     .text(`${activeService === SUPPORTED_DEFAULT_SERVICES.youtube ? '✅ ' : ''}${SUPPORTED_DEFAULT_SERVICES.youtube}`, 'service_youtube')
     .row()

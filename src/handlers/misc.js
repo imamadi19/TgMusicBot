@@ -1,6 +1,6 @@
 import os from 'node:os';
 import { performance } from 'node:perf_hooks';
-import { getUserDefaultService, getUserLanguage, isSupportedService, normalizeServiceName, setUserDefaultService } from '../core/db/user-settings.js';
+import { getUserDefaultService, getUserLanguage, isSupportedDefaultService, normalizeDefaultService, setUserDefaultService } from '../core/db/user-settings.js';
 import { languageName, t } from '../i18n/index.js';
 import { htmlEscape, isOwner } from '../utils/telegram.js';
 import { config } from '../config/index.js';
@@ -75,9 +75,9 @@ export async function noopHandler(ctx) {
 export async function serviceSelectHandler(ctx) {
   const language = await getUserLanguage(ctx.from?.id);
   const callback = String(ctx.callbackQuery?.data ?? '');
-  const requestedService = normalizeServiceName(callback.replace(/^service_/, ''));
+  const requestedService = normalizeDefaultService(callback.replace(/^service_/, ''));
 
-  if (!isSupportedService(requestedService)) {
+  if (!isSupportedDefaultService(requestedService)) {
     await ctx.answerCallbackQuery('Layanan tidak didukung.');
     return;
   }
