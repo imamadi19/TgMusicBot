@@ -7,6 +7,7 @@ import { parseDuration } from '../../utils/duration.js';
 import { searchNexRayYouTube } from './nexray.js';
 
 const SUPPORTED_HOSTS = ['youtube.com', 'youtu.be', 'open.spotify.com', 'saavn.com', 'jiosaavn.com', 'music.apple.com', 'soundcloud.com'];
+const INVALID_PLAYLIST_TITLE_PATTERNS = [/^\[private video\]$/i, /^\[deleted video\]$/i, /\b(private|deleted|unavailable|blocked|age[-\s]?restricted)\b/i];
 
 function isSupportedHost(host, supportedHost) {
   return host === supportedHost || host.endsWith(`.${supportedHost}`);
@@ -124,6 +125,37 @@ export class Downloader {
     return {
       platform: this.detectPlatform(),
       results: entries.filter(Boolean).map((entry) => this.#trackFromEntry(entry)),
+    };
+  }
+
+  async validatePlaylistItem(item, { isVideo = false } = {}) {
+    const baseTitle = String(item?.name ?? '').trim();
+    const baseUrl = String(item?.url ?? '').trim();
+    if (!baseTitle || !baseUrl || !isUrl(baseUrl)) return null;
+    if (INVALID_PLAYLIST_TITLE_PATTERNS.some((pattern) => pattern.test(baseTitle))) return null;
+    if (this.detectPlatformFor(baseUrl) !== 'YouTube') return item;
+
+    const output = await run('yt-dlp', [...(await ytDlpInfoArgs({ allowPlaylist: false })), baseUrl]);
+    const entry = JSON.parse(output);
+    if (!entry || typeof entry !== 'object') return null;
+    if (entry._type === 'error' || entry.is_unavailable) return null;
+
+    const title = String(entry.title ?? '').trim();
+    const url = String(entry.webpage_url ?? entry.original_url ?? entry.url ?? '').trim();
+    if (!title || !url || !isUrl(url)) return null;
+    if (INVALID_PLAYLIST_TITLE_PATTERNS.some((pattern) => pattern.test(title))) return null;
+    if (entry.availability && String(entry.availability).toLowerCase() !== 'public') return null;
+    if (entry.age_limit && Number(entry.age_limit) >= 18) return null;
+
+    return {
+      ...item,
+      trackId: String(entry.id ?? item.trackId ?? url),
+      name: title,
+      url,
+      duration: Number(entry.duration) || parseDuration(entry.duration_string) || item.duration || 0,
+      thumbnail: entry.thumbnail ?? item.thumbnail ?? '',
+      platform: item.platform ?? this.detectPlatformFor(url),
+      isVideo,
     };
   }
 

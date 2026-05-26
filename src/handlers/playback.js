@@ -686,23 +686,43 @@ async function processPlayRequest(ctx, status, input, isVideo, language) {
   if ((parsedMode === 'url' || looksLikePlaylistUrl) && results.length > 1) {
     const queueLimitAfter = await queueLimitFor(ctx);
     const remaining = queueLimitAfter - chatCache.getQueueLength(chatId);
-    const tracks = results.slice(0, remaining).map((item) => ({
-      ...item,
-      user: firstName(ctx),
-      userId: ctx.from?.id,
-      isVideo,
-      filePath: '',
-      platform: item.platform ?? config.defaultService,
-    }));
+    const maxCandidates = Math.max(remaining, 0);
+    const tracks = [];
+    let skippedCount = 0;
+    for (const item of results) {
+      if (tracks.length >= maxCandidates) break;
+      try {
+        const validated = await downloader.validatePlaylistItem(item, { isVideo });
+        if (!validated) {
+          skippedCount += 1;
+          continue;
+        }
+        tracks.push({
+          ...validated,
+          user: firstName(ctx),
+          userId: ctx.from?.id,
+          isVideo,
+          filePath: '',
+          platform: validated.platform ?? config.defaultService,
+        });
+      } catch (error) {
+        skippedCount += 1;
+        console.warn(`Playlist item skipped in chat ${chatId}:`, error?.message ?? error);
+      }
+    }
     if (tracks.length === 0) {
-      await editStatus(ctx, status, t(language, 'playback.queueFull', { max: queueLimitAfter }));
+      const message = remaining <= 0
+        ? t(language, 'playback.queueFull', { max: queueLimitAfter })
+        : 'Tidak ada video yang bisa diputar dari playlist ini.';
+      await editStatus(ctx, status, message);
       return;
     }
     const queueBefore = chatCache.getQueueLength(chatId);
     const queueWasEmpty = queueBefore === 0;
     const length = chatCache.addSongs(chatId, tracks);
     preloadTracks(queueWasEmpty ? tracks.slice(1) : tracks, { chatId });
-    const playlistNotice = `${t(language, 'playback.addedPlaylistTracks', { count: tracks.length, length })}\n\n${formatTrack(language, tracks[0], length)}`;
+    const skipSummary = skippedCount > 0 ? `\n${skippedCount} item dilewati karena tidak tersedia.` : '';
+    const playlistNotice = `${t(language, 'playback.addedPlaylistTracks', { count: tracks.length, length })}${skipSummary}\n\n${formatTrack(language, tracks[0], length)}`;
     const queueMessage = await sendPlaybackPhoto(ctx, status, tracks[0], playlistNotice, { disable_web_page_preview: true })
       ?? await editStatus(ctx, status, playlistNotice, { parse_mode: 'HTML', disable_web_page_preview: true });
     await sendPlaylistQueuePanels(ctx, tracks.slice(1), language, queueBefore + 1, queueMessage ?? status);
