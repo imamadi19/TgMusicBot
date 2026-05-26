@@ -49,7 +49,7 @@ export function serviceSettingsKeyboard(currentService, language = 'en') {
     .row()
     .text(`${activeService === SUPPORTED_DEFAULT_SERVICES.soundcloud ? '✅ ' : ''}${SUPPORTED_DEFAULT_SERVICES.soundcloud}`, 'service_soundcloud')
     .row()
-    .text(t(language, 'buttons.back'), 'help_all');
+    .text(t(language, 'buttons.back'), 'settings_menu');
 
   return keyboard;
 }

@@ -519,6 +519,17 @@ export class VoicePlayer {
     const key = String(chatId);
     const active = this.#active.get(key);
     if (!active) return false;
+
+    if (active.suspended) {
+      signalProcess(active.process, 'SIGCONT');
+      active.suspended = false;
+    }
+    const acknowledged = await sendAdapterCommand(active, { action: 'pause' });
+    if (!acknowledged) {
+      // Fallback signal is best-effort only and cannot be confirmed by adapter ACK.
+      signalProcess(active.process, 'SIGUSR1');
+      return false;
+    }
     chatCache.setPaused(key, true);
     if (active.timerEndsAt) {
       active.remainingMs = Math.max(1000, active.timerEndsAt - Date.now());
@@ -531,13 +542,6 @@ export class VoicePlayer {
       }
       this.#clearFinishTimer(key);
     }
-
-    if (active.suspended) {
-      signalProcess(active.process, 'SIGCONT');
-      active.suspended = false;
-    }
-    const acknowledged = await sendAdapterCommand(active, { action: 'pause' });
-    if (!acknowledged) signalProcess(active.process, 'SIGUSR1');
     return true;
   }
 
@@ -551,7 +555,11 @@ export class VoicePlayer {
     }
 
     const acknowledged = await sendAdapterCommand(active, { action: 'resume' });
-    if (!acknowledged) signalProcess(active.process, 'SIGUSR2');
+    if (!acknowledged) {
+      // Fallback signal is best-effort only and cannot be confirmed by adapter ACK.
+      signalProcess(active.process, 'SIGUSR2');
+      return false;
+    }
     chatCache.setPaused(key, false);
     if (active.remainingMs && !active.timerEndsAt) {
       const trackDurationMs = durationToMs(active.duration);

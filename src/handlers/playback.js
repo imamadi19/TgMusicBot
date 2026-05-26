@@ -500,11 +500,14 @@ async function sendSelectionPhoto(ctx, statusMessage, thumbnail, caption) {
 }
 
 async function sendPlaybackPhoto(ctx, statusMessage, track, caption, options = {}) {
+  const { deleteStatusMessage = true, ...sendOptions } = options;
   const thumbnail = youtubeThumbnail(track);
   if (!thumbnail) return null;
   try {
-    const message = await ctx.replyWithPhoto(thumbnail, { caption, parse_mode: 'HTML', ...captionEditOptions(caption, options) });
-    await ctx.api.deleteMessage(ctx.chat.id, statusMessage.message_id).catch(() => {});
+    const message = await ctx.replyWithPhoto(thumbnail, { caption, parse_mode: 'HTML', ...captionEditOptions(caption, sendOptions) });
+    if (deleteStatusMessage && statusMessage?.message_id) {
+      await ctx.api.deleteMessage(ctx.chat.id, statusMessage.message_id).catch(() => {});
+    }
     return message;
   } catch (error) {
     console.warn('Failed to send playback thumbnail photo, falling back to status edit:', error.message);
@@ -545,9 +548,18 @@ async function showYouTubeSelection(ctx, statusMessage, tracks, isVideo, languag
   });
 }
 
-async function queueAndMaybePlay(ctx, statusMessage, track, isVideo, language) {
+async function queueAndMaybePlay(ctx, statusMessage, track, isVideo, language, defaultService = config.defaultService) {
   const chatId = ctx.chat.id;
-  const saveTrack = { ...track, user: firstName(ctx), userId: ctx.from?.id, isVideo, filePath: '', platform: track.platform ?? defaultService };
+  const resolvedService = track.platform ?? track.defaultService ?? defaultService ?? config.defaultService;
+  const saveTrack = {
+    ...track,
+    user: firstName(ctx),
+    userId: ctx.from?.id,
+    isVideo,
+    filePath: '',
+    platform: track.platform ?? resolvedService,
+    defaultService: track.defaultService ?? resolvedService,
+  };
   const premiumSettings = await getPremiumSettings(chatId);
   saveTrack.audioPreset = premiumSettings.audioPreset;
   if (chatCache.getTrackIfExists(chatId, saveTrack.trackId)) {
@@ -592,13 +604,16 @@ async function queueAndMaybePlay(ctx, statusMessage, track, isVideo, language) {
 }
 
 async function sendPlaylistQueuePanels(ctx, tracks, language, queueStartLength, fallbackMessage) {
+  const sentMessages = [];
   for (const [index, queuedTrack] of tracks.entries()) {
     const queuePosition = queueStartLength + index + 1;
     const caption = formatTrack(language, queuedTrack, queuePosition);
-    const sent = await sendPlaybackPhoto(ctx, fallbackMessage, queuedTrack, caption, { disable_web_page_preview: true })
+    const sent = await sendPlaybackPhoto(ctx, fallbackMessage, queuedTrack, caption, { disable_web_page_preview: true, deleteStatusMessage: false })
       ?? await ctx.reply(caption, { parse_mode: 'HTML', disable_web_page_preview: true }).catch(() => null);
     if (sent) rememberPlaybackPanel(ctx, sent, language, queuedTrack);
+    sentMessages.push(sent);
   }
+  return sentMessages;
 }
 
 function isBlockedPlaylistTitle(title) {
@@ -623,34 +638,43 @@ async function validatePlaylistCandidates(downloader, items, chatId, isVideo, re
   const validTracks = [];
   const seenTrackIds = new Set();
   let skippedCount = 0;
-  for (const candidate of items) {
-    if (validTracks.length >= remaining) break;
-    const normalized = normalizePlaylistCandidate(candidate);
-    if (!normalized) {
-      skippedCount += 1;
-      continue;
-    }
-    if (seenTrackIds.has(normalized.trackId) || chatCache.getTrackIfExists(chatId, normalized.trackId)) {
-      skippedCount += 1;
-      continue;
-    }
-    try {
-      const validated = await downloader.validatePlaylistItem(normalized, { isVideo });
-      if (!validated?.trackId || !validated?.name || !validated?.url || isBlockedPlaylistTitle(validated.name) || !isUrl(validated.url)) {
+  let index = 0;
+  const concurrency = 2;
+  const workers = Array.from({ length: Math.max(1, concurrency) }, async () => {
+    while (true) {
+      if (validTracks.length >= remaining) return;
+      const currentIndex = index;
+      index += 1;
+      if (currentIndex >= items.length) return;
+      const candidate = items[currentIndex];
+      const normalized = normalizePlaylistCandidate(candidate);
+      if (!normalized) {
         skippedCount += 1;
         continue;
       }
-      if (seenTrackIds.has(validated.trackId) || chatCache.getTrackIfExists(chatId, validated.trackId)) {
+      if (seenTrackIds.has(normalized.trackId) || chatCache.getTrackIfExists(chatId, normalized.trackId)) {
         skippedCount += 1;
         continue;
       }
-      seenTrackIds.add(validated.trackId);
-      validTracks.push(validated);
-    } catch (error) {
-      skippedCount += 1;
-      console.warn(`Playlist item skipped in chat ${chatId}:`, error?.message ?? error);
+      try {
+        const validated = await downloader.validatePlaylistItem(normalized, { isVideo });
+        if (!validated?.trackId || !validated?.name || !validated?.url || isBlockedPlaylistTitle(validated.name) || !isUrl(validated.url)) {
+          skippedCount += 1;
+          continue;
+        }
+        if (seenTrackIds.has(validated.trackId) || chatCache.getTrackIfExists(chatId, validated.trackId) || validTracks.length >= remaining) {
+          skippedCount += 1;
+          continue;
+        }
+        seenTrackIds.add(validated.trackId);
+        validTracks.push(validated);
+      } catch (error) {
+        skippedCount += 1;
+        console.warn(`Playlist item skipped in chat ${chatId}:`, error?.message ?? error);
+      }
     }
-  }
+  });
+  await Promise.all(workers);
   return { validTracks, skippedCount };
 }
 
@@ -673,7 +697,18 @@ async function processPlayRequest(ctx, status, input, isVideo, language, default
       return;
     }
     const remaining = queueLimit - chatCache.getQueueLength(chatId);
-    const tracks = playlist.songs.slice(0, remaining).map((track) => ({ ...track, user: firstName(ctx), userId: ctx.from?.id, isVideo, filePath: track.filePath ?? '', platform: track.platform ?? defaultService }));
+    const tracks = playlist.songs.slice(0, remaining).map((track) => {
+      const resolvedService = track.platform ?? track.defaultService ?? defaultService ?? config.defaultService;
+      return {
+        ...track,
+        user: firstName(ctx),
+        userId: ctx.from?.id,
+        isVideo,
+        filePath: track.filePath ?? '',
+        platform: track.platform ?? resolvedService,
+        defaultService: track.defaultService ?? resolvedService,
+      };
+    });
     if (tracks.length === 0) {
       await editStatus(ctx, status, t(language, 'playback.queueFull', { max: queueLimit }));
       return;
@@ -682,17 +717,18 @@ async function processPlayRequest(ctx, status, input, isVideo, language, default
     const queueWasEmpty = queueBefore === 0;
     const length = chatCache.addSongs(chatId, tracks);
     preloadTracks(queueWasEmpty ? tracks.slice(1) : tracks, { chatId });
-    const playlistNotice = `${t(language, 'playback.addedPlaylistTracks', { count: tracks.length, length })}\n\n${formatTrack(language, tracks[0], length)}`;
-    const queueMessage = await sendPlaybackPhoto(ctx, status, tracks[0], playlistNotice, { disable_web_page_preview: true })
-      ?? await editStatus(ctx, status, playlistNotice, { parse_mode: 'HTML', disable_web_page_preview: true });
-    await sendPlaylistQueuePanels(ctx, tracks.slice(1), language, queueBefore + 1, queueMessage ?? status);
+    const playlistSummary = t(language, 'playback.addedPlaylistTracks', { count: tracks.length, length });
+    await editStatus(ctx, status, playlistSummary, { parse_mode: 'HTML', disable_web_page_preview: true });
+    const [firstTrackMessage] = await sendPlaylistQueuePanels(ctx, tracks, language, queueBefore, status);
     if (queueWasEmpty) {
       try {
         const activeTrack = await startQueuedTrack(ctx, tracks[0], isVideo);
         tracks[0].startedAt = activeTrack?.startedAt;
-        const playbackMessage = await editStatus(ctx, queueMessage ?? status, formatTrack(language, tracks[0]), { parse_mode: 'HTML', reply_markup: controlKeyboard(language, '', tracks[0]), disable_web_page_preview: true });
-        rememberPlaybackPanel(ctx, playbackMessage ?? queueMessage ?? status, language, tracks[0]);
-        startProgressUpdater(ctx, playbackMessage ?? queueMessage ?? status, language);
+        if (firstTrackMessage) {
+          const playbackMessage = await editStatus(ctx, firstTrackMessage, formatTrack(language, tracks[0]), { parse_mode: 'HTML', reply_markup: controlKeyboard(language, '', tracks[0]), disable_web_page_preview: true });
+          rememberPlaybackPanel(ctx, playbackMessage ?? firstTrackMessage, language, tracks[0]);
+          startProgressUpdater(ctx, playbackMessage ?? firstTrackMessage, language);
+        }
       } catch (error) {
         chatCache.shift(chatId);
         if (isVoiceChatInactiveError(error)) {
@@ -749,6 +785,7 @@ async function processPlayRequest(ctx, status, input, isVideo, language, default
       isVideo,
       filePath: '',
       platform: validated.platform ?? defaultService,
+      defaultService: validated.defaultService ?? validated.platform ?? defaultService ?? config.defaultService,
     }));
     if (tracks.length === 0) {
       const message = remaining <= 0
@@ -763,18 +800,19 @@ async function processPlayRequest(ctx, status, input, isVideo, language, default
     preloadTracks(queueWasEmpty ? tracks.slice(1) : tracks, { chatId });
     const notScannedCount = Math.max(0, results.length - candidates.length);
     const skipSummary = `${skippedCount > 0 ? `\n${skippedCount} item dilewati karena tidak tersedia/duplikat.` : ''}${notScannedCount > 0 ? '\nBeberapa item playlist tidak dicek agar proses tetap ringan.' : ''}`;
-    const playlistNotice = `${t(language, 'playback.addedPlaylistTracks', { count: tracks.length, length })}${skipSummary}\n\n${formatTrack(language, tracks[0], length)}`;
-    const queueMessage = await sendPlaybackPhoto(ctx, status, tracks[0], playlistNotice, { disable_web_page_preview: true })
-      ?? await editStatus(ctx, status, playlistNotice, { parse_mode: 'HTML', disable_web_page_preview: true });
-    await sendPlaylistQueuePanels(ctx, tracks.slice(1), language, queueBefore + 1, queueMessage ?? status);
+    const playlistSummary = `${t(language, 'playback.addedPlaylistTracks', { count: tracks.length, length })}${skipSummary}`;
+    await editStatus(ctx, status, playlistSummary, { parse_mode: 'HTML', disable_web_page_preview: true });
+    const [firstTrackMessage] = await sendPlaylistQueuePanels(ctx, tracks, language, queueBefore, status);
     if (queueWasEmpty) {
       try {
         await ensureDownloaded(tracks[0], isVideo);
         const activeTrack = await startQueuedTrack(ctx, tracks[0], isVideo);
         tracks[0].startedAt = activeTrack?.startedAt;
-        const playbackMessage = await editStatus(ctx, queueMessage ?? status, formatTrack(language, tracks[0]), { parse_mode: 'HTML', reply_markup: controlKeyboard(language, '', tracks[0]), disable_web_page_preview: true });
-        rememberPlaybackPanel(ctx, playbackMessage ?? queueMessage ?? status, language, tracks[0]);
-        startProgressUpdater(ctx, playbackMessage ?? queueMessage ?? status, language);
+        if (firstTrackMessage) {
+          const playbackMessage = await editStatus(ctx, firstTrackMessage, formatTrack(language, tracks[0]), { parse_mode: 'HTML', reply_markup: controlKeyboard(language, '', tracks[0]), disable_web_page_preview: true });
+          rememberPlaybackPanel(ctx, playbackMessage ?? firstTrackMessage, language, tracks[0]);
+          startProgressUpdater(ctx, playbackMessage ?? firstTrackMessage, language);
+        }
       } catch (error) {
         chatCache.shift(chatId);
         if (isVoiceChatInactiveError(error)) {
@@ -790,7 +828,7 @@ async function processPlayRequest(ctx, status, input, isVideo, language, default
     await showYouTubeSelection(ctx, status, results, isVideo, language);
     return;
   }
-  await queueAndMaybePlay(ctx, status, track, isVideo, language);
+  await queueAndMaybePlay(ctx, status, track, isVideo, language, defaultService);
 }
 
 export async function playHandler(ctx, isVideo = false) {
@@ -1090,5 +1128,6 @@ export async function youtubeSelectionPickHandler(ctx) {
   await ctx.answerCallbackQuery({ text: t(selection.language, 'playback.trackSelected', { number: index + 1 }) }).catch(() => {});
   const statusMessage = ctx.callbackQuery.message;
   await editStatus(ctx, statusMessage, t(selection.language, 'playback.downloadingSelected', { title: htmlEscape(track.name) }), { parse_mode: 'HTML' });
-  enqueueChatTask(ctx.chat.id, 'Proses pilihan YouTube', () => queueAndMaybePlay(ctx, statusMessage, track, Boolean(selection.isVideo), selection.language));
+  const defaultService = await getUserDefaultService(ctx.from?.id);
+  enqueueChatTask(ctx.chat.id, 'Proses pilihan YouTube', () => queueAndMaybePlay(ctx, statusMessage, track, Boolean(selection.isVideo), selection.language, defaultService));
 }
