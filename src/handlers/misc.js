@@ -51,10 +51,23 @@ export async function settingsHandler(ctx) {
 ${language.startsWith('id') ? 'Pilih layanan default:' : 'Choose default service:'}`;
   if (ctx.callbackQuery) {
     await ctx.answerCallbackQuery(t(language, 'buttons.settings'));
-    await ctx.editMessageText(text, { reply_markup: serviceSettingsKeyboard(currentService, language) });
+    await editOrReplyCallbackMessage(ctx, text, { reply_markup: serviceSettingsKeyboard(currentService, language) });
     return;
   }
   await ctx.reply(text, { reply_markup: serviceSettingsKeyboard(currentService, language) });
+}
+
+async function editOrReplyCallbackMessage(ctx, text, options = {}) {
+  const message = ctx.callbackQuery?.message;
+  try {
+    if (message?.caption && !message?.text) {
+      await ctx.editMessageCaption({ caption: String(text).slice(0, 1024), ...options });
+      return;
+    }
+    await ctx.editMessageText(text, options);
+  } catch {
+    await ctx.reply(text, options).catch(() => {});
+  }
 }
 
 export async function shellHandler(ctx) {
@@ -99,7 +112,7 @@ export async function serviceSelectHandler(ctx) {
 ${language.startsWith('id') ? 'Pilih layanan default:' : 'Choose default service:'}`;
 
   await ctx.answerCallbackQuery(`${savedService} dipilih.`);
-  await ctx.editMessageText(text, {
+  await editOrReplyCallbackMessage(ctx, text, {
     reply_markup: serviceSettingsKeyboard(savedService, language),
   });
 }

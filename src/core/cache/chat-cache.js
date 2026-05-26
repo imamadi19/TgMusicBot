@@ -4,7 +4,7 @@ export class ChatCache {
   #get(chatId) {
     const key = String(chatId);
     if (!this.#chats.has(key)) {
-      this.#chats.set(key, { queue: [], loop: 0, paused: false, muted: false, speed: 1, youtubeSelections: new Map() });
+      this.#chats.set(key, { queue: [], loop: 0, paused: false, muted: false, speed: 1, searchSelections: new Map() });
     }
     return this.#chats.get(key);
   }
@@ -58,17 +58,17 @@ export class ChatCache {
     this.#chats.delete(String(chatId));
   }
 
-  setYouTubeSelection(chatId, messageId, selection) {
+  setSearchSelection(chatId, messageId, selection) {
     const data = this.#get(chatId);
-    data.youtubeSelections.set(String(messageId), { ...selection, createdAt: Date.now() });
+    data.searchSelections.set(String(messageId), { ...selection, createdAt: Date.now() });
   }
 
-  getYouTubeSelection(chatId, messageId) {
-    return this.#get(chatId).youtubeSelections.get(String(messageId)) ?? null;
+  getSearchSelection(chatId, messageId) {
+    return this.#get(chatId).searchSelections.get(String(messageId)) ?? null;
   }
 
-  deleteYouTubeSelection(chatId, messageId) {
-    this.#get(chatId).youtubeSelections.delete(String(messageId));
+  deleteSearchSelection(chatId, messageId) {
+    this.#get(chatId).searchSelections.delete(String(messageId));
   }
 
   chats() {

@@ -6,7 +6,12 @@ import { pipeline } from 'node:stream/promises';
 import { config } from '../../config/index.js';
 import { parseDuration } from '../../utils/duration.js';
 
-const SEARCH_ENDPOINT = 'https://api.nexray.eu.cc/search/youtube';
+const SEARCH_ENDPOINTS = Object.freeze({
+  youtube: 'https://api.nexray.eu.cc/search/youtube',
+  spotify: 'https://api.nexray.eu.cc/search/spotify',
+  soundcloud: 'https://api.nexray.eu.cc/search/soundcloud',
+  apple_music: 'https://api.nexray.eu.cc/search/applemusic',
+});
 const YTMP3_ENDPOINT = 'https://api.nexray.eu.cc/downloader/v1/ytmp3';
 const YTMP4_ENDPOINT = 'https://api.nexray.eu.cc/downloader/v1/ytmp4';
 const YTMP4_RESOLUTION = '360';
@@ -73,7 +78,7 @@ async function fetchJson(url) {
 }
 
 export async function searchNexRayYouTube(input, limit = MAX_SEARCH_RESULTS) {
-  const url = new URL(SEARCH_ENDPOINT);
+  const url = new URL(SEARCH_ENDPOINTS.youtube);
   url.searchParams.set('q', input);
   const payload = await fetchJson(url);
   if (payload.status === false) throw new Error(payload.message || 'search failed');
@@ -83,6 +88,48 @@ export async function searchNexRayYouTube(input, limit = MAX_SEARCH_RESULTS) {
     .map(trackFromResult)
     .filter(Boolean)
     .slice(0, limit);
+}
+
+function normalizeDurationSeconds(item) {
+  const raw = Number(item.duration ?? item.duration_seconds ?? item.seconds ?? item.durationSec ?? 0);
+  if (Number.isFinite(raw) && raw > 0) return raw > 5000 ? Math.round(raw / 1000) : Math.round(raw);
+  const rawMs = Number(item.durationMs ?? item.duration_ms ?? 0);
+  if (Number.isFinite(rawMs) && rawMs > 0) return Math.round(rawMs / 1000);
+  return parseDuration(item.durationText ?? item.duration_text ?? item.length ?? item.duration_string);
+}
+
+function normalizeSearchTrack(item, platform) {
+  const name = safeText(item.title || item.name || item.songName);
+  const url = safeText(item.url || item.link || item.permalink);
+  if (!name || !url) return null;
+  const thumbnail = safeText(item.thumbnail || item.image || item.cover || item.artwork || item.image_url);
+  const artist = safeText(item.artist || item.author || item.channel);
+  const channel = safeText(item.channel || item.author || item.artist);
+  return {
+    trackId: safeText(item.trackId || item.id || url, url),
+    name,
+    title: name,
+    url,
+    duration: normalizeDurationSeconds(item),
+    thumbnail: /^https?:\/\//i.test(thumbnail) ? thumbnail : '',
+    platform,
+    artist,
+    channel,
+    views: safeText(item.views),
+    uploadAt: safeText(item.uploadAt || item.upload_at),
+  };
+}
+
+export async function searchNexRayByService(service, input, limit = MAX_SEARCH_RESULTS) {
+  const endpoint = SEARCH_ENDPOINTS[String(service ?? '').toLowerCase().replace(/\s+/g, '_')];
+  if (!endpoint) throw new Error('unsupported service');
+  const url = new URL(endpoint);
+  url.searchParams.set('q', input);
+  const payload = await fetchJson(url);
+  if (payload.status === false) throw new Error(payload.message || 'search failed');
+  const results = Array.isArray(payload.result) ? payload.result : (Array.isArray(payload.results) ? payload.results : []);
+  const platformMap = { spotify: 'Spotify', soundcloud: 'SoundCloud', apple_music: 'Apple Music' };
+  return results.map((item) => normalizeSearchTrack(item, platformMap[service] || 'YouTube')).filter(Boolean).slice(0, limit);
 }
 
 function isYouTubeUrl(url) {

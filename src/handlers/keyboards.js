@@ -111,7 +111,7 @@ export function controlKeyboard(language = 'en', state = '', track = {}) {
     .text('▢', 'play_stop');
 }
 
-export function youtubeSelectionKeyboard(messageId, tracks, index = 0) {
+export function searchSelectionKeyboard(messageId, tracks, index = 0) {
   const keyboard = new InlineKeyboard();
   const total = Math.max(1, tracks.length);
   const safeIndex = Math.max(0, Math.min(index, total - 1));
@@ -120,10 +120,12 @@ export function youtubeSelectionKeyboard(messageId, tracks, index = 0) {
     const previous = safeIndex === 0 ? total - 1 : safeIndex - 1;
     const next = safeIndex === total - 1 ? 0 : safeIndex + 1;
     keyboard
-      .text('⬅️', `ytpage:${messageId}:${previous}`)
-      .text('➡️', `ytpage:${messageId}:${next}`)
+      .text('⬅️', `searchpage:${messageId}:${previous}`)
+      .text('➡️', `searchpage:${messageId}:${next}`)
       .row();
   }
 
-  return keyboard.text('✅ Select', `ytpick:${messageId}:${safeIndex}`);
+  return keyboard.text('✅ Select', `searchpick:${messageId}:${safeIndex}`);
 }
+
+export const youtubeSelectionKeyboard = searchSelectionKeyboard;

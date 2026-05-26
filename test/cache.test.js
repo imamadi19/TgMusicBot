@@ -279,14 +279,14 @@ test('youtube selection keyboard uses carousel navigation with top result select
 
   const first = youtubeSelectionKeyboard(99, tracks).inline_keyboard;
   assert.deepEqual(first.map((row) => row.map((button) => button.callback_data)), [
-    ['ytpage:99:2', 'ytpage:99:1'],
-    ['ytpick:99:0'],
+    ['searchpage:99:2', 'searchpage:99:1'],
+    ['searchpick:99:0'],
   ]);
 
   const middle = youtubeSelectionKeyboard(99, tracks, 1).inline_keyboard;
   assert.deepEqual(middle.map((row) => row.map((button) => button.callback_data)), [
-    ['ytpage:99:0', 'ytpage:99:2'],
-    ['ytpick:99:1'],
+    ['searchpage:99:0', 'searchpage:99:2'],
+    ['searchpick:99:1'],
   ]);
 });
 

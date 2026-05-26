@@ -4,7 +4,7 @@ import { broadcastHandler, cancelBroadcastHandler } from './broadcast.js';
 import { vcPlayCallbackHandler } from './callbacks.js';
 import { clearAssistantsHandler, devActiveVcHandler, leaveAllHandler, loggerToggleHandler } from './devs.js';
 import { helpCallback, languageMenuHandler, languageSelectHandler, startHandler } from './help.js';
-import { loopHandler, muteHandler, pauseHandler, playHandler, queueHandler, removeHandler, resumeHandler, skipHandler, speedHandler, stopHandler, unmuteHandler, youtubeSelectionPageHandler, youtubeSelectionPickHandler } from './playback.js';
+import { loopHandler, muteHandler, pauseHandler, playHandler, queueHandler, removeHandler, resumeHandler, searchSelectionPageHandler, searchSelectionPickHandler, skipHandler, speedHandler, stopHandler, unmuteHandler } from './playback.js';
 import { addToPlaylistHandler, createPlaylistHandler, deletePlaylistHandler, myPlaylistsHandler, playlistInfoHandler, removeFromPlaylistHandler } from './playlists.js';
 import { premiumDjModeHandler, premiumFeaturesHandler, premiumGrantHandler, premiumInfoHandler, premiumProfileHandler, premiumQueueMoveHandler, premiumRevokeHandler, premiumSetPresetHandler } from './premium.js';
 import { noopHandler, pingHandler, privacyHandler, serviceSelectHandler, settingsHandler, shellHandler, statsHandler } from './misc.js';
@@ -62,7 +62,7 @@ export function loadHandlers(bot) {
   bot.callbackQuery('settings_menu', settingsHandler);
   bot.callbackQuery(/^service_/, serviceSelectHandler);
   bot.callbackQuery(/^help_/, helpCallback);
-  bot.callbackQuery(/^ytpage:/, youtubeSelectionPageHandler);
-  bot.callbackQuery(/^ytpick:/, youtubeSelectionPickHandler);
+  bot.callbackQuery(/^searchpage:/, searchSelectionPageHandler);
+  bot.callbackQuery(/^searchpick:/, searchSelectionPickHandler);
   bot.callbackQuery(/^(?:vcplay_|play_)/, vcPlayCallbackHandler);
 }
