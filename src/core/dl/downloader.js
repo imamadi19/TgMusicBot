@@ -4,7 +4,7 @@ import path from 'node:path';
 import { config } from '../../config/index.js';
 import { isUrl } from '../../utils/telegram.js';
 import { parseDuration } from '../../utils/duration.js';
-import { searchNexRayByService, searchNexRayYouTube } from './nexray.js';
+import { isAppleMusicUrl, isSpotifyUrl, resolveAppleMusicUrlMetadata, resolveSpotifyTrackMetadata, searchNexRayByService, searchNexRayYouTube } from './nexray.js';
 
 const SUPPORTED_HOSTS = ['youtube.com', 'youtu.be', 'open.spotify.com', 'music.apple.com', 'soundcloud.com'];
 const INVALID_PLAYLIST_TITLE_PATTERNS = [/^\[private video\]$/i, /^\[deleted video\]$/i, /\b(private|deleted|unavailable|blocked|age[-\s]?restricted)\b/i];
@@ -46,6 +46,12 @@ function shortenError(message) {
   }
   if (text.includes('No supported JavaScript runtime could be found')) {
     return 'yt-dlp butuh JavaScript runtime untuk extractor YouTube. Install deno/node runtime yang didukung atau update yt-dlp.';
+  }
+  if (text.includes('Unsupported URL') && text.includes('music.apple.com')) {
+    return 'Apple Music link didukung untuk metadata, tetapi sumber audio langsung tidak tersedia. Bot akan mencoba mencocokkan playback dari YouTube.';
+  }
+  if ((text.includes('[DRM]') || text.includes('DRM protection')) && text.toLowerCase().includes('spotify')) {
+    return 'Spotify link tidak didownload langsung karena DRM. Bot akan menggunakan metadata Spotify dan mencocokkan audio playback dari YouTube.';
   }
   return text.length > MAX_ERROR_LENGTH ? `${text.slice(0, MAX_ERROR_LENGTH)}…` : text;
 }
@@ -145,6 +151,18 @@ export class Downloader {
       }
     }
 
+    if (this.isUrl() && isSpotifyUrl(this.input)) {
+      const resolved = await resolveSpotifyTrackMetadata(this.input);
+      if (resolved.trackLinkRequired) return { platform: 'Spotify', results: [], trackLinkRequired: true, selectionRequired: false };
+      return { platform: 'Spotify', results: resolved.tracks, selectionRequired: resolved.tracks.length > 1 };
+    }
+
+    if (this.isUrl() && isAppleMusicUrl(this.input)) {
+      const resolved = await resolveAppleMusicUrlMetadata(this.input);
+      if (resolved.trackRequired) return { platform: 'Apple Music', results: [], trackLinkRequired: true, selectionRequired: false };
+      return { platform: 'Apple Music', results: resolved.tracks, selectionRequired: resolved.tracks.length > 1 };
+    }
+
     const query = this.isUrl() ? this.input : `ytsearch10:${this.input}`;
     const output = await run('yt-dlp', [...(await ytDlpInfoArgs({ allowPlaylist })), query]);
     const parsed = JSON.parse(output);
@@ -192,7 +210,7 @@ export class Downloader {
       ...(await ytDlpBaseArgs()),
       '-f', isVideo ? 'bv*+ba/best' : 'bestaudio/best',
       '-g',
-      track?.url ?? this.input,
+      track?.playbackUrl ?? track?.url ?? this.input,
     ];
     const output = await run('yt-dlp', args);
     const lines = output.split('\n').map((line) => line.trim()).filter(Boolean);
@@ -236,7 +254,7 @@ export class Downloader {
       '--print', 'after_move:filepath',
     ];
     if (!isVideo) args.push('-x', '--audio-format', 'mp3');
-    args.push(track?.url ?? this.input);
+    args.push(track?.playbackUrl ?? track?.url ?? this.input);
     const output = await run('yt-dlp', args);
     return output.trim().split('\n').at(-1);
   }

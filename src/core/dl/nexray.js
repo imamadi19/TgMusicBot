@@ -129,7 +129,221 @@ export async function searchNexRayByService(service, input, limit = MAX_SEARCH_R
   if (payload.status === false) throw new Error(payload.message || 'search failed');
   const results = Array.isArray(payload.result) ? payload.result : (Array.isArray(payload.results) ? payload.results : []);
   const platformMap = { spotify: 'Spotify', soundcloud: 'SoundCloud', apple_music: 'Apple Music' };
+  if (service === 'spotify') return results.map((item) => normalizeSpotifyTrack(item)).filter(Boolean).slice(0, limit);
   return results.map((item) => normalizeSearchTrack(item, platformMap[service] || 'YouTube')).filter(Boolean).slice(0, limit);
+}
+
+
+
+export function isSpotifyUrl(value) {
+  if (typeof value !== 'string') return false;
+  try {
+    const url = new URL(value.trim());
+    return url.hostname.toLowerCase() == 'open.spotify.com';
+  } catch {
+    return false;
+  }
+}
+
+export function parseSpotifyUrl(value) {
+  if (!isSpotifyUrl(value)) return null;
+  const url = new URL(value);
+  const parts = url.pathname.split('/').filter(Boolean);
+  const offset = parts[0]?.startsWith('intl-') ? 1 : 0;
+  const entityType = parts[offset] || '';
+  const spotifyId = parts[offset + 1] || '';
+  const canonicalUrl = spotifyId && entityType ? `https://open.spotify.com/${entityType}/${spotifyId}` : value;
+  return { entityType, spotifyId, isTrack: entityType === 'track' && Boolean(spotifyId), canonicalUrl, originalUrl: value };
+}
+
+function normalizeSpotifyArtists(item) {
+  const arr = Array.isArray(item.artists) ? item.artists : [];
+  const names = arr.map((a) => safeText(a?.name || a)).filter(Boolean);
+  if (names.length) return names;
+  const one = safeText(item.artist || item.author);
+  return one ? [one] : [];
+}
+
+export function normalizeSpotifyTrack(item, sourceUrl = '') {
+  if (!item || typeof item !== 'object') return null;
+  const name = safeText(item.title || item.name || item.songName || item.trackName);
+  if (!name) return null;
+  const spotifyUrl = safeText(sourceUrl || item.url || item.link);
+  const parsed = parseSpotifyUrl(spotifyUrl);
+  const spotifyId = safeText(item.spotifyId || item.id || parsed?.spotifyId || '');
+  const artists = normalizeSpotifyArtists(item);
+  return {
+    trackId: spotifyId ? `spotify:${spotifyId.replace(/^spotify:/, '')}` : `spotify:${name}`,
+    spotifyId,
+    name,
+    title: name,
+    artist: artists[0] || '',
+    artists,
+    album: safeText(item.album || item.albumName),
+    releaseDate: safeText(item.releaseDate || item.release_date || item.year),
+    duration: normalizeDurationSeconds(item),
+    explicit: typeof item.explicit === 'boolean' ? item.explicit : null,
+    popularity: Number.isFinite(Number(item.popularity)) ? Number(item.popularity) : null,
+    thumbnail: normalizeArtwork(item),
+    sourceUrl: spotifyUrl,
+    displayUrl: spotifyUrl,
+    playbackUrl: '',
+    platform: 'Spotify',
+    playbackPlatform: '',
+    sourceType: 'spotify',
+    url: spotifyUrl,
+  };
+}
+
+export function isSpotifyTrack(track) {
+  return Boolean(track) && (track.platform === 'Spotify' || track.sourceType === 'spotify');
+}
+
+async function fetchSpotifyOEmbed(urlValue) {
+  const url = new URL('https://open.spotify.com/oembed');
+  url.searchParams.set('url', urlValue);
+  return fetchJson(url);
+}
+
+export async function resolveSpotifyTrackMetadata(value) {
+  const parsed = parseSpotifyUrl(value);
+  if (!parsed) throw new Error('Not a Spotify URL');
+  if (!parsed.isTrack) return { trackLinkRequired: true, tracks: [], parsed };
+
+  const tryQueries = [value, parsed.canonicalUrl, parsed.spotifyId].filter(Boolean);
+  for (const query of tryQueries) {
+    try {
+      const list = await searchNexRayByService('spotify', query, 10);
+      const normalized = list.map((it) => normalizeSpotifyTrack(it, parsed.canonicalUrl)).filter(Boolean);
+      if (normalized.length) return { tracks: [normalized[0]], parsed };
+    } catch {}
+  }
+
+  const oembed = await fetchSpotifyOEmbed(parsed.canonicalUrl);
+  const title = safeText(oembed?.title);
+  const thumb = safeText(oembed?.thumbnail_url);
+  const baseTrack = normalizeSpotifyTrack({ id: parsed.spotifyId, title, artist: title.split(' - ').slice(1).join(' - '), thumbnail: thumb, url: parsed.canonicalUrl }, parsed.canonicalUrl);
+
+  if (title) {
+    try {
+      const list = await searchNexRayByService('spotify', title, 10);
+      const normalized = list.map((it) => normalizeSpotifyTrack(it, parsed.canonicalUrl)).filter(Boolean);
+      if (normalized.length) return { tracks: [normalized[0]], parsed };
+    } catch {}
+  }
+  return { tracks: baseTrack ? [baseTrack] : [], parsed };
+}
+
+export async function resolveSpotifyPlaybackTrack(track, searchFn = searchNexRayYouTube) {
+  if (!isSpotifyTrack(track) || track.playbackUrl) return track;
+  const query = `${track.title || track.name} ${track.artist || ''} official audio`.trim();
+  const results = await searchFn(query, 8);
+  const badWords = /(remix|karaoke|slowed|reverb|cover|live|instrumental)/i;
+  const needleTitle = String(track.title || track.name || '').toLowerCase();
+  const needleArtist = String(track.artist || '').toLowerCase();
+  const best = results.filter((r)=>r?.url).sort((a,b)=>{
+    const score=(x)=>{const t=String(x.title||x.name||'').toLowerCase();let s=0;if(t.includes(needleTitle))s+=3;if(needleArtist&&t.includes(needleArtist))s+=2;if(badWords.test(t))s-=3;return s;};
+    return score(b)-score(a);
+  })[0];
+  if (!best) throw new Error('SPOTIFY_PLAYBACK_NOT_FOUND');
+  track.playbackUrl = best.url;
+  track.playbackPlatform = 'YouTube';
+  return track;
+}
+export function isAppleMusicUrl(value) {
+  if (typeof value !== 'string') return false;
+  try {
+    const url = new URL(value.trim());
+    return url.hostname.toLowerCase().includes('music.apple.com');
+  } catch {
+    return false;
+  }
+}
+
+export function parseAppleMusicUrl(value) {
+  if (!isAppleMusicUrl(value)) return null;
+  const url = new URL(value);
+  const parts = url.pathname.split('/').filter(Boolean);
+  const storefront = parts[0] || '';
+  const kind = parts[1] || '';
+  const songId = url.searchParams.get('i') || '';
+  const albumId = parts.at(-1) || '';
+  return { storefront, kind, songId, albumId, isTrackLink: Boolean(songId), originalUrl: value };
+}
+
+function normalizeArtwork(item) {
+  const raw = safeText(item.artwork?.url || item.artworkUrl100 || item.artwork || item.thumbnail || item.image || item.cover);
+  if (!raw) return '';
+  const replaced = raw.replace('{w}', '1200').replace('{h}', '1200');
+  return /^https?:\/\//i.test(replaced) ? replaced : '';
+}
+
+export function normalizeAppleMusicTrack(item, sourceUrl = '') {
+  if (!item || typeof item !== 'object') return null;
+  const name = safeText(item.title || item.name || item.trackName || item.songName);
+  const artist = safeText(item.artist || item.artistName || item.author);
+  if (!name || !artist) return null;
+  const trackIdRaw = safeText(item.id || item.trackId || item.songId);
+  const trackId = trackIdRaw ? `apple:${trackIdRaw.replace(/^apple:/, '')}` : `apple:${name}:${artist}`;
+  const source = safeText(sourceUrl || item.url || item.link);
+  const duration = normalizeDurationSeconds(item);
+  return {
+    trackId,
+    name,
+    title: name,
+    artist,
+    album: safeText(item.album || item.collectionName),
+    releaseDate: safeText(item.releaseDate || item.release_date || item.year),
+    genre: safeText(item.genre || item.primaryGenreName),
+    duration,
+    thumbnail: normalizeArtwork(item),
+    sourceUrl: source,
+    displayUrl: source,
+    playbackUrl: '',
+    platform: 'Apple Music',
+    playbackPlatform: '',
+    sourceType: 'apple_music',
+    url: source,
+  };
+}
+
+export async function resolveAppleMusicUrlMetadata(value) {
+  const parsed = parseAppleMusicUrl(value);
+  if (!parsed) throw new Error('Not an Apple Music URL');
+  if (!parsed.isTrackLink) return { trackRequired: true, tracks: [] };
+  const query = parsed.songId;
+  const url = new URL(SEARCH_ENDPOINTS.apple_music);
+  url.searchParams.set('q', query);
+  const payload = await fetchJson(url);
+  const results = Array.isArray(payload.result) ? payload.result : (Array.isArray(payload.results) ? payload.results : []);
+  const tracks = results.map((item) => normalizeAppleMusicTrack(item, value)).filter(Boolean);
+  return { tracks, parsed };
+}
+
+export async function resolveAppleMusicPlayback(track, searchFn = searchNexRayYouTube) {
+  if (!track || (track.platform !== 'Apple Music' && track.sourceType !== 'apple_music')) return track;
+  if (track.playbackUrl) return track;
+  const query = `${track.title || track.name} ${track.artist || ''} official audio`.trim();
+  const results = await searchFn(query, 8);
+  const badWords = /(remix|karaoke|slowed|reverb|cover|live|instrumental)/i;
+  const titleNeedle = String(track.title || track.name || '').toLowerCase();
+  const artistNeedle = String(track.artist || '').toLowerCase();
+  const ranked = results.filter((r) => r?.url).sort((a, b) => {
+    const score = (x) => {
+      const t = String(x.title || x.name || '').toLowerCase();
+      let s = 0;
+      if (titleNeedle && t.includes(titleNeedle)) s += 3;
+      if (artistNeedle && t.includes(artistNeedle)) s += 2;
+      if (badWords.test(t)) s -= 3;
+      return s;
+    };
+    return score(b) - score(a);
+  });
+  const best = ranked[0];
+  if (!best) throw new Error('APPLE_MUSIC_PLAYBACK_NOT_FOUND');
+  track.playbackUrl = best.url;
+  track.playbackPlatform = 'YouTube';
+  return track;
 }
 
 function isYouTubeUrl(url) {

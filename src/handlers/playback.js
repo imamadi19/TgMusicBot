@@ -14,6 +14,7 @@ import { secondsToClock } from '../utils/duration.js';
 import { completedProgressKeyboard, controlKeyboard, supportKeyboard, searchSelectionKeyboard } from './keyboards.js';
 import { playMode } from './filters.js';
 import { isAuthUser } from '../core/db/auth.js';
+import { resolveAppleMusicPlayback, resolveSpotifyPlaybackTrack } from '../core/dl/nexray.js';
 
 const MAX_QUEUE = 10;
 const PREMIUM_MAX_QUEUE = 50;
@@ -435,6 +436,12 @@ function playbackHeading(language, state = 'playing', queueLength = 1) {
 }
 
 function formatTrack(language, track, queueLength = 1, state = 'playing') {
+  if (track?.platform === 'Spotify' || track?.sourceType === 'spotify') {
+    return `🟢 <b>${t(language, 'playback.spotifyNowPlaying')}</b>\n\n🎵 <a href="${htmlEscape(track.displayUrl || track.sourceUrl || track.url)}">${htmlEscape(track.name)}</a>\n${track.artist ? `👤 ${htmlEscape(track.artist)}\n` : ''}${track.album ? `💿 ${htmlEscape(track.album)}\n` : ''}⏱ ${secondsToClock(track.duration)}\n▶️ ${t(language, 'playback.spotifyPlaybackVia')}: ${htmlEscape(track.playbackPlatform || 'YouTube')}\n🙋 ${t(language, 'playback.requestedBy')}: ${htmlEscape(track.user)}`;
+  }
+  if (track?.platform === 'Apple Music' || track?.sourceType === 'apple_music') {
+    return `🍎 <b>${t(language, 'playback.appleMusicNowPlaying')}</b>\n\n🎵 <a href="${htmlEscape(track.displayUrl || track.sourceUrl || track.url)}">${htmlEscape(track.name)}</a>\n👤 ${htmlEscape(track.artist || '-')}\n${track.album ? `💿 ${htmlEscape(track.album)}\n` : ''}⏱ ${secondsToClock(track.duration)}\n▶️ ${t(language, 'playback.appleMusicPlaybackVia')}: ${htmlEscape(track.playbackPlatform || 'YouTube')}\n🙋 ${t(language, 'playback.requestedBy')}: ${htmlEscape(track.user)}`;
+  }
   const heading = playbackHeading(language, state, queueLength);
   const preset = track.audioPreset ? `\n<b>Preset:</b> ${htmlEscape(track.audioPreset)}` : '';
   return `<u><b>${heading}</b></u>\n\n<b>${t(language, 'playback.title')}:</b> <a href="${htmlEscape(track.url)}">${htmlEscape(track.name)}</a>\n\n<b>${t(language, 'playback.duration')}:</b> ${secondsToClock(track.duration)}\n<b>${t(language, 'playback.requestedBy')}:</b> ${htmlEscape(track.user)}${preset}`;
@@ -468,7 +475,7 @@ function youtubeThumbnail(track) {
   return /^https?:\/\//i.test(value) ? value : '';
 }
 
-function formatSearchResult(language, track, index, total) {
+function formatYouTubeSearchResult(language, track, index, total) {
   const channel = track.channel || track.channelUrl || '-';
   const lines = [
     `🎵 <b>${t(language, 'playback.chooseTrack')}</b> (${index + 1}/${total})`,
@@ -483,9 +490,44 @@ function formatSearchResult(language, track, index, total) {
   return lines.join('\n');
 }
 
+
+function formatAppleMusicSearchResult(language, track, index, total) {
+  const lines = [
+    `🍎 <b>${t(language, 'playback.appleMusicDiscovery')}</b>  •  <code>${index + 1}/${total}</code>`,
+    '━━━━━━━━━━━━━━━━━━',
+    '',
+    `🎵 <b>${htmlEscape(track.title ?? track.name ?? '-')}</b>`,
+    `👤 ${htmlEscape(track.artist ?? '-')}`,
+  ];
+  if (track.album) lines.push(`💿 ${htmlEscape(track.album)}`);
+  if (track.releaseDate || track.duration) lines.push(`📅 ${htmlEscape(track.releaseDate || '-')}   •   ⏱ ${secondsToClock(track.duration || 0)}`);
+  if (track.genre) lines.push(`🎼 ${htmlEscape(track.genre)}`);
+  lines.push('', '━━━━━━━━━━━━━━━━━━', `<i>${t(language, 'playback.appleMusicSelectHint')}</i>`);
+  if (track.displayUrl || track.sourceUrl) lines.push(`🔗 <a href="${htmlEscape(track.displayUrl || track.sourceUrl)}">${t(language, 'playback.appleMusicOpen')}</a>`);
+  return lines.join('\n');
+}
+
+function formatSpotifySearchResult(language, track, index, total) {
+  const lines = [
+    `🟢 <b>${t(language, 'playback.spotifyDiscovery')}</b>  •  <code>${index + 1}/${total}</code>`,
+    '━━━━━━━━━━━━━━━━━━',
+    '',
+    `🎵 <b>${htmlEscape(track.title ?? track.name ?? '-')}</b>`,
+  ];
+  if (track.artist) lines.push(`👤 ${htmlEscape(track.artist)}`);
+  if (track.album) lines.push(`💿 ${htmlEscape(track.album)}`);
+  if (track.releaseDate || track.duration) lines.push(`📅 ${htmlEscape(track.releaseDate || '-')}   •   ⏱ ${secondsToClock(track.duration || 0)}`);
+  lines.push('', '━━━━━━━━━━━━━━━━━━', `<i>${t(language, 'playback.spotifySelectHint')}</i>`);
+  if (track.displayUrl || track.sourceUrl) lines.push(`🔗 <a href="${htmlEscape(track.displayUrl || track.sourceUrl)}">${t(language, 'playback.spotifyOpen')}</a>`);
+  return lines.join('\n');
+}
+
 function formatSearchSelection(language, tracks, index = 0) {
   const safeIndex = selectedTrackIndex(tracks, index);
-  return formatSearchResult(language, tracks[safeIndex], safeIndex, tracks.length);
+  const track = tracks[safeIndex];
+  if (track?.platform === 'Apple Music' || track?.sourceType === 'apple_music') return formatAppleMusicSearchResult(language, track, safeIndex, tracks.length);
+  if (track?.platform === 'Spotify' || track?.sourceType === 'spotify') return formatSpotifySearchResult(language, track, safeIndex, tracks.length);
+  return formatYouTubeSearchResult(language, track, safeIndex, tracks.length);
 }
 
 
@@ -779,6 +821,10 @@ async function processPlayRequest(ctx, status, input, isVideo, language, default
     return;
   }
 
+  if (info.trackLinkRequired && info.platform === 'Spotify') {
+    await editStatus(ctx, status, t(language, 'playback.spotifyTrackLinkRequired'));
+    return;
+  }
   const results = info.results ?? [];
   const [track] = results;
   if (!track) {
@@ -1144,7 +1190,28 @@ export async function searchSelectionPickHandler(ctx) {
   chatCache.deleteSearchSelection(ctx.chat.id, messageId);
   await ctx.answerCallbackQuery({ text: t(selection.language, 'playback.trackSelected', { number: index + 1 }) }).catch(() => {});
   const statusMessage = ctx.callbackQuery.message;
-  await editStatus(ctx, statusMessage, t(selection.language, 'playback.downloadingSelected', { title: htmlEscape(track.name) }), { parse_mode: 'HTML' });
+  if (track.platform === 'Spotify' || track.sourceType === 'spotify') {
+    await editStatus(ctx, statusMessage, t(selection.language, 'playback.spotifyResolving'), { parse_mode: 'HTML' });
+    try {
+      await resolveSpotifyPlaybackTrack(track);
+    } catch {
+      await editStatus(ctx, statusMessage, t(selection.language, 'playback.spotifyMatchFailed'));
+      return;
+    }
+  } else if (track.platform === 'Apple Music' || track.sourceType === 'apple_music') {
+    await editStatus(ctx, statusMessage, t(selection.language, 'playback.appleMusicResolving'), { parse_mode: 'HTML' });
+    try {
+      await resolveAppleMusicPlayback(track);
+    } catch {
+      await editStatus(ctx, statusMessage, t(selection.language, 'playback.appleMusicMatchFailed'));
+      return;
+    }
+  } else {
+    await editStatus(ctx, statusMessage, t(selection.language, 'playback.downloadingSelected', { title: htmlEscape(track.name) }), { parse_mode: 'HTML' });
+  }
   const defaultService = await getUserDefaultService(ctx.from?.id);
   enqueueChatTask(ctx.chat.id, 'Proses pilihan search', () => queueAndMaybePlay(ctx, statusMessage, track, Boolean(selection.isVideo), selection.language, defaultService));
 }
+
+
+export const __appleTestHooks = { formatSearchSelection, formatYouTubeSearchResult, formatAppleMusicSearchResult, formatSpotifySearchResult, formatTrack };

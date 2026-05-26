@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { config } from '../../config/index.js';
 import { Downloader } from './downloader.js';
+import { resolveAppleMusicPlayback, resolveSpotifyPlaybackTrack } from './nexray.js';
 
 const downloadPromises = new WeakMap();
 const COOKIE_FILE_NAME = 'yt-dlp-cookies.txt';
@@ -56,6 +57,12 @@ export async function ensureTrackDownloaded(track, isVideo = Boolean(track?.isVi
   let downloadPromise = downloadPromises.get(track);
   if (!downloadPromise) {
     downloadPromise = (async () => {
+      if ((track.platform === 'Apple Music' || track.sourceType === 'apple_music') && !track.playbackUrl) {
+        await resolveAppleMusicPlayback(track);
+      }
+      if ((track.platform === 'Spotify' || track.sourceType === 'spotify') && !track.playbackUrl) {
+        await resolveSpotifyPlaybackTrack(track);
+      }
       const downloader = new Downloader(track.url, {
         defaultService: track.defaultService ?? track.platform ?? config.defaultService,
       });
