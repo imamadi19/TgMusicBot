@@ -5,7 +5,7 @@ import { requesterKey, voicePlayer } from '../core/player/player.js';
 import { getPlaylist } from '../core/db/playlists.js';
 import { isPremiumActive } from '../core/db/premium.js';
 import { getPremiumSettings } from '../core/db/premium-settings.js';
-import { getUserLanguage } from '../core/db/user-settings.js';
+import { getUserDefaultService, getUserLanguage } from '../core/db/user-settings.js';
 import { config } from '../config/index.js';
 import { t } from '../i18n/index.js';
 import { commandArgs, htmlEscape, isUrl } from '../utils/telegram.js';
@@ -547,7 +547,7 @@ async function showYouTubeSelection(ctx, statusMessage, tracks, isVideo, languag
 
 async function queueAndMaybePlay(ctx, statusMessage, track, isVideo, language) {
   const chatId = ctx.chat.id;
-  const saveTrack = { ...track, user: firstName(ctx), userId: ctx.from?.id, isVideo, filePath: '', platform: track.platform ?? config.defaultService };
+  const saveTrack = { ...track, user: firstName(ctx), userId: ctx.from?.id, isVideo, filePath: '', platform: track.platform ?? defaultService };
   const premiumSettings = await getPremiumSettings(chatId);
   saveTrack.audioPreset = premiumSettings.audioPreset;
   if (chatCache.getTrackIfExists(chatId, saveTrack.trackId)) {
@@ -601,7 +601,7 @@ async function sendPlaylistQueuePanels(ctx, tracks, language, queueStartLength, 
   }
 }
 
-async function processPlayRequest(ctx, status, input, isVideo, language) {
+async function processPlayRequest(ctx, status, input, isVideo, language, defaultService) {
   const chatId = ctx.chat.id;
   const queueLimit = await queueLimitFor(ctx);
   if (chatCache.getQueueLength(chatId) >= queueLimit) {
@@ -620,7 +620,7 @@ async function processPlayRequest(ctx, status, input, isVideo, language) {
       return;
     }
     const remaining = queueLimit - chatCache.getQueueLength(chatId);
-    const tracks = playlist.songs.slice(0, remaining).map((track) => ({ ...track, user: firstName(ctx), userId: ctx.from?.id, isVideo, filePath: track.filePath ?? '', platform: track.platform ?? config.defaultService }));
+    const tracks = playlist.songs.slice(0, remaining).map((track) => ({ ...track, user: firstName(ctx), userId: ctx.from?.id, isVideo, filePath: track.filePath ?? '', platform: track.platform ?? defaultService }));
     if (tracks.length === 0) {
       await editStatus(ctx, status, t(language, 'playback.queueFull', { max: queueLimit }));
       return;
@@ -661,7 +661,7 @@ async function processPlayRequest(ctx, status, input, isVideo, language) {
     return;
   }
 
-  const downloader = new Downloader(normalizedInput);
+  const downloader = new Downloader(normalizedInput, { defaultService });
   if ((parsedMode === 'url' || isUrl(normalizedInput)) && !downloader.isValid()) {
     await editStatus(ctx, status, t(language, 'playback.invalidUrl'));
     return;
@@ -703,7 +703,7 @@ async function processPlayRequest(ctx, status, input, isVideo, language) {
           userId: ctx.from?.id,
           isVideo,
           filePath: '',
-          platform: validated.platform ?? config.defaultService,
+          platform: validated.platform ?? defaultService,
         });
       } catch (error) {
         skippedCount += 1;
@@ -790,8 +790,9 @@ export async function playHandler(ctx, isVideo = false) {
   cleanupInactiveChatDownloads();
   markPlayRequest(chatId, ctx.from?.id);
   const status = await ctx.reply(input.startsWith('tgpl_') ? t(language, 'playback.searchingPlaylist') : t(language, 'playback.searchingDownload'));
+  const defaultService = await getUserDefaultService(ctx.from?.id);
   prepareAssistantJoin(ctx);
-  enqueueChatTask(chatId, 'Proses /play', () => processPlayRequest(ctx, status, input, isVideo, language));
+  enqueueChatTask(chatId, 'Proses /play', () => processPlayRequest(ctx, status, input, isVideo, language, defaultService));
 }
 
 export async function queueHandler(ctx) {
