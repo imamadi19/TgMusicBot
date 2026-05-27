@@ -1189,8 +1189,8 @@ export async function volumeHandler(ctx) {
     await ctx.reply(t(language, 'playback.volumeUsage'));
     return;
   }
-  const { applied, volume } = await voicePlayer.setVolume(ctx.chat.id, value);
-  if (!applied) {
+  const { applied, saved, volume } = await voicePlayer.setVolume(ctx.chat.id, value);
+  if (!applied && !saved) {
     await ctx.reply(t(language, 'playback.voiceFailed', { error: 'Volume tidak didukung atau gagal di voice adapter.' }));
     return;
   }

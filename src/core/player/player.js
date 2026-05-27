@@ -496,6 +496,7 @@ export class VoicePlayer {
           TGMB_TRACK_TITLE: String(track.name ?? ''),
           TGMB_TRACK_URL: String(track.url ?? ''),
           TGMB_IS_VIDEO: track.isVideo ? '1' : '0',
+          TGMB_VOLUME: String(chatCache.getVolume(key)),
         });
         assistantNumber = candidate.assistantNumber;
         this.#chatSessions.set(key, candidate.sessionString);
@@ -630,11 +631,18 @@ export class VoicePlayer {
 
   async setVolume(chatId, volume) {
     const key = String(chatId);
-    const normalized = chatCache.setVolume(key, volume);
+    const currentVolume = chatCache.getVolume(key);
+    const parsed = Number(volume);
+    const normalized = Number.isFinite(parsed) ? Math.max(0, Math.min(200, Math.round(parsed))) : 100;
     const active = this.#active.get(key);
-    if (!active) return { applied: true, volume: normalized };
+    if (!active) {
+      chatCache.setVolume(key, normalized);
+      return { applied: false, saved: true, volume: normalized };
+    }
     const acknowledged = await sendAdapterCommand(active, { action: 'volume', volume: normalized });
-    return { applied: acknowledged, volume: normalized };
+    if (!acknowledged) return { applied: false, saved: false, volume: currentVolume };
+    chatCache.setVolume(key, normalized);
+    return { applied: true, saved: true, volume: normalized };
   }
 
   async seek(chatId, seekSeconds) {
