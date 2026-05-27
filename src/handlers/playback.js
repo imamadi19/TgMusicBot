@@ -443,6 +443,9 @@ function formatTrack(language, track, queueLength = 1, state = 'playing') {
   if (track?.platform === 'Apple Music' || track?.sourceType === 'apple_music') {
     return `🍎 <b>${t(language, 'playback.appleMusicNowPlaying')}</b>\n\n🎵 <a href="${htmlEscape(track.displayUrl || track.sourceUrl || track.url)}">${htmlEscape(track.name)}</a>\n👤 ${htmlEscape(track.artist || '-')}\n${track.album ? `💿 ${htmlEscape(track.album)}\n` : ''}⏱ ${secondsToClock(track.duration)}\n🙋 ${t(language, 'playback.requestedBy')}: ${htmlEscape(track.user)}`;
   }
+  if (track?.platform === 'SoundCloud' || track?.sourceType === 'soundcloud') {
+    return `🟠 <b>${t(language, 'playback.soundcloudNowPlaying')}</b>\n\n🎵 <a href="${htmlEscape(track.displayUrl || track.sourceUrl || track.url)}">${htmlEscape(track.name)}</a>\n${track.artist ? `👤 ${htmlEscape(track.artist)}\n` : ''}⏱ ${secondsToClock(track.duration)}\n🙋 ${t(language, 'playback.requestedBy')}: ${htmlEscape(track.user)}`;
+  }
   const heading = playbackHeading(language, state, queueLength);
   const preset = track.audioPreset ? `\n<b>Preset:</b> ${htmlEscape(track.audioPreset)}` : '';
   return `<u><b>${heading}</b></u>\n\n<b>${t(language, 'playback.title')}:</b> <a href="${htmlEscape(track.url)}">${htmlEscape(track.name)}</a>\n\n<b>${t(language, 'playback.duration')}:</b> ${secondsToClock(track.duration)}\n<b>${t(language, 'playback.requestedBy')}:</b> ${htmlEscape(track.user)}${preset}`;
@@ -523,11 +526,26 @@ function formatSpotifySearchResult(language, track, index, total) {
   return lines.join('\n');
 }
 
+function formatSoundCloudSearchResult(language, track, index, total) {
+  const lines = [
+    `🟠 <b>${t(language, 'playback.soundcloudDiscovery')}</b>  •  <code>${index + 1}/${total}</code>`,
+    '━━━━━━━━━━━━━━━━━━',
+    '',
+    `🎵 <b>${htmlEscape(track.title ?? track.name ?? '-')}</b>`,
+  ];
+  if (track.artist || track.channel) lines.push(`👤 ${htmlEscape(track.artist || track.channel)}`);
+  lines.push(`⏱ ${secondsToClock(track.duration || 0)}`);
+  lines.push('', '━━━━━━━━━━━━━━━━━━', `<i>${t(language, 'playback.soundcloudSelectHint')}</i>`);
+  if (track.url) lines.push(`🔗 <a href="${htmlEscape(track.url)}">${t(language, 'playback.soundcloudOpen')}</a>`);
+  return lines.join('\n');
+}
+
 function formatSearchSelection(language, tracks, index = 0) {
   const safeIndex = selectedTrackIndex(tracks, index);
   const track = tracks[safeIndex];
   if (track?.platform === 'Apple Music' || track?.sourceType === 'apple_music') return formatAppleMusicSearchResult(language, track, safeIndex, tracks.length);
   if (track?.platform === 'Spotify' || track?.sourceType === 'spotify') return formatSpotifySearchResult(language, track, safeIndex, tracks.length);
+  if (track?.platform === 'SoundCloud' || track?.sourceType === 'soundcloud') return formatSoundCloudSearchResult(language, track, safeIndex, tracks.length);
   return formatYouTubeSearchResult(language, track, safeIndex, tracks.length);
 }
 
@@ -1197,4 +1215,4 @@ export async function searchSelectionPickHandler(ctx) {
 }
 
 
-export const __appleTestHooks = { formatSearchSelection, formatYouTubeSearchResult, formatAppleMusicSearchResult, formatSpotifySearchResult, formatTrack };
+export const __appleTestHooks = { formatSearchSelection, formatYouTubeSearchResult, formatAppleMusicSearchResult, formatSpotifySearchResult, formatSoundCloudSearchResult, formatTrack };
