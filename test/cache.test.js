@@ -207,6 +207,67 @@ test('skip callback acknowledges before slow playback work', async () => {
   assert.equal(answers[0]?.text, 'Track skipped.');
 });
 
+test('mute/unmute callbacks call voice player and keep UI/cache unchanged on failure', async () => {
+  const { chatCache } = await import('../src/core/cache/chat-cache.js');
+  const { vcPlayCallbackHandler } = await import('../src/handlers/callbacks.js');
+  const { voicePlayer } = await import('../src/core/player/player.js');
+  const chatId = -9105;
+  const answers = [];
+  const edits = [];
+  const originalMute = voicePlayer.mute;
+  const originalUnmute = voicePlayer.unmute;
+  let muteCalls = 0;
+  let unmuteCalls = 0;
+
+  chatCache.clear(chatId);
+  chatCache.addSong(chatId, { trackId: 'mute-test', name: 'Mute Test', duration: 65, url: 'https://example.com/mute-test', userId: 321 });
+  chatCache.setMuted(chatId, false);
+  voicePlayer.mute = async () => { muteCalls += 1; return false; };
+  voicePlayer.unmute = async () => { unmuteCalls += 1; return true; };
+
+  try {
+    await vcPlayCallbackHandler({
+      chat: { id: chatId, type: 'supergroup' },
+      from: { id: 321 },
+      callbackQuery: { data: 'play_mute', message: { message_id: 14 } },
+      async answerCallbackQuery(payload) { answers.push(payload); },
+      async editMessageReplyMarkup() { edits.push('edit'); },
+      api: { async editMessageReplyMarkup() { edits.push('api-edit'); } },
+    });
+    assert.equal(chatCache.isMuted(chatId), false);
+    assert.equal(edits.length, 0);
+    assert.equal(answers.at(-1)?.text, 'Unable to process playback action.');
+
+    voicePlayer.mute = async () => { muteCalls += 1; return true; };
+    await vcPlayCallbackHandler({
+      chat: { id: chatId, type: 'supergroup' },
+      from: { id: 321 },
+      callbackQuery: { data: 'play_mute', message: { message_id: 15 } },
+      async answerCallbackQuery(payload) { answers.push(payload); },
+      async editMessageReplyMarkup() { edits.push('edit'); },
+      api: { async editMessageReplyMarkup() { edits.push('api-edit'); } },
+    });
+    assert.equal(answers.at(-1)?.text, 'Playback muted.');
+
+    await vcPlayCallbackHandler({
+      chat: { id: chatId, type: 'supergroup' },
+      from: { id: 321 },
+      callbackQuery: { data: 'play_unmute', message: { message_id: 16 } },
+      async answerCallbackQuery(payload) { answers.push(payload); },
+      async editMessageReplyMarkup() { edits.push('edit'); },
+      api: { async editMessageReplyMarkup() { edits.push('api-edit'); } },
+    });
+    assert.equal(answers.at(-1)?.text, 'Playback unmuted.');
+  } finally {
+    voicePlayer.mute = originalMute;
+    voicePlayer.unmute = originalUnmute;
+    chatCache.clear(chatId);
+  }
+
+  assert.equal(muteCalls >= 2, true);
+  assert.equal(unmuteCalls, 1);
+});
+
 
 test('track advance sends a new playback panel message for next queue item', async () => {
   const { rememberPlaybackPanel, updatePlaybackPanelsForAdvance } = await import('../src/handlers/playback.js');
@@ -388,6 +449,53 @@ test('stop advances to next requester but clears same requester queue', async ()
 
   chatCache.clear(differentChat);
   chatCache.clear(sameChat);
+});
+
+test('/loop sets 0/1/2 and /skip advances despite loop setting', async () => {
+  const { chatCache } = await import('../src/core/cache/chat-cache.js');
+  const { loopHandler, skipHandler } = await import('../src/handlers/playback.js');
+  const { voicePlayer } = await import('../src/core/player/player.js');
+  const chatId = -9106;
+  const replies = [];
+  const originalSkip = voicePlayer.skip;
+  const originalPlay = voicePlayer.play;
+
+  chatCache.clear(chatId);
+  chatCache.addSong(chatId, { trackId: 'loop-a', name: 'Loop A', duration: 10, url: 'https://example.com/a', filePath: '/tmp/a.mp3', user: 'A', userId: 1 });
+  chatCache.addSong(chatId, { trackId: 'loop-b', name: 'Loop B', duration: 10, url: 'https://example.com/b', filePath: '/tmp/b.mp3', user: 'A', userId: 1 });
+
+  const baseCtx = {
+    chat: { id: chatId, type: 'supergroup' },
+    from: { id: 1 },
+    message: { text: '' },
+    api: {
+      sendMessage: async () => {},
+      createChatInviteLink: async () => ({ invite_link: 'https://t.me/+x' }),
+      getChat: async () => ({ invite_link: 'https://t.me/+y' }),
+    },
+    async reply(text) { replies.push(text); },
+  };
+
+  await loopHandler({ ...baseCtx, message: { text: '/loop 0' } });
+  assert.equal(chatCache.getLoop(chatId), 0);
+  await loopHandler({ ...baseCtx, message: { text: '/loop 1' } });
+  assert.equal(chatCache.getLoop(chatId), 1);
+  assert.equal(chatCache.current(chatId).loopRemaining, 1);
+  await loopHandler({ ...baseCtx, message: { text: '/loop 2' } });
+  assert.equal(chatCache.getLoop(chatId), 2);
+  assert.equal(chatCache.current(chatId).loopRemaining, 2);
+
+  voicePlayer.skip = async () => {
+    const skipped = chatCache.shift(chatId);
+    return { skipped, next: chatCache.current(chatId), activeTrack: null };
+  };
+  voicePlayer.play = async (_chatId, track) => ({ ...track, startedAt: new Date() });
+  await skipHandler(baseCtx);
+  assert.equal(chatCache.current(chatId).trackId, 'loop-b');
+  assert.match(String(replies.at(-1)), /Skipped/i);
+  voicePlayer.skip = originalSkip;
+  voicePlayer.play = originalPlay;
+  chatCache.clear(chatId);
 });
 
 test('voice adapter shell wrapper ignores control signals in shell', async () => {

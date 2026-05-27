@@ -281,14 +281,16 @@ async def handle_stdin_command(command: dict):
         return
     if action == "mute":
         method = getattr(call_client, "mute_stream", None) or getattr(call_client, "mute", None)
-        if callable(method):
-            await call_method_with_optional_chat(method)
+        if not callable(method):
+            raise RuntimeError("PyTgCalls runtime ini tidak mendukung mute (method mute_stream/mute tidak ditemukan)")
+        await call_method_with_optional_chat(method)
         print(f"TGMB_CONTROL_OK {command_id} mute", flush=True)
         return
     if action == "unmute":
         method = getattr(call_client, "unmute_stream", None) or getattr(call_client, "unmute", None)
-        if callable(method):
-            await call_method_with_optional_chat(method)
+        if not callable(method):
+            raise RuntimeError("PyTgCalls runtime ini tidak mendukung unmute (method unmute_stream/unmute tidak ditemukan)")
+        await call_method_with_optional_chat(method)
         print(f"TGMB_CONTROL_OK {command_id} unmute", flush=True)
         return
     if action == "speed":
@@ -296,8 +298,9 @@ async def handle_stdin_command(command: dict):
         if speed < 0.25 or speed > 4:
             raise RuntimeError("speed harus di antara 0.25 dan 4")
         method = getattr(call_client, "set_speed", None) or getattr(call_client, "set_playback_speed", None)
-        if callable(method):
-            await call_method(method, chat_id, speed)
+        if not callable(method):
+            raise RuntimeError("PyTgCalls runtime ini tidak mendukung speed (method set_speed/set_playback_speed tidak ditemukan)")
+        await call_method(method, chat_id, speed)
         print(f"TGMB_CONTROL_OK {command_id} speed", flush=True)
         return
     if action == "stop":

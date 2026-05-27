@@ -313,7 +313,26 @@ export class VoicePlayer {
   #finishCurrentTrack(chatId, reason) {
     const key = String(chatId);
     const finished = chatCache.shift(key);
-    const next = chatCache.current(key);
+    let next = chatCache.current(key);
+    const loopCount = chatCache.getLoop(key);
+
+    if (finished && reason === 'ended' && loopCount > 0) {
+      const remainingLoops = Number.isFinite(Number(finished.loopRemaining))
+        ? Math.max(0, Number(finished.loopRemaining))
+        : loopCount;
+      if (remainingLoops > 0) {
+        const replayTrack = {
+          ...finished,
+          loopRemaining: remainingLoops - 1,
+          startedAt: undefined,
+          remainingMs: undefined,
+          timerEndsAt: undefined,
+        };
+        chatCache.addSongAt(key, replayTrack, 0);
+        next = chatCache.current(key);
+      }
+    }
+
     if (!next) {
       this.#killActive(key, { scheduleLeave: true });
     } else {
