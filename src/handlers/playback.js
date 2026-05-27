@@ -1176,7 +1176,7 @@ export async function seekHandler(ctx) {
   }
   const updated = await voicePlayer.seek(ctx.chat.id, target);
   if (!updated) {
-    await ctx.reply(t(language, 'playback.voiceFailed', { error: 'Seek tidak didukung atau gagal di voice adapter.' }));
+    await ctx.reply(t(language, 'playback.voiceFailed', { error: 'Gagal memindahkan posisi playback.' }));
     return;
   }
   await ctx.reply(t(language, 'playback.seeked', { position: secondsToClock(target) }));
@@ -1191,7 +1191,7 @@ export async function volumeHandler(ctx) {
   }
   const { applied, saved, volume } = await voicePlayer.setVolume(ctx.chat.id, value);
   if (!applied && !saved) {
-    await ctx.reply(t(language, 'playback.voiceFailed', { error: 'Volume tidak didukung atau gagal di voice adapter.' }));
+    await ctx.reply(t(language, 'playback.voiceFailed', { error: 'Gagal menerapkan volume pada stream aktif.' }));
     return;
   }
   await ctx.reply(t(language, 'playback.volumeSet', { volume }));
