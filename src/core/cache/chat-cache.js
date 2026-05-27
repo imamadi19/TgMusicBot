@@ -4,7 +4,7 @@ export class ChatCache {
   #get(chatId) {
     const key = String(chatId);
     if (!this.#chats.has(key)) {
-      this.#chats.set(key, { queue: [], loop: 0, paused: false, muted: false, speed: 1, searchSelections: new Map() });
+      this.#chats.set(key, { queue: [], loop: 0, paused: false, muted: false, speed: 1, volume: 100, searchSelections: new Map() });
     }
     return this.#chats.get(key);
   }
@@ -98,6 +98,29 @@ export class ChatCache {
 
   isMuted(chatId) {
     return this.#get(chatId).muted;
+  }
+
+
+
+  setVolume(chatId, volume) {
+    const parsed = Number(volume);
+    const normalized = Number.isFinite(parsed) ? Math.max(0, Math.min(200, Math.round(parsed))) : 100;
+    this.#get(chatId).volume = normalized;
+    return normalized;
+  }
+
+  getVolume(chatId) {
+    return this.#get(chatId).volume ?? 100;
+  }
+
+  shuffleUpcoming(chatId) {
+    const data = this.#get(chatId);
+    if (data.queue.length <= 2) return false;
+    for (let i = data.queue.length - 1; i > 1; i -= 1) {
+      const j = 1 + Math.floor(Math.random() * i);
+      [data.queue[i], data.queue[j]] = [data.queue[j], data.queue[i]];
+    }
+    return true;
   }
 
   setSpeed(chatId, speed) {

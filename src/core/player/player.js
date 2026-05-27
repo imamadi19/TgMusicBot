@@ -239,7 +239,7 @@ export class VoicePlayer {
   }
 
   async #replaceActiveStream(chatId, track, active) {
-    if (!track?.filePath || !(await sendAdapterCommand(active, { action: 'play', file_path: track.filePath, is_video: Boolean(track.isVideo) }))) {
+    if (!track?.filePath || !(await sendAdapterCommand(active, { action: 'play', file_path: track.filePath, is_video: Boolean(track.isVideo), volume: chatCache.getVolume(chatId) }))) {
       return null;
     }
     const key = String(chatId);
@@ -626,6 +626,33 @@ export class VoicePlayer {
     if (!acknowledged) return false;
     chatCache.setSpeed(key, normalized);
     return normalized;
+  }
+
+  async setVolume(chatId, volume) {
+    const key = String(chatId);
+    const normalized = chatCache.setVolume(key, volume);
+    const active = this.#active.get(key);
+    if (!active) return { applied: true, volume: normalized };
+    const acknowledged = await sendAdapterCommand(active, { action: 'volume', volume: normalized });
+    return { applied: acknowledged, volume: normalized };
+  }
+
+  async seek(chatId, seekSeconds) {
+    const key = String(chatId);
+    const track = chatCache.current(key);
+    const active = this.#active.get(key);
+    if (!track || !active || !track.filePath) return null;
+    const durationMs = durationToMs(track.duration);
+    const targetMs = Math.max(0, Math.floor(Number(seekSeconds) * 1000));
+    if (durationMs > 0 && targetMs > durationMs) return null;
+    const acknowledged = await sendAdapterCommand(active, { action: 'seek', file_path: track.filePath, is_video: Boolean(track.isVideo), seek_seconds: targetMs / 1000, volume: chatCache.getVolume(key) });
+    if (!acknowledged) return null;
+    const startedAt = new Date(Date.now() - targetMs);
+    this.#clearFinishTimer(key);
+    const remaining = durationMs > 0 ? Math.max(1000, durationMs - targetMs + TRACK_END_GRACE_MS) : 0;
+    const activeTrack = this.#setActiveTrack(key, track, active.process, active.assistantNumber, startedAt);
+    if (remaining > 0) this.#scheduleTrackEnd(key, activeTrack, active.process, remaining);
+    return activeTrack;
   }
 
   async stopOrAdvance(chatId, { reuseActive = false } = {}) {
