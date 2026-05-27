@@ -219,8 +219,9 @@ class AdapterControlSignalTest(unittest.IsolatedAsyncioTestCase):
         action, chat_id, stream = self.fake_call_client.calls[0]
         self.assertEqual((action, chat_id), ("play", -100123))
         self.assertEqual(getattr(stream, "_media_path", None), "/tmp/next.mp3")
-        self.assertIn("-ss 60.0", getattr(stream, "_ffmpeg_parameters", ""))
-        self.assertIn("-af volume=0.50", getattr(stream, "_ffmpeg_parameters", ""))
+        ffmpeg_parameters = getattr(stream, "_ffmpeg_parameters", "")
+        self.assertIn("--audio ---start -ss 60", ffmpeg_parameters)
+        self.assertIn("---mid -af volume=0.50", ffmpeg_parameters)
 
     async def test_volume_command_rebuilds_stream_at_current_seek(self):
         await self.adapter.handle_stdin_command({
@@ -232,8 +233,9 @@ class AdapterControlSignalTest(unittest.IsolatedAsyncioTestCase):
 
         action, chat_id, stream = self.fake_call_client.calls[0]
         self.assertEqual((action, chat_id), ("play", -100123))
-        self.assertIn("-ss 42.0", getattr(stream, "_ffmpeg_parameters", ""))
-        self.assertIn("-af volume=2.00", getattr(stream, "_ffmpeg_parameters", ""))
+        ffmpeg_parameters = getattr(stream, "_ffmpeg_parameters", "")
+        self.assertIn("--audio ---start -ss 42", ffmpeg_parameters)
+        self.assertIn("---mid -af volume=2.00", ffmpeg_parameters)
 
     async def test_seek_rejects_negative_seek_seconds(self):
         with self.assertRaisesRegex(RuntimeError, "tidak boleh negatif"):
@@ -272,6 +274,22 @@ class AdapterControlSignalTest(unittest.IsolatedAsyncioTestCase):
 
         self.assertIsNone(existing_chat)
         self.assertEqual(client.join_chat_calls, ["https://t.me/+invite"])
+
+    async def test_default_audio_stream_uses_no_ffmpeg_overrides(self):
+        stream = self.adapter.media_stream_for("/tmp/next.mp3", False, 0, 100)
+        self.assertIsNone(getattr(stream, "_ffmpeg_parameters", None))
+
+    async def test_video_stream_separates_seek_and_audio_filter_segments(self):
+        ffmpeg_parameters = self.adapter.ffmpeg_parameters_for_stream(seek_seconds=60, volume=50, is_video=True)
+        self.assertIn("--audio ---start -ss 60", ffmpeg_parameters)
+        self.assertIn("---mid -af volume=0.50", ffmpeg_parameters)
+        self.assertIn("--video ---start -ss 60", ffmpeg_parameters)
+        video_segment = ffmpeg_parameters.split("--video", 1)[1]
+        self.assertNotIn("-af", video_segment)
+
+    async def test_audio_stream_places_seek_in_start_and_filter_in_mid(self):
+        ffmpeg_parameters = self.adapter.ffmpeg_parameters_for_stream(seek_seconds=60, volume=50, is_video=False)
+        self.assertEqual(ffmpeg_parameters, "--audio ---start -ss 60 ---mid -af volume=0.50")
 
 
 if __name__ == "__main__":
