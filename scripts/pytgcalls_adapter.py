@@ -208,15 +208,33 @@ def clamp_volume(value) -> int:
 
 
 def ffmpeg_parameters_for_stream(*, seek_seconds: float = 0.0, volume: int = 100, is_video: bool = False) -> str | None:
-    params = []
-    if seek_seconds > 0:
-        params.extend(["-ss", str(float(seek_seconds))])
-    params.extend(["-af", f"volume={max(0, min(200, int(volume))) / 100:.2f}"])
+    seek_value = max(0.0, float(seek_seconds))
+    normalized_volume = clamp_volume(volume)
+
+    audio_parts: list[str] = []
+    video_parts: list[str] = []
+
+    if seek_value > 0:
+        seek_arg = str(seek_value).rstrip("0").rstrip(".") if seek_value % 1 else str(int(seek_value))
+        audio_parts.extend(["---start", "-ss", seek_arg])
+        if is_video:
+            video_parts.extend(["---start", "-ss", seek_arg])
+
+    if normalized_volume != 100:
+        audio_parts.extend(["---mid", "-af", f"volume={normalized_volume / 100:.2f}"])
+
     if is_video:
         video_params = video_ffmpeg_parameters()
         if video_params:
-            params.append(video_params)
-    return " ".join(params) if params else None
+            video_parts.extend(video_params.split())
+
+    segments: list[str] = []
+    if audio_parts:
+        segments.extend(["--audio", *audio_parts])
+    if video_parts:
+        segments.extend(["--video", *video_parts])
+
+    return " ".join(segments) if segments else None
 
 
 def media_stream_for(file_path: str, is_video: bool, seek_seconds: float = 0.0, volume: int = 100):
@@ -278,7 +296,14 @@ async def play_file_async(file_path: str, is_video: bool = False, seek_seconds: 
         raise RuntimeError("voice call belum aktif")
     if not file_path:
         raise RuntimeError("file_path kosong")
-    stream = media_stream_for(file_path, is_video, max(0.0, float(seek_seconds)), clamp_volume(volume))
+    normalized_seek = max(0.0, float(seek_seconds))
+    normalized_volume = clamp_volume(volume)
+    stream = media_stream_for(file_path, is_video, normalized_seek, normalized_volume)
+    print(
+        f"VOICE_ADAPTER_DEBUG action=play is_video={str(is_video).lower()} seek={normalized_seek} volume={normalized_volume} ffmpeg_parameters={getattr(stream, '_ffmpeg_parameters', None)}",
+        file=sys.stderr,
+        flush=True,
+    )
     if paused:
         await resume_async()
     if stream_started and current_stream_is_video == is_video and await switch_stream_in_current_call(stream):
