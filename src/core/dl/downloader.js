@@ -5,6 +5,7 @@ import { config } from '../../config/index.js';
 import { isUrl } from '../../utils/telegram.js';
 import { parseDuration } from '../../utils/duration.js';
 import { isAppleMusicUrl, isSpotifyUrl, resolveAppleMusicUrlMetadata, resolveSpotifyTrackMetadata, searchNexRayByService, searchNexRayYouTube } from './nexray.js';
+import { downloadViaPlatformProvider, isPlatformTrackRequiringProvider } from './platform-downloader.js';
 
 const SUPPORTED_HOSTS = ['youtube.com', 'youtu.be', 'open.spotify.com', 'music.apple.com', 'soundcloud.com'];
 const INVALID_PLAYLIST_TITLE_PATTERNS = [/^\[private video\]$/i, /^\[deleted video\]$/i, /\b(private|deleted|unavailable|blocked|age[-\s]?restricted)\b/i];
@@ -47,12 +48,7 @@ function shortenError(message) {
   if (text.includes('No supported JavaScript runtime could be found')) {
     return 'yt-dlp butuh JavaScript runtime untuk extractor YouTube. Install deno/node runtime yang didukung atau update yt-dlp.';
   }
-  if (text.includes('Unsupported URL') && text.includes('music.apple.com')) {
-    return 'Apple Music link didukung untuk metadata, tetapi sumber audio langsung tidak tersedia. Bot akan mencoba mencocokkan playback dari YouTube.';
-  }
-  if ((text.includes('[DRM]') || text.includes('DRM protection')) && text.toLowerCase().includes('spotify')) {
-    return 'Spotify link tidak didownload langsung karena DRM. Bot akan menggunakan metadata Spotify dan mencocokkan audio playback dari YouTube.';
-  }
+
   return text.length > MAX_ERROR_LENGTH ? `${text.slice(0, MAX_ERROR_LENGTH)}…` : text;
 }
 
@@ -210,7 +206,7 @@ export class Downloader {
       ...(await ytDlpBaseArgs()),
       '-f', isVideo ? 'bv*+ba/best' : 'bestaudio/best',
       '-g',
-      track?.playbackUrl ?? track?.url ?? this.input,
+      track?.url ?? this.input,
     ];
     const output = await run('yt-dlp', args);
     const lines = output.split('\n').map((line) => line.trim()).filter(Boolean);
@@ -218,6 +214,9 @@ export class Downloader {
   }
 
   async download(track, isVideo = false) {
+    if (isPlatformTrackRequiringProvider(track)) {
+      return downloadViaPlatformProvider(track, isVideo);
+    }
     // Direct stream URLs from yt-dlp (-g) are often short-lived for video
     // and can fail in PyTgCalls/FFmpeg with NoVideoSourceFound.
     // Keep direct mode for audio only, and always download video to a local file.
@@ -254,7 +253,7 @@ export class Downloader {
       '--print', 'after_move:filepath',
     ];
     if (!isVideo) args.push('-x', '--audio-format', 'mp3');
-    args.push(track?.playbackUrl ?? track?.url ?? this.input);
+    args.push(track?.url ?? this.input);
     const output = await run('yt-dlp', args);
     return output.trim().split('\n').at(-1);
   }

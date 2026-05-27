@@ -14,7 +14,6 @@ import { secondsToClock } from '../utils/duration.js';
 import { completedProgressKeyboard, controlKeyboard, supportKeyboard, searchSelectionKeyboard } from './keyboards.js';
 import { playMode } from './filters.js';
 import { isAuthUser } from '../core/db/auth.js';
-import { resolveAppleMusicPlayback, resolveSpotifyPlaybackTrack } from '../core/dl/nexray.js';
 
 const MAX_QUEUE = 10;
 const PREMIUM_MAX_QUEUE = 50;
@@ -402,8 +401,10 @@ voicePlayer.onTrackEnd(async ({ chatId, finished, next }) => {
   }
 });
 
-function formatError(error) {
+function formatError(error, language = 'en') {
   const raw = String(error?.message ?? error ?? 'Unknown error').replace(/\s+/g, ' ').trim();
+  if (raw.startsWith('PLATFORM_DOWNLOADER_NOT_CONFIGURED:spotify')) return htmlEscape(t(language, 'playback.spotifyDownloaderNotConfigured'));
+  if (raw.startsWith('PLATFORM_DOWNLOADER_NOT_CONFIGURED:apple_music')) return htmlEscape(t(language, 'playback.appleMusicDownloaderNotConfigured'));
   const shortened = raw.length > 280 ? `${raw.slice(0, 277)}...` : raw;
   return htmlEscape(shortened);
 }
@@ -437,10 +438,10 @@ function playbackHeading(language, state = 'playing', queueLength = 1) {
 
 function formatTrack(language, track, queueLength = 1, state = 'playing') {
   if (track?.platform === 'Spotify' || track?.sourceType === 'spotify') {
-    return `🟢 <b>${t(language, 'playback.spotifyNowPlaying')}</b>\n\n🎵 <a href="${htmlEscape(track.displayUrl || track.sourceUrl || track.url)}">${htmlEscape(track.name)}</a>\n${track.artist ? `👤 ${htmlEscape(track.artist)}\n` : ''}${track.album ? `💿 ${htmlEscape(track.album)}\n` : ''}⏱ ${secondsToClock(track.duration)}\n▶️ ${t(language, 'playback.spotifyPlaybackVia')}: ${htmlEscape(track.playbackPlatform || 'YouTube')}\n🙋 ${t(language, 'playback.requestedBy')}: ${htmlEscape(track.user)}`;
+    return `🟢 <b>${t(language, 'playback.spotifyNowPlaying')}</b>\n\n🎵 <a href="${htmlEscape(track.displayUrl || track.sourceUrl || track.url)}">${htmlEscape(track.name)}</a>\n${track.artist ? `👤 ${htmlEscape(track.artist)}\n` : ''}${track.album ? `💿 ${htmlEscape(track.album)}\n` : ''}⏱ ${secondsToClock(track.duration)}\n🙋 ${t(language, 'playback.requestedBy')}: ${htmlEscape(track.user)}`;
   }
   if (track?.platform === 'Apple Music' || track?.sourceType === 'apple_music') {
-    return `🍎 <b>${t(language, 'playback.appleMusicNowPlaying')}</b>\n\n🎵 <a href="${htmlEscape(track.displayUrl || track.sourceUrl || track.url)}">${htmlEscape(track.name)}</a>\n👤 ${htmlEscape(track.artist || '-')}\n${track.album ? `💿 ${htmlEscape(track.album)}\n` : ''}⏱ ${secondsToClock(track.duration)}\n▶️ ${t(language, 'playback.appleMusicPlaybackVia')}: ${htmlEscape(track.playbackPlatform || 'YouTube')}\n🙋 ${t(language, 'playback.requestedBy')}: ${htmlEscape(track.user)}`;
+    return `🍎 <b>${t(language, 'playback.appleMusicNowPlaying')}</b>\n\n🎵 <a href="${htmlEscape(track.displayUrl || track.sourceUrl || track.url)}">${htmlEscape(track.name)}</a>\n👤 ${htmlEscape(track.artist || '-')}\n${track.album ? `💿 ${htmlEscape(track.album)}\n` : ''}⏱ ${secondsToClock(track.duration)}\n🙋 ${t(language, 'playback.requestedBy')}: ${htmlEscape(track.user)}`;
   }
   const heading = playbackHeading(language, state, queueLength);
   const preset = track.audioPreset ? `\n<b>Preset:</b> ${htmlEscape(track.audioPreset)}` : '';
@@ -633,7 +634,7 @@ async function queueAndMaybePlay(ctx, statusMessage, track, isVideo, language, d
     await ensureDownloaded(saveTrack, isVideo);
   } catch (error) {
     chatCache.shift(chatId);
-    await editStatus(ctx, statusMessage, t(language, 'playback.downloadFailed', { error: formatError(error) }));
+    await editStatus(ctx, statusMessage, t(language, 'playback.downloadFailed', { error: formatError(error, language) }));
     return;
   }
   try {
@@ -645,7 +646,7 @@ async function queueAndMaybePlay(ctx, statusMessage, track, isVideo, language, d
       await editStatus(ctx, statusMessage, t(language, 'playback.voiceChatInactiveWarning'));
       return;
     }
-    await editStatus(ctx, statusMessage, t(language, 'playback.voiceFailed', { error: formatError(error) }));
+    await editStatus(ctx, statusMessage, t(language, 'playback.voiceFailed', { error: formatError(error, language) }));
     return;
   }
   const playbackMessage = await editStatus(ctx, statusMessage, formatTrack(language, saveTrack), { parse_mode: 'HTML', reply_markup: controlKeyboard(language, '', saveTrack), disable_web_page_preview: true });
@@ -785,7 +786,7 @@ async function processPlayRequest(ctx, status, input, isVideo, language, default
           await ctx.reply(t(language, 'playback.voiceChatInactiveWarning'));
           return;
         }
-        await ctx.reply(t(language, 'playback.voiceFailed', { error: formatError(error) }));
+        await ctx.reply(t(language, 'playback.voiceFailed', { error: formatError(error, language) }));
       }
     }
     return;
@@ -816,7 +817,7 @@ async function processPlayRequest(ctx, status, input, isVideo, language, default
     if (!isUrl(normalizedInput) && !String(defaultService).toLowerCase().includes('youtube')) {
       await editStatus(ctx, status, `Gagal mencari lagu di ${serviceLabel}. Coba lagi nanti atau pilih layanan lain.`);
     } else {
-      await editStatus(ctx, status, t(language, 'playback.fetchError', { error: formatError(error) }));
+      await editStatus(ctx, status, t(language, 'playback.fetchError', { error: formatError(error, language) }));
     }
     return;
   }
@@ -882,7 +883,7 @@ async function processPlayRequest(ctx, status, input, isVideo, language, default
           await ctx.reply(t(language, 'playback.voiceChatInactiveWarning'));
           return;
         }
-        await ctx.reply(t(language, 'playback.voiceFailed', { error: formatError(error) }));
+        await ctx.reply(t(language, 'playback.voiceFailed', { error: formatError(error, language) }));
       }
     }
     return;
@@ -974,7 +975,7 @@ export async function skipHandler(ctx) {
   try {
     if (queuedNext) await ensureDownloaded(queuedNext, queuedNext.isVideo);
   } catch (error) {
-    await ctx.reply(t(language, 'playback.voiceFailed', { error: formatError(error) }));
+    await ctx.reply(t(language, 'playback.voiceFailed', { error: formatError(error, language) }));
     return;
   }
 
@@ -1002,7 +1003,7 @@ export async function skipHandler(ctx) {
       await ctx.reply(t(language, 'playback.voiceChatInactiveWarning'));
       return;
     }
-    await ctx.reply(t(language, 'playback.voiceFailed', { error: formatError(error) }));
+    await ctx.reply(t(language, 'playback.voiceFailed', { error: formatError(error, language) }));
   }
 }
 
@@ -1016,7 +1017,7 @@ export async function stopHandler(ctx) {
   try {
     if (queuedNext && currentRequester && nextRequester && currentRequester !== nextRequester) await ensureDownloaded(queuedNext, queuedNext.isVideo);
   } catch (error) {
-    await ctx.reply(t(language, 'playback.voiceFailed', { error: formatError(error) }));
+    await ctx.reply(t(language, 'playback.voiceFailed', { error: formatError(error, language) }));
     return;
   }
 
@@ -1041,7 +1042,7 @@ export async function stopHandler(ctx) {
       await ctx.reply(t(language, 'playback.voiceChatInactiveWarning'));
       return;
     }
-    await ctx.reply(t(language, 'playback.voiceFailed', { error: formatError(error) }));
+    await ctx.reply(t(language, 'playback.voiceFailed', { error: formatError(error, language) }));
   }
 }
 
@@ -1190,25 +1191,7 @@ export async function searchSelectionPickHandler(ctx) {
   chatCache.deleteSearchSelection(ctx.chat.id, messageId);
   await ctx.answerCallbackQuery({ text: t(selection.language, 'playback.trackSelected', { number: index + 1 }) }).catch(() => {});
   const statusMessage = ctx.callbackQuery.message;
-  if (track.platform === 'Spotify' || track.sourceType === 'spotify') {
-    await editStatus(ctx, statusMessage, t(selection.language, 'playback.spotifyResolving'), { parse_mode: 'HTML' });
-    try {
-      await resolveSpotifyPlaybackTrack(track);
-    } catch {
-      await editStatus(ctx, statusMessage, t(selection.language, 'playback.spotifyMatchFailed'));
-      return;
-    }
-  } else if (track.platform === 'Apple Music' || track.sourceType === 'apple_music') {
-    await editStatus(ctx, statusMessage, t(selection.language, 'playback.appleMusicResolving'), { parse_mode: 'HTML' });
-    try {
-      await resolveAppleMusicPlayback(track);
-    } catch {
-      await editStatus(ctx, statusMessage, t(selection.language, 'playback.appleMusicMatchFailed'));
-      return;
-    }
-  } else {
-    await editStatus(ctx, statusMessage, t(selection.language, 'playback.downloadingSelected', { title: htmlEscape(track.name) }), { parse_mode: 'HTML' });
-  }
+  await editStatus(ctx, statusMessage, t(selection.language, 'playback.downloadingSelected', { title: htmlEscape(track.name) }), { parse_mode: 'HTML' });
   const defaultService = await getUserDefaultService(ctx.from?.id);
   enqueueChatTask(ctx.chat.id, 'Proses pilihan search', () => queueAndMaybePlay(ctx, statusMessage, track, Boolean(selection.isVideo), selection.language, defaultService));
 }
