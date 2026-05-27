@@ -40,6 +40,12 @@ function timeoutSignal(timeoutMs) {
   return Number.isFinite(value) && value > 0 ? AbortSignal.timeout(value) : undefined;
 }
 
+function isLocalFilePath(value) {
+  const filePath = String(value ?? '').trim();
+  if (!filePath) return false;
+  return !/^https?:\/\//i.test(filePath);
+}
+
 function shortenError(message) {
   const text = String(message ?? '').replace(/\s+/g, ' ').trim();
   if (text.includes("Sign in to confirm you're not a bot")) {
@@ -214,13 +220,15 @@ export class Downloader {
   }
 
   async download(track, isVideo = false) {
+    const platform = String(track?.platform ?? this.detectPlatform()).toLowerCase();
+    const isSoundCloud = platform.includes('soundcloud');
     if (isPlatformTrackRequiringProvider(track)) {
       return downloadViaPlatformProvider(track, isVideo);
     }
     // Direct stream URLs from yt-dlp (-g) are often short-lived for video
     // and can fail in PyTgCalls/FFmpeg with NoVideoSourceFound.
     // Keep direct mode for audio only, and always download video to a local file.
-    if (config.streamDirect && !isVideo) {
+    if (config.streamDirect && !isVideo && !isSoundCloud) {
       const streamUrl = await this.directStreamUrl(track, false);
       if (streamUrl) return streamUrl;
     }
@@ -255,7 +263,26 @@ export class Downloader {
     if (!isVideo) args.push('-x', '--audio-format', 'mp3');
     args.push(track?.url ?? this.input);
     const output = await run('yt-dlp', args);
-    return output.trim().split('\n').at(-1);
+    const downloadedPath = output.trim().split('\n').at(-1);
+    if (!isVideo && isLocalFilePath(downloadedPath)) {
+      const hasAudio = await this.validateAudioFile(downloadedPath);
+      if (!hasAudio) throw new Error('File hasil unduhan tidak memiliki audio stream yang valid.');
+    }
+    return downloadedPath;
+  }
+
+  async validateAudioFile(filePath) {
+    const output = await run('ffprobe', [
+      '-v', 'error',
+      '-select_streams', 'a:0',
+      '-show_entries', 'stream=codec_type',
+      '-of', 'default=noprint_wrappers=1:nokey=1',
+      filePath,
+    ], { timeoutMs: config.requestTimeoutMs });
+    return output
+      .split('\n')
+      .map((line) => line.trim().toLowerCase())
+      .includes('audio');
   }
 
   detectPlatform() {
