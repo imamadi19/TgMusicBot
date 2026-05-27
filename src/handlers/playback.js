@@ -389,7 +389,7 @@ voicePlayer.onTrackEnd(async ({ chatId, finished, next }) => {
     const activeTrack = await startCachedTrack(chatId, next);
     next.startedAt = activeTrack?.startedAt;
     await updatePlaybackPanelsForAdvance(chatId, finished, next, activeTrack);
-    cleanupTrackDownload(finished, { chatId });
+    if (finished?.trackId !== next?.trackId) cleanupTrackDownload(finished, { chatId });
   } catch (error) {
     const failedNext = chatCache.shift(chatId);
     cleanupTrackDownload(failedNext, { chatId });
@@ -1103,14 +1103,20 @@ export async function removeHandler(ctx) {
 export async function loopHandler(ctx) {
   const language = await getUserLanguage(ctx.from?.id);
   const count = chatCache.setLoop(ctx.chat.id, commandArgs(ctx));
+  const current = chatCache.current(ctx.chat.id);
+  if (current) current.loopRemaining = count;
   await ctx.reply(t(language, 'playback.loopSet', { count }));
 }
 
 export async function muteHandler(ctx) {
   const language = await getUserLanguage(ctx.from?.id);
+  if (!chatCache.current(ctx.chat.id)) {
+    await ctx.reply(t(language, 'playback.nothingPlaying'));
+    return;
+  }
   const muted = await voicePlayer.mute(ctx.chat.id);
   if (!muted) {
-    await ctx.reply(t(language, 'playback.nothingPlaying'));
+    await ctx.reply(t(language, 'playback.voiceFailed', { error: 'Mute tidak didukung atau gagal di voice adapter.' }));
     return;
   }
   await ctx.reply(t(language, 'playback.muted'));
@@ -1118,9 +1124,13 @@ export async function muteHandler(ctx) {
 
 export async function unmuteHandler(ctx) {
   const language = await getUserLanguage(ctx.from?.id);
+  if (!chatCache.current(ctx.chat.id)) {
+    await ctx.reply(t(language, 'playback.nothingPlaying'));
+    return;
+  }
   const unmuted = await voicePlayer.unmute(ctx.chat.id);
   if (!unmuted) {
-    await ctx.reply(t(language, 'playback.nothingPlaying'));
+    await ctx.reply(t(language, 'playback.voiceFailed', { error: 'Unmute tidak didukung atau gagal di voice adapter.' }));
     return;
   }
   await ctx.reply(t(language, 'playback.unmuted'));
@@ -1135,7 +1145,11 @@ export async function speedHandler(ctx) {
   }
   const speed = await voicePlayer.setSpeed(ctx.chat.id, requestedSpeed);
   if (!speed) {
-    await ctx.reply(t(language, 'playback.nothingPlaying'));
+    if (!chatCache.current(ctx.chat.id)) {
+      await ctx.reply(t(language, 'playback.nothingPlaying'));
+      return;
+    }
+    await ctx.reply(t(language, 'playback.voiceFailed', { error: 'Speed tidak didukung atau gagal di voice adapter.' }));
     return;
   }
   await ctx.reply(t(language, 'playback.speedSet', { speed }));

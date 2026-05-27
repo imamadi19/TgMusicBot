@@ -175,13 +175,21 @@ export async function vcPlayCallbackHandler(ctx) {
         return;
       }
       case 'mute': {
-        chatCache.setMuted(chatId, true);
+        const muted = await voicePlayer.mute(chatId);
+        if (!muted) {
+          await answer(ctx, t(language, 'callbacks.actionFailed'));
+          return;
+        }
         await answer(ctx, t(language, 'callbacks.playbackMuted'));
         await editPlaybackControls(ctx, language, 'mute');
         return;
       }
       case 'unmute': {
-        chatCache.setMuted(chatId, false);
+        const unmuted = await voicePlayer.unmute(chatId);
+        if (!unmuted) {
+          await answer(ctx, t(language, 'callbacks.actionFailed'));
+          return;
+        }
         await answer(ctx, t(language, 'callbacks.playbackUnmuted'));
         await editPlaybackControls(ctx, language, 'unmute');
         return;
