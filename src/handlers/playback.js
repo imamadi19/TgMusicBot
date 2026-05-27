@@ -1108,6 +1108,24 @@ export async function loopHandler(ctx) {
   await ctx.reply(t(language, 'playback.loopSet', { count }));
 }
 
+
+export function parseSeekValue(input) {
+  const value = String(input || '').trim();
+  if (!value) return null;
+  const sign = value.startsWith('+') ? 1 : value.startsWith('-') ? -1 : 0;
+  const raw = sign ? value.slice(1) : value;
+  if (!raw) return null;
+  if (raw.includes(':')) {
+    const parts = raw.split(':').map((part) => Number(part));
+    if (parts.some((part) => !Number.isFinite(part) || part < 0)) return null;
+    const seconds = parts.reduce((acc, part) => acc * 60 + part, 0);
+    return { absolute: sign === 0, seconds: sign === 0 ? seconds : sign * seconds };
+  }
+  const seconds = Number(raw);
+  if (!Number.isFinite(seconds) || seconds < 0) return null;
+  return { absolute: sign === 0, seconds: sign === 0 ? seconds : sign * seconds };
+}
+
 export async function muteHandler(ctx) {
   const language = await getUserLanguage(ctx.from?.id);
   if (!chatCache.current(ctx.chat.id)) {
@@ -1136,6 +1154,58 @@ export async function unmuteHandler(ctx) {
   await ctx.reply(t(language, 'playback.unmuted'));
 }
 
+
+export async function seekHandler(ctx) {
+  const language = await getUserLanguage(ctx.from.id);
+  const active = voicePlayer.activeTrack(ctx.chat.id) ?? chatCache.current(ctx.chat.id);
+  if (!active) {
+    await ctx.reply(t(language, 'playback.noActive'));
+    return;
+  }
+  const parsed = parseSeekValue(commandArgs(ctx));
+  if (!parsed) {
+    await ctx.reply(t(language, 'playback.seekUsage'));
+    return;
+  }
+  const currentElapsed = active.startedAt ? Math.max(0, Math.floor((Date.now() - new Date(active.startedAt).getTime()) / 1000)) : 0;
+  const target = parsed.absolute ? parsed.seconds : currentElapsed + parsed.seconds;
+  const duration = Number(active.duration) || 0;
+  if (target < 0 || (duration > 0 && target > duration)) {
+    await ctx.reply(t(language, 'playback.seekOutOfRange'));
+    return;
+  }
+  const updated = await voicePlayer.seek(ctx.chat.id, target);
+  if (!updated) {
+    await ctx.reply(t(language, 'playback.voiceFailed', { error: 'Seek tidak didukung atau gagal di voice adapter.' }));
+    return;
+  }
+  await ctx.reply(t(language, 'playback.seeked', { position: secondsToClock(target) }));
+}
+
+export async function volumeHandler(ctx) {
+  const language = await getUserLanguage(ctx.from.id);
+  const value = Number(commandArgs(ctx));
+  if (!Number.isFinite(value)) {
+    await ctx.reply(t(language, 'playback.volumeUsage'));
+    return;
+  }
+  const { applied, volume } = await voicePlayer.setVolume(ctx.chat.id, value);
+  if (!applied) {
+    await ctx.reply(t(language, 'playback.voiceFailed', { error: 'Volume tidak didukung atau gagal di voice adapter.' }));
+    return;
+  }
+  await ctx.reply(t(language, 'playback.volumeSet', { volume }));
+}
+
+export async function shuffleHandler(ctx) {
+  const language = await getUserLanguage(ctx.from.id);
+  if (chatCache.getQueueLength(ctx.chat.id) <= 2) {
+    await ctx.reply(t(language, 'playback.shuffleNotEnough'));
+    return;
+  }
+  chatCache.shuffleUpcoming(ctx.chat.id);
+  await ctx.reply(t(language, 'playback.shuffleDone'));
+}
 export async function speedHandler(ctx) {
   const language = await getUserLanguage(ctx.from?.id);
   const requestedSpeed = Number(commandArgs(ctx));

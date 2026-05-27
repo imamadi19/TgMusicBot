@@ -264,11 +264,27 @@ async def play_file_async(file_path: str, is_video: bool = False):
     paused = False
 
 
+
+
+async def set_volume_async(volume: int):
+    methods = ("set_my_volume", "set_volume", "change_volume_call")
+    for name in methods:
+        method = getattr(call_client, name, None)
+        if not callable(method):
+            continue
+        try:
+            await call_method(method, chat_id, volume)
+        except TypeError:
+            await call_method(method, volume)
+        return True
+    return False
 async def handle_stdin_command(command: dict):
     action = str(command.get("action", "")).strip().lower()
     command_id = str(command.get("id", "")).strip() or "-"
     if action in {"play", "replay", "switch"}:
         await play_file_async(str(command.get("file_path", "")), bool_value(command.get("is_video")))
+        if "volume" in command:
+            await set_volume_async(int(float(command.get("volume", 100))))
         print(f"TGMB_CONTROL_OK {command_id} play", flush=True)
         return
     if action == "pause":
@@ -302,6 +318,19 @@ async def handle_stdin_command(command: dict):
             raise RuntimeError("PyTgCalls runtime ini tidak mendukung speed (method set_speed/set_playback_speed tidak ditemukan)")
         await call_method(method, chat_id, speed)
         print(f"TGMB_CONTROL_OK {command_id} speed", flush=True)
+        return
+    if action == "volume":
+        volume = int(float(command.get("volume", 100)))
+        volume = max(0, min(200, volume))
+        if not await set_volume_async(volume):
+            raise RuntimeError("PyTgCalls runtime ini tidak mendukung volume")
+        print(f"TGMB_CONTROL_OK {command_id} volume", flush=True)
+        return
+    if action == "seek":
+        await play_file_async(str(command.get("file_path", "")), bool_value(command.get("is_video")))
+        if "volume" in command:
+            await set_volume_async(int(float(command.get("volume", 100))))
+        print(f"TGMB_CONTROL_OK {command_id} seek", flush=True)
         return
     if action == "stop":
         cleanup()
@@ -660,6 +689,12 @@ async def main_async() -> int:
         call_client = PyTgCalls(client)
         await maybe_call_async(call_client, "start")
         await play_file_async(file_path, is_video)
+    env_volume = os.environ.get("TGMB_VOLUME", "").strip()
+    if env_volume:
+        try:
+            await set_volume_async(int(float(env_volume)))
+        except Exception:
+            pass
         print(READY_MARKER, flush=True)
 
         command_task = asyncio.create_task(stdin_command_loop())

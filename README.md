@@ -11,7 +11,7 @@ Repo ini cocok untuk menjalankan bot musik mandiri di VPS, Docker, atau platform
 - Pencarian metadata via YouTube Music, lalu fallback ke `yt-dlp` jika diperlukan.
 - Mendukung URL YouTube, YouTube Music, Spotify, Apple Music, dan SoundCloud selama dapat diproses `yt-dlp`.
 - Queue per grup dengan batas 10 lagu.
-- Kontrol playback: skip, pause, resume, stop, remove, loop, mute, unmute, dan speed.
+- Kontrol playback: skip, pause, resume, stop, remove, loop, mute, unmute, speed, seek, volume, dan shuffle.
 - Playlist pengguna berbasis MongoDB.
 - Menu bahasa, bantuan, statistik, pengaturan, dan privacy.
 - Health server HTTP sederhana untuk deployment container.
@@ -51,7 +51,10 @@ Repo ini cocok untuk menjalankan bot musik mandiri di VPS, Docker, atau platform
    - Adapter memakai `API_ID`, `API_HASH`, dan session string assistant (`STRING1` atau `SESSION_STRINGS`) untuk login sebagai akun user Telegram, join voice chat grup, lalu memutar file yang sudah diunduh.
 
 7. **Kontrol playback**
-   - `/pause` dan `/resume` mengubah status pause di cache dan mengirim sinyal ke proses adapter.
+   - `/pause` dan `/resume` mengubah status pause di cache dan mengirim kontrol ke adapter.
+   - `/seek 01:30` memindahkan posisi playback aktif dengan sinkronisasi timer/progress.
+   - `/volume 80` mengatur volume 0-200 per chat dan dipakai juga di track berikutnya.
+   - `/shuffle` mengacak antrean setelah track aktif (index 0 tetap).
    - `/skip` menghentikan proses aktif, mengeluarkan track saat ini dari queue, lalu memutar track berikutnya jika ada.
    - `/stop` atau `/end` menghentikan proses aktif dan mengosongkan queue grup.
 
@@ -318,6 +321,9 @@ docker stop tgmusicbot && docker rm tgmusicbot
 | `/loop <jumlah>` | Atur loop. |
 | `/mute` / `/unmute` | Ubah status mute di cache playback. |
 | `/speed <angka>` | Atur speed playback di cache. |
+| `/seek <detik|mm:ss|+n|-n>` | Pindahkan posisi playback aktif. Contoh: `/seek 01:30`. |
+| `/volume <0-200>` atau `/vol <0-200>` | Atur volume chat. Contoh: `/volume 80`. |
+| `/shuffle` | Acak antrean setelah track yang sedang diputar. |
 | `/av` atau `/active_vc` | Lihat voice chat aktif yang dikelola bot. |
 
 ### Playlist
