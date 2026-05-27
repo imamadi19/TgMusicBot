@@ -12,6 +12,8 @@ Repo ini cocok untuk menjalankan bot musik mandiri di VPS, Docker, atau platform
 - Mendukung URL YouTube, YouTube Music, Spotify, Apple Music, dan SoundCloud selama dapat diproses `yt-dlp`.
 - Queue per grup dengan batas 10 lagu.
 - Kontrol playback: skip, pause, resume, stop, remove, loop, mute, unmute, speed, seek, volume, dan shuffle.
+
+- Dependensi voice adapter dipin ke `py-tgcalls==2.2.12` (versi teruji untuk seek offset + filter volume FFmpeg).
 - Playlist pengguna berbasis MongoDB.
 - Menu bahasa, bantuan, statistik, pengaturan, dan privacy.
 - Health server HTTP sederhana untuk deployment container.

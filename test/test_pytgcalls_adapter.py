@@ -208,6 +208,41 @@ class AdapterControlSignalTest(unittest.IsolatedAsyncioTestCase):
             [("resume", -100123), ("play", -100123, "/tmp/current.mp3")],
         )
 
+    async def test_seek_command_uses_seek_seconds_and_volume_in_stream(self):
+        await self.adapter.handle_stdin_command({
+            "action": "seek",
+            "file_path": "/tmp/next.mp3",
+            "seek_seconds": 60,
+            "volume": 50,
+        })
+
+        action, chat_id, stream = self.fake_call_client.calls[0]
+        self.assertEqual((action, chat_id), ("play", -100123))
+        self.assertEqual(getattr(stream, "_media_path", None), "/tmp/next.mp3")
+        self.assertIn("-ss 60.0", getattr(stream, "_ffmpeg_parameters", ""))
+        self.assertIn("-af volume=0.50", getattr(stream, "_ffmpeg_parameters", ""))
+
+    async def test_volume_command_rebuilds_stream_at_current_seek(self):
+        await self.adapter.handle_stdin_command({
+            "action": "volume",
+            "file_path": "/tmp/next.mp3",
+            "seek_seconds": 42,
+            "volume": 200,
+        })
+
+        action, chat_id, stream = self.fake_call_client.calls[0]
+        self.assertEqual((action, chat_id), ("play", -100123))
+        self.assertIn("-ss 42.0", getattr(stream, "_ffmpeg_parameters", ""))
+        self.assertIn("-af volume=2.00", getattr(stream, "_ffmpeg_parameters", ""))
+
+    async def test_seek_rejects_negative_seek_seconds(self):
+        with self.assertRaisesRegex(RuntimeError, "tidak boleh negatif"):
+            await self.adapter.handle_stdin_command({
+                "action": "seek",
+                "file_path": "/tmp/next.mp3",
+                "seek_seconds": -1,
+            })
+
     async def test_existing_chat_skips_invite_links(self):
         chat = SimpleNamespace(id=-100123)
         client = FakeChatAccessClient(chat=chat)

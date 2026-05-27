@@ -202,9 +202,35 @@ def is_remote_media_path(file_path: str) -> bool:
     value = str(file_path or '').strip().lower()
     return value.startswith('http://') or value.startswith('https://')
 
-def media_stream_for(file_path: str, is_video: bool):
+def clamp_volume(value) -> int:
+    parsed = int(float(value))
+    return max(0, min(200, parsed))
+
+
+def ffmpeg_parameters_for_stream(*, seek_seconds: float = 0.0, volume: int = 100, is_video: bool = False) -> str | None:
+    params = []
+    if seek_seconds > 0:
+        params.extend(["-ss", str(float(seek_seconds))])
+    params.extend(["-af", f"volume={max(0, min(200, int(volume))) / 100:.2f}"])
+    if is_video:
+        video_params = video_ffmpeg_parameters()
+        if video_params:
+            params.append(video_params)
+    return " ".join(params) if params else None
+
+
+def media_stream_for(file_path: str, is_video: bool, seek_seconds: float = 0.0, volume: int = 100):
+    ffmpeg_parameters = ffmpeg_parameters_for_stream(seek_seconds=seek_seconds, volume=volume, is_video=is_video)
     if not is_video:
-        return file_path
+        from pytgcalls.types import MediaStream
+
+        return MediaStream(
+            file_path,
+            audio_path=file_path,
+            audio_flags=MediaStream.Flags.REQUIRED,
+            video_flags=MediaStream.Flags.IGNORE,
+            ffmpeg_parameters=ffmpeg_parameters,
+        )
 
     from pytgcalls.types import MediaStream
     from pytgcalls.types.stream import AudioQuality
@@ -216,7 +242,7 @@ def media_stream_for(file_path: str, is_video: bool):
         audio_path=file_path,
         audio_flags=MediaStream.Flags.REQUIRED,
         video_flags=MediaStream.Flags.REQUIRED,
-        ffmpeg_parameters=video_ffmpeg_parameters(),
+        ffmpeg_parameters=ffmpeg_parameters,
     )
 
 
@@ -246,13 +272,13 @@ async def start_stream_with_fallback(stream):
     )
 
 
-async def play_file_async(file_path: str, is_video: bool = False):
+async def play_file_async(file_path: str, is_video: bool = False, seek_seconds: float = 0.0, volume: int = 100):
     global paused, stream_started, current_stream_is_video
     if call_client is None or chat_id is None:
         raise RuntimeError("voice call belum aktif")
     if not file_path:
         raise RuntimeError("file_path kosong")
-    stream = media_stream_for(file_path, is_video)
+    stream = media_stream_for(file_path, is_video, max(0.0, float(seek_seconds)), clamp_volume(volume))
     if paused:
         await resume_async()
     if stream_started and current_stream_is_video == is_video and await switch_stream_in_current_call(stream):
@@ -266,28 +292,16 @@ async def play_file_async(file_path: str, is_video: bool = False):
 
 
 
-async def set_volume_async(volume: int):
-    volume = max(0, min(200, int(volume)))
-    methods = ("set_my_volume", "set_volume", "change_volume_call")
-    for name in methods:
-        method = getattr(call_client, name, None)
-        if not callable(method):
-            continue
-        try:
-            await call_method(method, chat_id, volume)
-        except TypeError:
-            await call_method(method, volume)
-        return True
-    return False
 async def handle_stdin_command(command: dict):
     action = str(command.get("action", "")).strip().lower()
     command_id = str(command.get("id", "")).strip() or "-"
     if action in {"play", "replay", "switch"}:
-        await play_file_async(str(command.get("file_path", "")), bool_value(command.get("is_video")))
-        if "volume" in command:
-            volume_applied = await set_volume_async(int(float(command.get("volume", 100))))
-            if not volume_applied:
-                raise RuntimeError("PyTgCalls runtime ini tidak mendukung volume")
+        await play_file_async(
+            str(command.get("file_path", "")),
+            bool_value(command.get("is_video")),
+            float(command.get("seek_seconds", 0)),
+            clamp_volume(command.get("volume", 100)),
+        )
         print(f"TGMB_CONTROL_OK {command_id} play", flush=True)
         return
     if action == "pause":
@@ -323,18 +337,22 @@ async def handle_stdin_command(command: dict):
         print(f"TGMB_CONTROL_OK {command_id} speed", flush=True)
         return
     if action == "volume":
-        volume = int(float(command.get("volume", 100)))
-        volume = max(0, min(200, volume))
-        if not await set_volume_async(volume):
-            raise RuntimeError("PyTgCalls runtime ini tidak mendukung volume")
+        file_path = str(command.get("file_path", "")).strip()
+        if not file_path:
+            raise RuntimeError("file_path wajib diisi saat ubah volume stream aktif")
+        seek_seconds = float(command.get("seek_seconds", 0))
+        if seek_seconds < 0:
+            raise RuntimeError("seek_seconds tidak boleh negatif")
+        await play_file_async(file_path, bool_value(command.get("is_video")), seek_seconds, clamp_volume(command.get("volume", 100)))
         print(f"TGMB_CONTROL_OK {command_id} volume", flush=True)
         return
     if action == "seek":
-        await play_file_async(str(command.get("file_path", "")), bool_value(command.get("is_video")))
-        if "volume" in command:
-            volume_applied = await set_volume_async(int(float(command.get("volume", 100))))
-            if not volume_applied:
-                raise RuntimeError("PyTgCalls runtime ini tidak mendukung volume")
+        await play_file_async(
+            str(command.get("file_path", "")),
+            bool_value(command.get("is_video")),
+            float(command.get("seek_seconds", 0)),
+            clamp_volume(command.get("volume", 100)),
+        )
         print(f"TGMB_CONTROL_OK {command_id} seek", flush=True)
         return
     if action == "stop":
@@ -693,23 +711,14 @@ async def main_async() -> int:
 
         call_client = PyTgCalls(client)
         await maybe_call_async(call_client, "start")
-        await play_file_async(file_path, is_video)
+        initial_volume = 100
         env_volume = os.environ.get("TGMB_VOLUME", "").strip()
         if env_volume:
             try:
-                volume_applied = await set_volume_async(int(float(env_volume)))
-                if not volume_applied:
-                    print(
-                        "VOICE_ADAPTER_WARN: initial volume tidak didukung runtime PyTgCalls",
-                        file=sys.stderr,
-                        flush=True,
-                    )
-            except Exception as exc:  # noqa: BLE001 - initial volume should not crash playback.
-                print(
-                    f"VOICE_ADAPTER_WARN: gagal menerapkan initial volume ({env_volume}): {exc}",
-                    file=sys.stderr,
-                    flush=True,
-                )
+                initial_volume = clamp_volume(env_volume)
+            except Exception as exc:  # noqa: BLE001
+                print(f"VOICE_ADAPTER_WARN: TGMB_VOLUME tidak valid ({env_volume}): {exc}", file=sys.stderr, flush=True)
+        await play_file_async(file_path, is_video, 0.0, initial_volume)
         print(READY_MARKER, flush=True)
 
         command_task = asyncio.create_task(stdin_command_loop())

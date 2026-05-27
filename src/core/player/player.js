@@ -639,7 +639,14 @@ export class VoicePlayer {
       chatCache.setVolume(key, normalized);
       return { applied: false, saved: true, volume: normalized };
     }
-    const acknowledged = await sendAdapterCommand(active, { action: 'volume', volume: normalized });
+    const elapsedSeconds = active.startedAt ? Math.max(0, Math.floor((Date.now() - new Date(active.startedAt).getTime()) / 1000)) : 0;
+    const acknowledged = await sendAdapterCommand(active, {
+      action: 'volume',
+      file_path: active.filePath,
+      is_video: Boolean(active.isVideo),
+      seek_seconds: elapsedSeconds,
+      volume: normalized,
+    });
     if (!acknowledged) return { applied: false, saved: false, volume: currentVolume };
     chatCache.setVolume(key, normalized);
     return { applied: true, saved: true, volume: normalized };
