@@ -267,6 +267,7 @@ async def play_file_async(file_path: str, is_video: bool = False):
 
 
 async def set_volume_async(volume: int):
+    volume = max(0, min(200, int(volume)))
     methods = ("set_my_volume", "set_volume", "change_volume_call")
     for name in methods:
         method = getattr(call_client, name, None)
@@ -284,7 +285,9 @@ async def handle_stdin_command(command: dict):
     if action in {"play", "replay", "switch"}:
         await play_file_async(str(command.get("file_path", "")), bool_value(command.get("is_video")))
         if "volume" in command:
-            await set_volume_async(int(float(command.get("volume", 100))))
+            volume_applied = await set_volume_async(int(float(command.get("volume", 100))))
+            if not volume_applied:
+                raise RuntimeError("PyTgCalls runtime ini tidak mendukung volume")
         print(f"TGMB_CONTROL_OK {command_id} play", flush=True)
         return
     if action == "pause":
@@ -329,7 +332,9 @@ async def handle_stdin_command(command: dict):
     if action == "seek":
         await play_file_async(str(command.get("file_path", "")), bool_value(command.get("is_video")))
         if "volume" in command:
-            await set_volume_async(int(float(command.get("volume", 100))))
+            volume_applied = await set_volume_async(int(float(command.get("volume", 100))))
+            if not volume_applied:
+                raise RuntimeError("PyTgCalls runtime ini tidak mendukung volume")
         print(f"TGMB_CONTROL_OK {command_id} seek", flush=True)
         return
     if action == "stop":
@@ -689,12 +694,22 @@ async def main_async() -> int:
         call_client = PyTgCalls(client)
         await maybe_call_async(call_client, "start")
         await play_file_async(file_path, is_video)
-    env_volume = os.environ.get("TGMB_VOLUME", "").strip()
-    if env_volume:
-        try:
-            await set_volume_async(int(float(env_volume)))
-        except Exception:
-            pass
+        env_volume = os.environ.get("TGMB_VOLUME", "").strip()
+        if env_volume:
+            try:
+                volume_applied = await set_volume_async(int(float(env_volume)))
+                if not volume_applied:
+                    print(
+                        "VOICE_ADAPTER_WARN: initial volume tidak didukung runtime PyTgCalls",
+                        file=sys.stderr,
+                        flush=True,
+                    )
+            except Exception as exc:  # noqa: BLE001 - initial volume should not crash playback.
+                print(
+                    f"VOICE_ADAPTER_WARN: gagal menerapkan initial volume ({env_volume}): {exc}",
+                    file=sys.stderr,
+                    flush=True,
+                )
         print(READY_MARKER, flush=True)
 
         command_task = asyncio.create_task(stdin_command_loop())
