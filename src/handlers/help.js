@@ -16,7 +16,11 @@ import { getPremiumSettings } from '../core/db/premium-settings.js';
 
 export async function safeAnswerCallback(ctx, text = '', options = {}) {
   try {
-    await ctx.answerCallbackQuery(text ? { text, ...options } : undefined);
+    if (text) {
+      await ctx.answerCallbackQuery({ text, ...options });
+    } else {
+      await ctx.answerCallbackQuery();
+    }
   } catch {}
 }
 
@@ -70,7 +74,7 @@ export async function deleteStartPanel(ctx) {
       return false;
     } catch {
       try {
-        await editStartPanel(ctx, 'Menu ditutup.', { reply_markup: undefined });
+        await editStartPanel(ctx, t(await getUserLanguage(ctx.from?.id), 'start.closed'), { reply_markup: undefined });
         return false;
       } catch {
         return false;
@@ -112,44 +116,29 @@ async function sendStartMessage(ctx, text, image, options) {
 // ==========================================
 
 export async function buildPrivateStartText(ctx, language) {
-  const name = firstName(ctx);
-  const escapedName = htmlEscape(name);
-
-  if (String(language).startsWith('id')) {
-    return `🎧 <b>Selamat datang di TgMusicBot</b>\n\n` +
-      `Hai, <b>${escapedName}</b>!\n` +
-      `Aku bisa membantu memutar musik dan video ke voice chat grup Telegram.\n\n` +
-      `🚀 <b>Cara mulai:</b>\n` +
-      `1. Tambahkan bot ke grup\n` +
-      `2. Tambahkan assistant/userbot ke grup\n` +
-      `3. Aktifkan voice chat\n` +
-      `4. Ketik <code>/play nama lagu</code>\n\n` +
-      `✨ <b>Fitur utama:</b>\n` +
-      `• Audio & video playback\n` +
-      `• YouTube / Spotify / Apple Music / SoundCloud\n` +
-      `• Playlist pribadi\n` +
-      `• Queue control\n` +
-      `• Premium audio preset\n` +
-      `• DJ mode untuk grup\n\n` +
-      `Pilih menu di bawah:`;
-  } else {
-    return `🎧 <b>Welcome to TgMusicBot</b>\n\n` +
-      `Hi, <b>${escapedName}</b>!\n` +
-      `I can help play music and videos in Telegram group voice chats.\n\n` +
-      `🚀 <b>How to start:</b>\n` +
-      `1. Add the bot to your group\n` +
-      `2. Add the assistant/userbot to the group\n` +
-      `3. Start the voice chat\n` +
-      `4. Type <code>/play song name</code>\n\n` +
-      `✨ <b>Main features:</b>\n` +
-      `• Audio & video playback\n` +
-      `• YouTube / Spotify / Apple Music / SoundCloud\n` +
-      `• Personal playlists\n` +
-      `• Queue control\n` +
-      `• Premium audio presets\n` +
-      `• DJ mode for groups\n\n` +
-      `Choose a menu below:`;
-  }
+  const name = htmlEscape(firstName(ctx));
+  return [
+    `🎧 <b>${t(language, 'start.private.title')}</b>`,
+    '',
+    t(language, 'start.private.greeting', { name }),
+    t(language, 'start.private.description'),
+    '',
+    `🚀 <b>${t(language, 'start.private.stepsTitle')}</b>`,
+    `1. ${t(language, 'start.private.stepAddBot')}`,
+    `2. ${t(language, 'start.private.stepAddAssistant')}`,
+    `3. ${t(language, 'start.private.stepStartVoice')}`,
+    `4. ${t(language, 'start.private.stepPlay')}`,
+    '',
+    `✨ <b>${t(language, 'start.private.featuresTitle')}</b>`,
+    `• ${t(language, 'start.private.featurePlayback')}`,
+    `• ${t(language, 'start.private.featurePlatforms')}`,
+    `• ${t(language, 'start.private.featurePlaylist')}`,
+    `• ${t(language, 'start.private.featureQueue')}`,
+    `• ${t(language, 'start.private.featurePremiumPreset')}`,
+    `• ${t(language, 'start.private.featureDjMode')}`,
+    '',
+    t(language, 'start.private.chooseMenu'),
+  ].join('\n');
 }
 
 export async function buildGroupStartText(ctx, language) {
@@ -179,25 +168,19 @@ export async function buildGroupStartText(ctx, language) {
     }
   }
 
-  if (String(language).startsWith('id')) {
-    return `🎶 <b>TgMusicBot aktif di grup ini!</b>\n\n` +
-      `Siap memutar musik ke voice chat.\n\n` +
-      `📌 <b>Status grup:</b>\n` +
-      `• Queue limit: <b>${queueLimit}</b>\n` +
-      `• DJ Mode: <b>${djMode}</b>\n` +
-      `• Preset: <b>${audioPreset}</b>\n` +
-      `• Premium: <b>${premiumStatus}</b>\n\n` +
-      `Gunakan tombol di bawah untuk bantuan cepat.`;
-  } else {
-    return `🎶 <b>TgMusicBot is active in this group!</b>\n\n` +
-      `Ready to play music in voice chat.\n\n` +
-      `📌 <b>Group status:</b>\n` +
-      `• Queue limit: <b>${queueLimit}</b>\n` +
-      `• DJ Mode: <b>${djMode}</b>\n` +
-      `• Preset: <b>${audioPreset}</b>\n` +
-      `• Premium: <b>${premiumStatus}</b>\n\n` +
-      `Use the buttons below for quick help.`;
-  }
+  return [
+    `🎶 <b>${t(language, 'start.group.title')}</b>`,
+    '',
+    t(language, 'start.group.description'),
+    '',
+    `📌 <b>${t(language, 'start.group.statusTitle')}</b>`,
+    `• ${t(language, 'start.group.queueLimit', { limit: queueLimit })}`,
+    `• ${t(language, 'start.group.djMode', { djMode })}`,
+    `• ${t(language, 'start.group.preset', { preset: audioPreset })}`,
+    `• ${t(language, 'start.group.premium', { premium: premiumStatus })}`,
+    '',
+    t(language, 'start.group.quickHelp'),
+  ].join('\n');
 }
 
 // ==========================================
@@ -257,8 +240,7 @@ export async function startHomeHandler(ctx) {
 
 export async function startCloseHandler(ctx) {
   const language = await getUserLanguage(ctx.from?.id);
-  const closeText = String(language).startsWith('id') ? 'Ditutup.' : 'Closed.';
-  await safeAnswerCallback(ctx, closeText);
+  await safeAnswerCallback(ctx, t(language, 'start.closed'));
   await deleteStartPanel(ctx);
 }
 
@@ -266,14 +248,7 @@ export async function startSettingsHintHandler(ctx) {
   const language = await getUserLanguage(ctx.from?.id);
   await safeAnswerCallback(ctx);
 
-  let text;
-  if (String(language).startsWith('id')) {
-    text = `⚙️ <b>Pengaturan</b>\n\n` +
-      `Gunakan perintah <code>/settings</code> untuk membuka menu pengaturan bot.`;
-  } else {
-    text = `⚙️ <b>Settings</b>\n\n` +
-      `Use the <code>/settings</code> command to open the bot settings menu.`;
-  }
+  const text = `⚙️ <b>${t(language, 'start.settings.title')}</b>\n\n${t(language, 'start.settings.content')}`;
 
   await editStartPanel(ctx, text, {
     reply_markup: backToStartKeyboard(language),
@@ -284,28 +259,7 @@ export async function startSetupHandler(ctx) {
   const language = await getUserLanguage(ctx.from?.id);
   await safeAnswerCallback(ctx);
 
-  let text;
-  if (String(language).startsWith('id')) {
-    text = `🚀 <b>Panduan Setup TgMusicBot</b>\n\n` +
-      `1. <b>Tambahkan bot ke grup</b>\n` +
-      `Jadikan bot admin jika grup membatasi pesan/command.\n\n` +
-      `2. <b>Tambahkan assistant</b>\n` +
-      `Assistant/userbot harus ada di grup agar bisa join voice chat.\n\n` +
-      `3. <b>Aktifkan voice chat</b>\n` +
-      `Mulai voice chat/video chat di grup.\n\n` +
-      `4. <b>Putar lagu</b>\n` +
-      `Gunakan <code>/play judul lagu</code>.`;
-  } else {
-    text = `🚀 <b>TgMusicBot Setup Guide</b>\n\n` +
-      `1. <b>Add the bot to your group</b>\n` +
-      `Promote the bot to admin if the group restricts messages/commands.\n\n` +
-      `2. <b>Add the assistant</b>\n` +
-      `The assistant/userbot must be in the group to join the voice chat.\n\n` +
-      `3. <b>Start the voice chat</b>\n` +
-      `Start the voice chat/video chat in the group.\n\n` +
-      `4. <b>Play a song</b>\n` +
-      `Use <code>/play song title</code>.`;
-  }
+  const text = `🚀 <b>${t(language, 'start.setup.title')}</b>\n\n${t(language, 'start.setup.content')}`;
 
   await editStartPanel(ctx, text, {
     reply_markup: backToStartKeyboard(language),
@@ -316,24 +270,7 @@ export async function startFeaturesHandler(ctx) {
   const language = await getUserLanguage(ctx.from?.id);
   await safeAnswerCallback(ctx);
 
-  let text;
-  if (String(language).startsWith('id')) {
-    text = `🎵 <b>Fitur Musik</b>\n\n` +
-      `• Audio & video playback\n` +
-      `• YouTube / Spotify / Apple Music / SoundCloud\n` +
-      `• Queue control\n` +
-      `• Playlist pribadi\n` +
-      `• Premium audio preset\n` +
-      `• DJ mode untuk grup`;
-  } else {
-    text = `🎵 <b>Music Features</b>\n\n` +
-      `• Audio & video playback\n` +
-      `• YouTube / Spotify / Apple Music / SoundCloud\n` +
-      `• Queue control\n` +
-      `• Personal playlists\n` +
-      `• Premium audio presets\n` +
-      `• DJ mode for groups`;
-  }
+  const text = `🎵 <b>${t(language, 'start.features.title')}</b>\n\n${t(language, 'start.features.content')}`;
 
   await editStartPanel(ctx, text, {
     reply_markup: backToStartKeyboard(language),
@@ -344,22 +281,7 @@ export async function startPlaylistHandler(ctx) {
   const language = await getUserLanguage(ctx.from?.id);
   await safeAnswerCallback(ctx);
 
-  let text;
-  if (String(language).startsWith('id')) {
-    text = `🎼 <b>Playlist Pribadi</b>\n\n` +
-      `Gunakan:\n` +
-      `<code>/cplist nama</code>\n` +
-      `<code>/addtoplaylist id/url</code>\n` +
-      `<code>/myplaylists</code>\n` +
-      `<code>/deleteplaylist id</code>`;
-  } else {
-    text = `🎼 <b>Personal Playlists</b>\n\n` +
-      `Use:\n` +
-      `<code>/cplist name</code>\n` +
-      `<code>/addtoplaylist id/url</code>\n` +
-      `<code>/myplaylists</code>\n` +
-      `<code>/deleteplaylist id</code>`;
-  }
+  const text = `🎼 <b>${t(language, 'start.playlist.title')}</b>\n\n${t(language, 'start.playlist.content')}`;
 
   await editStartPanel(ctx, text, {
     reply_markup: backToStartKeyboard(language),
@@ -370,22 +292,7 @@ export async function startPremiumHandler(ctx) {
   const language = await getUserLanguage(ctx.from?.id);
   await safeAnswerCallback(ctx);
 
-  let text;
-  if (String(language).startsWith('id')) {
-    text = `⭐ <b>Premium</b>\n\n` +
-      `• Queue limit lebih besar\n` +
-      `• /qmove untuk memindahkan antrean\n` +
-      `• /setpreset normal/bass/nightcore/vaporwave\n` +
-      `• /djmode on/off\n` +
-      `• /premiuminfo untuk melihat status`;
-  } else {
-    text = `⭐ <b>Premium</b>\n\n` +
-      `• Larger queue limits\n` +
-      `• /qmove to move queue items\n` +
-      `• /setpreset normal/bass/nightcore/vaporwave\n` +
-      `• /djmode on/off\n` +
-      `• /premiuminfo to check status`;
-  }
+  const text = `⭐ <b>${t(language, 'start.premium.title')}</b>\n\n${t(language, 'start.premium.content')}`;
 
   await editStartPanel(ctx, text, {
     reply_markup: backToStartKeyboard(language),
@@ -396,24 +303,7 @@ export async function groupPlayHintHandler(ctx) {
   const language = await getUserLanguage(ctx.from?.id);
   await safeAnswerCallback(ctx);
 
-  let text;
-  if (String(language).startsWith('id')) {
-    text = `▶️ <b>Putar Musik</b>\n\n` +
-      `Gunakan:\n` +
-      `<code>/play judul lagu</code>\n\n` +
-      `Contoh:\n` +
-      `<code>/play faded alan walker</code>\n\n` +
-      `Tips:\n` +
-      `Mulai voice chat dulu sebelum memutar lagu.`;
-  } else {
-    text = `▶️ <b>Play Music</b>\n\n` +
-      `Use:\n` +
-      `<code>/play song title</code>\n\n` +
-      `Example:\n` +
-      `<code>/play faded alan walker</code>\n\n` +
-      `Tip:\n` +
-      `Start the voice chat before playing music.`;
-  }
+  const text = `▶️ <b>${t(language, 'start.groupPlay.title')}</b>\n\n${t(language, 'start.groupPlay.content')}`;
 
   await editStartPanel(ctx, text, {
     reply_markup: backToStartKeyboard(language),
@@ -424,24 +314,7 @@ export async function groupVplayHintHandler(ctx) {
   const language = await getUserLanguage(ctx.from?.id);
   await safeAnswerCallback(ctx);
 
-  let text;
-  if (String(language).startsWith('id')) {
-    text = `🎬 <b>Putar Video</b>\n\n` +
-      `Gunakan:\n` +
-      `<code>/vplay judul video</code>\n\n` +
-      `Contoh:\n` +
-      `<code>/vplay faded alan walker official video</code>\n\n` +
-      `Tips:\n` +
-      `Mulai video chat/voice chat dulu sebelum memutar video.`;
-  } else {
-    text = `🎬 <b>Play Video</b>\n\n` +
-      `Use:\n` +
-      `<code>/vplay video title</code>\n\n` +
-      `Example:\n` +
-      `<code>/vplay faded alan walker official video</code>\n\n` +
-      `Tip:\n` +
-      `Start the voice chat / video chat before playing video.`;
-  }
+  const text = `🎬 <b>${t(language, 'start.groupVideo.title')}</b>\n\n${t(language, 'start.groupVideo.content')}`;
 
   await editStartPanel(ctx, text, {
     reply_markup: backToStartKeyboard(language),
@@ -452,18 +325,7 @@ export async function groupQueueHintHandler(ctx) {
   const language = await getUserLanguage(ctx.from?.id);
   await safeAnswerCallback(ctx);
 
-  let text;
-  if (String(language).startsWith('id')) {
-    text = `📜 <b>Queue</b>\n\n` +
-      `Gunakan:\n` +
-      `<code>/queue</code>\n\n` +
-      `Command ini menampilkan daftar lagu yang sedang antre di grup.`;
-  } else {
-    text = `📜 <b>Queue</b>\n\n` +
-      `Use:\n` +
-      `<code>/queue</code>\n\n` +
-      `This command displays the list of songs currently in the group queue.`;
-  }
+  const text = `📜 <b>${t(language, 'start.groupQueue.title')}</b>\n\n${t(language, 'start.groupQueue.content')}`;
 
   await editStartPanel(ctx, text, {
     reply_markup: backToStartKeyboard(language),
@@ -474,20 +336,7 @@ export async function groupSkipHintHandler(ctx) {
   const language = await getUserLanguage(ctx.from?.id);
   await safeAnswerCallback(ctx);
 
-  let text;
-  if (String(language).startsWith('id')) {
-    text = `⏭ <b>Skip</b>\n\n` +
-      `Gunakan:\n` +
-      `<code>/skip</code>\n\n` +
-      `Command ini melewati lagu yang sedang diputar.\n` +
-      `Jika DJ Mode aktif, hanya admin/auth/premium user yang bisa memakai kontrol ini.`;
-  } else {
-    text = `⏭ <b>Skip</b>\n\n` +
-      `Use:\n` +
-      `<code>/skip</code>\n\n` +
-      `This command skips the currently playing song.\n` +
-      `If DJ Mode is active, only admin/auth/premium users can use this control.`;
-  }
+  const text = `⏭ <b>${t(language, 'start.groupSkip.title')}</b>\n\n${t(language, 'start.groupSkip.content')}`;
 
   await editStartPanel(ctx, text, {
     reply_markup: backToStartKeyboard(language),
@@ -498,20 +347,7 @@ export async function groupDjmodeHintHandler(ctx) {
   const language = await getUserLanguage(ctx.from?.id);
   await safeAnswerCallback(ctx);
 
-  let text;
-  if (String(language).startsWith('id')) {
-    text = `🎧 <b>DJ Mode</b>\n\n` +
-      `Gunakan:\n` +
-      `<code>/djmode on</code>\n` +
-      `<code>/djmode off</code>\n\n` +
-      `Saat aktif, kontrol seperti skip, stop, seek, volume, shuffle, dan qmove hanya bisa dipakai admin/auth/premium user.`;
-  } else {
-    text = `🎧 <b>DJ Mode</b>\n\n` +
-      `Use:\n` +
-      `<code>/djmode on</code>\n` +
-      `<code>/djmode off</code>\n\n` +
-      `When active, controls like skip, stop, seek, volume, shuffle, and qmove can only be used by admin/auth/premium users.`;
-  }
+  const text = `🎧 <b>${t(language, 'start.groupDjMode.title')}</b>\n\n${t(language, 'start.groupDjMode.content')}`;
 
   await editStartPanel(ctx, text, {
     reply_markup: backToStartKeyboard(language),
@@ -545,8 +381,7 @@ export async function languageSelectHandler(ctx) {
   }
   await setUserLanguage(ctx.from?.id, selected);
 
-  const savedText = String(selected).startsWith('id') ? 'Bahasa disimpan.' : 'Language saved.';
-  await safeAnswerCallback(ctx, savedText);
+  await safeAnswerCallback(ctx, t(selected, 'language.saved', { language: languageName(selected) }));
 
   // Check if callback originates from the start panel
   const message = ctx.callbackQuery?.message;

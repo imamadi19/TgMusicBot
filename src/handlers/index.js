@@ -79,5 +79,5 @@ export function loadHandlers(bot) {
   bot.callbackQuery('group_djmode_hint', groupDjmodeHintHandler);
   bot.callbackQuery('start_home', startHomeHandler);
   bot.callbackQuery('start_close', startCloseHandler);
-  bot.callbackQuery('start_settings_hint', startSettingsHintHandler);
+  bot.callbackQuery('start_settings', startSettingsHintHandler);
 }

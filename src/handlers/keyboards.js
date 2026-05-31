@@ -3,54 +3,6 @@ import { config } from '../config/index.js';
 import { languages, t } from '../i18n/index.js';
 import { SUPPORTED_DEFAULT_SERVICES, normalizeDefaultService } from '../core/db/user-settings.js';
 
-const labels = {
-  id: {
-    addToGroup: '➕ Tambahkan ke Grup',
-    setupGuide: '📖 Panduan Setup',
-    musicFeatures: '🎧 Fitur Musik',
-    myPlaylist: '🎼 Playlist Saya',
-    premium: '⭐ Premium',
-    language: '🌐 Bahasa',
-    settings: '⚙️ Pengaturan',
-    support: '👥 Support',
-    channel: '📢 Channel',
-    close: '❌ Tutup',
-    back: '⬅️ Kembali',
-    playMusic: '▶️ Play Musik',
-    playVideo: '🎬 Play Video',
-    queue: '📜 Queue',
-    skip: '⏭ Skip',
-    groupSettings: '⚙️ Settings Grup',
-    djMode: '🎧 DJ Mode',
-    help: '📖 Help'
-  },
-  en: {
-    addToGroup: '➕ Add to Group',
-    setupGuide: '📖 Setup Guide',
-    musicFeatures: '🎧 Music Features',
-    myPlaylist: '🎼 My Playlists',
-    premium: '⭐ Premium',
-    language: '🌐 Language',
-    settings: '⚙️ Settings',
-    support: '👥 Support',
-    channel: '📢 Channel',
-    close: '❌ Close',
-    back: '⬅️ Back',
-    playMusic: '▶️ Play Music',
-    playVideo: '🎬 Play Video',
-    queue: '📜 Queue',
-    skip: '⏭ Skip',
-    groupSettings: '⚙️ Group Settings',
-    djMode: '🎧 DJ Mode',
-    help: '📖 Help'
-  }
-};
-
-function getLabel(language, key) {
-  const lang = String(language ?? '').startsWith('id') ? 'id' : 'en';
-  return labels[lang]?.[key] || labels['en']?.[key] || key;
-}
-
 export function supportKeyboard(language = 'en') {
   const keyboard = new InlineKeyboard();
   if (config.supportGroup) keyboard.url(t(language, 'buttons.support'), config.supportGroup);
@@ -81,8 +33,8 @@ export function helpKeyboard(language = 'en') {
     .text(t(language, 'buttons.developer'), 'help_devs').row()
     .text(t(language, 'buttons.language'), 'language_menu')
     .row()
-    .text(`⬅️ ${language.startsWith('id') ? 'Kembali ke Start' : 'Back to Start'}`, 'start_home')
-    .text(`❌ ${language.startsWith('id') ? 'Tutup' : 'Close'}`, 'start_close');
+    .text(t(language, 'buttons.back'), 'start_home')
+    .text(t(language, 'buttons.close'), 'start_close');
 }
 
 export function backKeyboard(language = 'en') {
@@ -112,8 +64,8 @@ export function languageKeyboard(language = 'en', options = {}) {
     if (index % 2 === 1) keyboard.row();
   });
   if (options && options.includeBack) {
-    keyboard.text(getLabel(language, 'back'), 'start_home')
-            .text(getLabel(language, 'close'), 'start_close');
+    keyboard.text(t(language, 'buttons.back'), 'start_home')
+            .text(t(language, 'buttons.close'), 'start_close');
   }
   return keyboard;
 }
@@ -192,54 +144,54 @@ export function privateStartKeyboard(language = 'en') {
   const addToGroupUrl = `https://t.me/${botUsername}?startgroup=true`;
 
   const keyboard = new InlineKeyboard()
-    .url(getLabel(language, 'addToGroup'), addToGroupUrl)
+    .url(t(language, 'buttons.addToGroup'), addToGroupUrl)
     .row()
-    .text(getLabel(language, 'setupGuide'), 'start_setup')
-    .text(getLabel(language, 'musicFeatures'), 'start_features')
+    .text(t(language, 'buttons.setupGuide'), 'start_setup')
+    .text(t(language, 'buttons.musicFeatures'), 'start_features')
     .row()
-    .text(getLabel(language, 'myPlaylist'), 'start_playlist')
-    .text(getLabel(language, 'premium'), 'start_premium')
+    .text(t(language, 'buttons.myPlaylists'), 'start_playlist')
+    .text(t(language, 'buttons.premium'), 'start_premium')
     .row()
-    .text(getLabel(language, 'language'), 'language_menu')
-    .text(getLabel(language, 'settings'), 'start_settings_hint');
+    .text(t(language, 'buttons.language'), 'language_menu')
+    .text(t(language, 'buttons.settings'), 'start_settings');
 
   const supportUrl = config.supportGroup;
   const channelUrl = config.supportChannel;
   if (supportUrl || channelUrl) {
     keyboard.row();
     if (supportUrl) {
-      keyboard.url(getLabel(language, 'support'), supportUrl);
+      keyboard.url(t(language, 'buttons.support'), supportUrl);
     }
     if (channelUrl) {
-      keyboard.url(getLabel(language, 'channel'), channelUrl);
+      keyboard.url(t(language, 'buttons.channel'), channelUrl);
     }
   }
 
-  keyboard.row().text(getLabel(language, 'close'), 'start_close');
+  keyboard.row().text(t(language, 'buttons.close'), 'start_close');
 
   return keyboard;
 }
 
 export function groupStartKeyboard(language = 'en') {
   return new InlineKeyboard()
-    .text(getLabel(language, 'playMusic'), 'group_play_hint')
-    .text(getLabel(language, 'playVideo'), 'group_vplay_hint')
+    .text(t(language, 'buttons.playMusic'), 'group_play_hint')
+    .text(t(language, 'buttons.playVideo'), 'group_vplay_hint')
     .row()
-    .text(getLabel(language, 'queue'), 'group_queue_hint')
-    .text(getLabel(language, 'skip'), 'group_skip_hint')
+    .text(t(language, 'buttons.queue'), 'group_queue_hint')
+    .text(t(language, 'buttons.skip'), 'group_skip_hint')
     .row()
-    .text(getLabel(language, 'groupSettings'), 'start_settings_hint')
-    .text(getLabel(language, 'djMode'), 'group_djmode_hint')
+    .text(t(language, 'buttons.groupSettings'), 'start_settings')
+    .text(t(language, 'buttons.djMode'), 'group_djmode_hint')
     .row()
-    .text(getLabel(language, 'help'), 'help_all')
-    .text(getLabel(language, 'premium'), 'start_premium')
+    .text(t(language, 'buttons.help'), 'help_all')
+    .text(t(language, 'buttons.premium'), 'start_premium')
     .row()
-    .text(getLabel(language, 'close'), 'start_close');
+    .text(t(language, 'buttons.close'), 'start_close');
 }
 
 export function backToStartKeyboard(language = 'en') {
   return new InlineKeyboard()
-    .text(getLabel(language, 'back'), 'start_home')
-    .text(getLabel(language, 'close'), 'start_close');
+    .text(t(language, 'buttons.back'), 'start_home')
+    .text(t(language, 'buttons.close'), 'start_close');
 }
 
