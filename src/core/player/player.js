@@ -2,6 +2,8 @@ import crypto from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { config } from '../../config/index.js';
 import { chatCache } from '../cache/chat-cache.js';
+import { markFileActive, unmarkFileActive } from '../cache/active-files.js';
+import { getPremiumSettings } from '../db/premium-settings.js';
 
 const READY_MARKER = 'TGMB_READY';
 const START_TIMEOUT_MS = 30000;
@@ -230,16 +232,25 @@ export class VoicePlayer {
 
   #setActiveTrack(chatId, track, process, assistantNumber, startedAt = new Date()) {
     const key = String(chatId);
+    const oldActive = this.#active.get(key);
+    if (oldActive?.filePath) {
+      unmarkFileActive(oldActive.filePath);
+    }
     chatCache.setPaused(key, false);
     resetTrackTiming(track, startedAt);
     const activeTrack = { ...track, startedAt, process, assistantNumber };
     this.#active.set(key, activeTrack);
     this.#scheduleTrackEnd(key, activeTrack, process);
+    if (track.filePath) {
+      markFileActive(track.filePath);
+    }
     return activeTrack;
   }
 
   async #replaceActiveStream(chatId, track, active) {
-    if (!track?.filePath || !(await sendAdapterCommand(active, { action: 'play', file_path: track.filePath, is_video: Boolean(track.isVideo), volume: chatCache.getVolume(chatId) }))) {
+    const premiumSettings = await getPremiumSettings(chatId).catch(() => ({ audioPreset: 'normal' }));
+    const audioPreset = premiumSettings?.audioPreset || 'normal';
+    if (!track?.filePath || !(await sendAdapterCommand(active, { action: 'play', file_path: track.filePath, is_video: Boolean(track.isVideo), volume: chatCache.getVolume(chatId), audio_preset: audioPreset }))) {
       return null;
     }
     const key = String(chatId);
@@ -284,6 +295,9 @@ export class VoicePlayer {
       this.#intentionalExits.add(active.process);
       signalProcess(active.process, 'SIGTERM');
       setTimeout(() => signalProcess(active.process, 'SIGKILL'), 5000).unref?.();
+    }
+    if (active?.filePath) {
+      unmarkFileActive(active.filePath);
     }
     this.#active.delete(key);
     if (scheduleLeave) this.#scheduleLeaveChat(key);
@@ -483,6 +497,9 @@ export class VoicePlayer {
     let child = null;
     let assistantNumber = 0;
 
+    const premiumSettings = await getPremiumSettings(chatId).catch(() => ({ audioPreset: 'normal' }));
+    const audioPreset = premiumSettings?.audioPreset || 'normal';
+
     for (const candidate of sessionCandidates) {
       try {
         child = await this.#spawnAdapter(chatId, {
@@ -497,6 +514,7 @@ export class VoicePlayer {
           TGMB_TRACK_URL: String(track.url ?? ''),
           TGMB_IS_VIDEO: track.isVideo ? '1' : '0',
           TGMB_VOLUME: String(chatCache.getVolume(key)),
+          TGMB_AUDIO_PRESET: audioPreset,
         });
         assistantNumber = candidate.assistantNumber;
         this.#chatSessions.set(key, candidate.sessionString);

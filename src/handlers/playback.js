@@ -3,6 +3,8 @@ import { Downloader } from '../core/dl/downloader.js';
 import { cleanupTrackDownload, cleanupTrackDownloads, ensureTrackDownloaded, preloadTrack, preloadTracks } from '../core/dl/queue-downloads.js';
 import { requesterKey, voicePlayer } from '../core/player/player.js';
 import { getPlaylist } from '../core/db/playlists.js';
+import { searchCache } from '../core/cache/search-cache.js';
+import { InlineKeyboard } from 'grammy';
 import { isPremiumActive } from '../core/db/premium.js';
 import { getPremiumSettings } from '../core/db/premium-settings.js';
 import { getUserDefaultService, getUserLanguage } from '../core/db/user-settings.js';
@@ -12,7 +14,7 @@ import { commandArgs, htmlEscape, isUrl } from '../utils/telegram.js';
 import { firstName } from '../utils/extras.js';
 import { secondsToClock } from '../utils/duration.js';
 import { completedProgressKeyboard, controlKeyboard, supportKeyboard, searchSelectionKeyboard } from './keyboards.js';
-import { playMode } from './filters.js';
+import { playMode, isUserAdminOrAuth } from './filters.js';
 import { isAuthUser } from '../core/db/auth.js';
 
 const MAX_QUEUE = 10;
@@ -367,7 +369,7 @@ async function queueLimitFor(ctx) {
     isPremiumActive('chat', chatId),
     isPremiumActive('user', userId),
   ]);
-  return chatPremium || userPremium ? PREMIUM_MAX_QUEUE : MAX_QUEUE;
+  return chatPremium || userPremium ? config.premiumQueueLimit : MAX_QUEUE;
 }
 
 async function isPremiumRequester(ctx) {
@@ -376,6 +378,27 @@ async function isPremiumRequester(ctx) {
     isPremiumActive('user', Number(ctx.from?.id)),
   ]);
   return chatPremium || userPremium;
+}
+
+async function isUserAuthorizedForDjControl(ctx) {
+  const userId = ctx.from?.id;
+  if (!userId) return false;
+  const isOwner = Number(userId) === Number(config.ownerId) || config.devs.includes(Number(userId));
+  if (isOwner) return true;
+  if (await isUserAdminOrAuth(ctx, userId)) return true;
+  if (await isPremiumActive('user', userId)) return true;
+  return false;
+}
+
+async function checkDjMode(ctx) {
+  const premiumSettings = await getPremiumSettings(ctx.chat.id);
+  if (premiumSettings.djMode) {
+    if (!(await isUserAuthorizedForDjControl(ctx))) {
+      await ctx.reply('DJ mode is enabled: only admin/auth/premium DJ can control playback.');
+      return false;
+    }
+  }
+  return true;
 }
 
 voicePlayer.onTrackEnd(async ({ chatId, finished, next }) => {
@@ -854,6 +877,28 @@ async function processPlayRequest(ctx, status, input, isVideo, language, default
     }
     return;
   }
+
+  if (!isUrl(normalizedInput) && !input.startsWith('tgpl_')) {
+    const state = {
+      chatId: ctx.chat.id,
+      userId: ctx.from?.id,
+      query: normalizedInput,
+      isVideo,
+      results,
+      page: 0,
+      language,
+    };
+    const token = searchCache.save(state);
+    const text = formatSearchSelectionText(normalizedInput, results, 0, isVideo);
+    const keyboard = makeSearchSelectionKeyboard(token, 0, results.length);
+    await editStatus(ctx, status, text, {
+      parse_mode: 'HTML',
+      reply_markup: keyboard,
+      disable_web_page_preview: true,
+    });
+    return;
+  }
+
   if ((parsedMode === 'url' || looksLikePlaylistUrl) && results.length > 1) {
     const queueLimitAfter = await queueLimitFor(ctx);
     const remaining = queueLimitAfter - chatCache.getQueueLength(chatId);
@@ -988,6 +1033,7 @@ export async function queueHandler(ctx) {
 
 
 export async function skipHandler(ctx) {
+  if (!(await checkDjMode(ctx))) return;
   const language = await getUserLanguage(ctx.from?.id);
   const queuedNext = chatCache.getQueue(ctx.chat.id)[1] ?? null;
   try {
@@ -1026,6 +1072,7 @@ export async function skipHandler(ctx) {
 }
 
 export async function stopHandler(ctx) {
+  if (!(await checkDjMode(ctx))) return;
   const language = await getUserLanguage(ctx.from?.id);
   const queue = chatCache.getQueue(ctx.chat.id);
   const queuedCurrent = queue[0] ?? null;
@@ -1089,6 +1136,7 @@ export async function resumeHandler(ctx) {
 }
 
 export async function removeHandler(ctx) {
+  if (!(await checkDjMode(ctx))) return;
   const language = await getUserLanguage(ctx.from?.id);
   const index = Number.parseInt(commandArgs(ctx), 10) - 1;
   if (!Number.isInteger(index)) {
@@ -1156,6 +1204,7 @@ export async function unmuteHandler(ctx) {
 
 
 export async function seekHandler(ctx) {
+  if (!(await checkDjMode(ctx))) return;
   const language = await getUserLanguage(ctx.from.id);
   const active = voicePlayer.activeTrack(ctx.chat.id) ?? chatCache.current(ctx.chat.id);
   if (!active) {
@@ -1183,6 +1232,7 @@ export async function seekHandler(ctx) {
 }
 
 export async function volumeHandler(ctx) {
+  if (!(await checkDjMode(ctx))) return;
   const language = await getUserLanguage(ctx.from.id);
   const value = Number(commandArgs(ctx));
   if (!Number.isFinite(value)) {
@@ -1198,6 +1248,7 @@ export async function volumeHandler(ctx) {
 }
 
 export async function shuffleHandler(ctx) {
+  if (!(await checkDjMode(ctx))) return;
   const language = await getUserLanguage(ctx.from.id);
   if (chatCache.getQueueLength(ctx.chat.id) <= 2) {
     await ctx.reply(t(language, 'playback.shuffleNotEnough'));
@@ -1226,76 +1277,133 @@ export async function speedHandler(ctx) {
 }
 
 
+function formatSearchSelectionText(query, results, page, isVideo) {
+  const start = page * 5;
+  const pageTracks = results.slice(start, start + 5);
+  const typeLabel = isVideo ? 'Video' : 'Audio';
+
+  let text = `🔍 <b>Hasil Pencarian ${typeLabel}:</b> "${htmlEscape(query)}"\n`;
+  text += `Halaman ${page + 1}\n\n`;
+
+  pageTracks.forEach((track, index) => {
+    const number = start + index + 1;
+    const title = htmlEscape(track.name || track.title || 'Unknown');
+    const artist = track.artist || track.channel ? htmlEscape(track.artist || track.channel) : '';
+    const duration = track.duration ? `(${secondsToClock(track.duration)})` : '';
+    const artistLine = artist ? ` - ${artist}` : '';
+    text += `${number}. <b>${title}</b>${artistLine} ${duration}\n`;
+  });
+
+  text += `\nSilakan pilih angka di bawah untuk memutar.`;
+  return text;
+}
+
+function makeSearchSelectionKeyboard(token, page, totalResults) {
+  const keyboard = new InlineKeyboard();
+  const start = page * 5;
+  const pageCount = Math.min(5, totalResults - start);
+
+  // Row for 1 to 5 selection
+  for (let i = 0; i < pageCount; i++) {
+    const globalIndex = start + i;
+    keyboard.text(String(i + 1), `searchpick:${token}:${globalIndex}`);
+  }
+  keyboard.row();
+
+  // Navigation row: Prev, Cancel, Next
+  const hasPrev = page > 0;
+  const hasNext = (page + 1) * 5 < totalResults;
+
+  if (hasPrev) {
+    keyboard.text('⬅️ Prev', `searchpage:${token}:${page - 1}`);
+  }
+  keyboard.text('❌ Cancel', `searchcancel:${token}`);
+  if (hasNext) {
+    keyboard.text('Next ➡️', `searchpage:${token}:${page + 1}`);
+  }
+
+  return keyboard;
+}
+
 export async function searchSelectionPageHandler(ctx) {
   const data = ctx.callbackQuery?.data ?? '';
-  const [, messageId, pageText] = data.split(':');
-  const selection = chatCache.getSearchSelection(ctx.chat.id, messageId);
+  const [, token, pageText] = data.split(':');
+  const selection = searchCache.get(token);
   if (!selection) {
-    await ctx.answerCallbackQuery({ text: t(await getUserLanguage(ctx.from?.id), 'playback.selectionExpired') }).catch(() => {});
+    await ctx.answerCallbackQuery({ text: 'Hasil pencarian sudah kedaluwarsa. Jalankan /play lagi.' }).catch(() => {});
+    await ctx.editMessageText('Hasil pencarian sudah kedaluwarsa. Jalankan /play lagi.').catch(() => {});
     return;
   }
+
   if (selection.userId && selection.userId !== ctx.from?.id) {
-    await ctx.answerCallbackQuery({ text: t(selection.language, 'playback.selectionOwnerOnly') }).catch(() => {});
+    await ctx.answerCallbackQuery({ text: 'Hanya requester yang bisa memilih hasil ini.' }).catch(() => {});
     return;
   }
-  const index = selectedTrackIndex(selection.tracks, pageText);
-  const track = selection.tracks[index];
-  const caption = formatSearchSelection(selection.language, selection.tracks, index);
-  const replyMarkup = searchSelectionKeyboard(messageId, selection.tracks, index);
+
+  const page = Number.parseInt(pageText, 10) || 0;
+  selection.page = page;
+
+  const text = formatSearchSelectionText(selection.query, selection.results, page, selection.isVideo);
+  const keyboard = makeSearchSelectionKeyboard(token, page, selection.results.length);
+
   await ctx.answerCallbackQuery().catch(() => {});
-
-  if (selection.hasPhoto) {
-    const thumbnail = youtubeThumbnail(track);
-    if (thumbnail) {
-      try {
-        await ctx.editMessageMedia({ type: 'photo', media: thumbnail, caption, parse_mode: 'HTML' }, { reply_markup: replyMarkup });
-        return;
-      } catch (error) {
-        console.warn('Failed to update search selection thumbnail, falling back to caption edit:', error.message);
-      }
-    }
-    await ctx.editMessageCaption({ caption, parse_mode: 'HTML', reply_markup: replyMarkup });
-    return;
-  }
-
-  await ctx.editMessageText(caption, {
+  await ctx.editMessageText(text, {
     parse_mode: 'HTML',
-    reply_markup: replyMarkup,
+    reply_markup: keyboard,
     disable_web_page_preview: true,
-  });
+  }).catch(() => {});
 }
 
 export async function searchSelectionPickHandler(ctx) {
   const data = ctx.callbackQuery?.data ?? '';
-  const [, messageId, indexText] = data.split(':');
-  const selection = chatCache.getSearchSelection(ctx.chat.id, messageId);
+  const [, token, indexText] = data.split(':');
+  const selection = searchCache.get(token);
   if (!selection) {
-    await ctx.answerCallbackQuery({ text: t(await getUserLanguage(ctx.from?.id), 'playback.selectionExpired') }).catch(() => {});
+    await ctx.answerCallbackQuery({ text: 'Hasil pencarian sudah kedaluwarsa. Jalankan /play lagi.' }).catch(() => {});
+    await ctx.editMessageText('Hasil pencarian sudah kedaluwarsa. Jalankan /play lagi.').catch(() => {});
     return;
   }
+
   if (selection.userId && selection.userId !== ctx.from?.id) {
-    await ctx.answerCallbackQuery({ text: t(selection.language, 'playback.selectionOwnerOnly') }).catch(() => {});
-    return;
-  }
-  const queueLimit = await queueLimitFor(ctx);
-  if (chatCache.getQueueLength(ctx.chat.id) >= queueLimit) {
-    await ctx.answerCallbackQuery({ text: t(selection.language, 'playback.queueFull', { max: queueLimit }) }).catch(() => {});
+    await ctx.answerCallbackQuery({ text: 'Hanya requester yang bisa memilih hasil ini.' }).catch(() => {});
     return;
   }
 
   const index = Number.parseInt(indexText, 10);
-  const track = selection.tracks[index];
+  const track = selection.results[index];
   if (!track) {
-    await ctx.answerCallbackQuery({ text: t(selection.language, 'playback.invalidSelection') }).catch(() => {});
+    await ctx.answerCallbackQuery({ text: 'Pilihan tidak valid.' }).catch(() => {});
     return;
   }
 
-  chatCache.deleteSearchSelection(ctx.chat.id, messageId);
-  await ctx.answerCallbackQuery({ text: t(selection.language, 'playback.trackSelected', { number: index + 1 }) }).catch(() => {});
+  searchCache.delete(token);
+  await ctx.answerCallbackQuery({ text: `Dipilih: ${track.name}` }).catch(() => {});
+
   const statusMessage = ctx.callbackQuery.message;
-  await editStatus(ctx, statusMessage, t(selection.language, 'playback.downloadingSelected', { title: htmlEscape(track.name) }), { parse_mode: 'HTML' });
+  await editStatus(ctx, statusMessage, `Dipilih: ${htmlEscape(track.name)}`, { parse_mode: 'HTML' }).catch(() => {});
+
   const defaultService = await getUserDefaultService(ctx.from?.id);
   enqueueChatTask(ctx.chat.id, 'Proses pilihan search', () => queueAndMaybePlay(ctx, statusMessage, track, Boolean(selection.isVideo), selection.language, defaultService));
+}
+
+export async function searchSelectionCancelHandler(ctx) {
+  const data = ctx.callbackQuery?.data ?? '';
+  const [, token] = data.split(':');
+  const selection = searchCache.get(token);
+  if (!selection) {
+    await ctx.answerCallbackQuery({ text: 'Hasil pencarian sudah kedaluwarsa. Jalankan /play lagi.' }).catch(() => {});
+    await ctx.editMessageText('Hasil pencarian sudah kedaluwarsa. Jalankan /play lagi.').catch(() => {});
+    return;
+  }
+
+  if (selection.userId && selection.userId !== ctx.from?.id) {
+    await ctx.answerCallbackQuery({ text: 'Hanya requester yang bisa memilih hasil ini.' }).catch(() => {});
+    return;
+  }
+
+  searchCache.delete(token);
+  await ctx.answerCallbackQuery({ text: 'Pencarian dibatalkan.' }).catch(() => {});
+  await ctx.editMessageText('Pencarian dibatalkan.').catch(() => {});
 }
 
 

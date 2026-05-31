@@ -220,8 +220,21 @@ def ffmpeg_parameters_for_stream(*, seek_seconds: float = 0.0, volume: int = 100
         if is_video:
             video_parts.extend(["---start", "-ss", seek_arg])
 
+    preset = os.environ.get("TGMB_AUDIO_PRESET", "normal").strip().lower()
+    filters = []
     if normalized_volume != 100:
-        audio_parts.extend(["---mid", "-af", f"volume={normalized_volume / 100:.2f}"])
+        filters.append(f"volume={normalized_volume / 100:.2f}")
+
+    if preset == "bass":
+        filters.append("equalizer=f=60:width_type=h:width=50:g=8")
+    elif preset == "nightcore":
+        filters.append("asetrate=48000*1.25,aresample=48000")
+    elif preset == "vaporwave":
+        filters.append("asetrate=48000*0.8,aresample=48000")
+
+    if filters:
+        filter_str = ",".join(filters)
+        audio_parts.extend(["---mid", "-af", filter_str])
 
     if is_video:
         video_params = video_ffmpeg_parameters()
@@ -325,6 +338,9 @@ async def handle_stdin_command(command: dict):
     
     # 1. Penanganan aksi pemutaran ("play", "replay", atau "switch")
     if action in {"play", "replay", "switch"}:
+        preset = str(command.get("audio_preset", "")).strip()
+        if preset:
+            os.environ["TGMB_AUDIO_PRESET"] = preset
         # Menjalankan pemutaran file secara asinkron dengan argumen path file, status video, detik seek, dan volume
         await play_file_async(
             str(command.get("file_path", "")),

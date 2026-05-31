@@ -119,6 +119,30 @@ function run(command, args, { timeoutMs = config.ytdlpTimeoutMs } = {}) {
   });
 }
 
+async function findCachedFile(downloadsDir, safeId, isVideo) {
+  try {
+    const files = await fs.readdir(downloadsDir);
+    const prefix = `${safeId}.`;
+    for (const file of files) {
+      if (file.startsWith(prefix)) {
+        const ext = path.extname(file).toLowerCase();
+        const isVideoExt = ['.mp4', '.mkv', '.webm', '.flv', '.avi', '.mov', '.3gp'].includes(ext);
+        const isAudioExt = ['.mp3', '.m4a', '.ogg', '.opus', '.wav', '.flac'].includes(ext);
+        if (isVideo ? isVideoExt : isAudioExt) {
+          const filePath = path.join(downloadsDir, file);
+          const stats = await fs.stat(filePath);
+          if (stats.size > 0) {
+            return filePath;
+          }
+        }
+      }
+    }
+  } catch {
+    // Ignore errors
+  }
+  return null;
+}
+
 export class Downloader {
   constructor(input, { defaultService = config.defaultService } = {}) {
     this.input = input;
@@ -220,6 +244,18 @@ export class Downloader {
   }
 
   async download(track, isVideo = false) {
+    const id = track?.trackId || track?.url || this.input || '';
+    const safeId = String(id).replace(/[^a-zA-Z0-9_-]/g, '_');
+
+    if (config.downloadCache && safeId) {
+      const cachedPath = await findCachedFile(config.downloadsDir, safeId, isVideo);
+      if (cachedPath) {
+        console.log(`[Cache Hit] Menggunakan file cache untuk ${track?.name || this.input}: ${cachedPath}`);
+        return cachedPath;
+      }
+      console.log(`[Cache Miss] File cache tidak ditemukan untuk ${track?.name || this.input}. Memulai download.`);
+    }
+
     const platform = String(track?.platform ?? this.detectPlatform()).toLowerCase();
     const isSoundCloud = platform.includes('soundcloud');
     if (isPlatformTrackRequiringProvider(track)) {
@@ -254,7 +290,7 @@ export class Downloader {
       }
     }*/
 
-    const outputTemplate = path.join(config.downloadsDir, '%(id)s.%(ext)s');
+    const outputTemplate = path.join(config.downloadsDir, `${safeId}.%(ext)s`);
     const args = [
       ...(await ytDlpBaseArgs()),
       '-o', outputTemplate,

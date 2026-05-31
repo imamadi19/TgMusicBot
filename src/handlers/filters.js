@@ -53,7 +53,7 @@ export async function checkBotAdmin(ctx, replyErr) {
   return true;
 }
 
-async function isUserAdminOrAuth(ctx, userId) {
+export async function isUserAdminOrAuth(ctx, userId) {
   if (await isAuthUser(ctx.chat.id, userId)) return true;
 
   const cachedAdmins = getCachedAdmins(ctx.chat.id);

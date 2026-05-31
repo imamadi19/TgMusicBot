@@ -6,12 +6,10 @@ import { rememberChat } from './core/db/chat-registry.js';
 import { getLoggerStatus } from './core/db/system.js';
 import { loadHandlers } from './handlers/index.js';
 import { scheduleDownloadCleanup } from './core/dl/download-cleanup.js';
+import { handleHealthRequest } from './core/health/health.js';
 
 function startHealthServer() {
-  const server = http.createServer((_, response) => {
-    response.writeHead(200, { 'content-type': 'application/json' });
-    response.end(JSON.stringify({ ok: true, service: 'TgMusicBot JS' }));
-  });
+  const server = http.createServer(handleHealthRequest);
   server.listen(Number(config.port), '0.0.0.0');
   return server;
 }
