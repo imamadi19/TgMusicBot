@@ -318,72 +318,124 @@ async def play_file_async(file_path: str, is_video: bool = False, seek_seconds: 
 
 
 async def handle_stdin_command(command: dict):
+    # Mengambil jenis aksi (action) dari dictionary perintah dan mengubahnya menjadi huruf kecil tanpa spasi tambahan
     action = str(command.get("action", "")).strip().lower()
+    # Mengambil ID perintah untuk kebutuhan pencocokan respons balik ke Node.js, defaultnya "-" jika kosong
     command_id = str(command.get("id", "")).strip() or "-"
+    
+    # 1. Penanganan aksi pemutaran ("play", "replay", atau "switch")
     if action in {"play", "replay", "switch"}:
+        # Menjalankan pemutaran file secara asinkron dengan argumen path file, status video, detik seek, dan volume
         await play_file_async(
             str(command.get("file_path", "")),
             bool_value(command.get("is_video")),
             float(command.get("seek_seconds", 0)),
             clamp_volume(command.get("volume", 100)),
         )
+        # Mencetak konfirmasi sukses pemutaran ke stdout agar dibaca oleh proses Node.js induk
         print(f"TGMB_CONTROL_OK {command_id} play", flush=True)
         return
+
+    # 2. Penanganan aksi jeda ("pause")
     if action == "pause":
+        # Menjalankan fungsi penjedaan asinkron (pause_async)
         await pause_async()
+        # Mencetak konfirmasi sukses jeda ke stdout
         print(f"TGMB_CONTROL_OK {command_id} pause", flush=True)
         return
+
+    # 3. Penanganan aksi melanjutkan ("resume")
     if action == "resume":
+        # Menjalankan fungsi melanjutkan pemutaran asinkron (resume_async)
         await resume_async()
+        # Mencetak konfirmasi sukses melanjutkan pemutaran ke stdout
         print(f"TGMB_CONTROL_OK {command_id} resume", flush=True)
         return
+
+    # 4. Penanganan aksi senyap ("mute")
     if action == "mute":
+        # Mencari metode bisukan suara dari library PyTgCalls (mute_stream atau mute) secara dinamis
         method = getattr(call_client, "mute_stream", None) or getattr(call_client, "mute", None)
         if not callable(method):
             raise RuntimeError("PyTgCalls runtime ini tidak mendukung mute (method mute_stream/mute tidak ditemukan)")
+        # Memanggil metode pembisuan yang didapatkan dengan melewatkan chat_id
         await call_method_with_optional_chat(method)
+        # Mencetak konfirmasi sukses mute ke stdout
         print(f"TGMB_CONTROL_OK {command_id} mute", flush=True)
         return
+
+    # 5. Penanganan aksi suarakan kembali ("unmute")
     if action == "unmute":
+        # Mencari metode nyalakan suara dari library PyTgCalls (unmute_stream atau unmute) secara dinamis
         method = getattr(call_client, "unmute_stream", None) or getattr(call_client, "unmute", None)
         if not callable(method):
             raise RuntimeError("PyTgCalls runtime ini tidak mendukung unmute (method unmute_stream/unmute tidak ditemukan)")
+        # Memanggil metode pembukaan bisu dengan chat_id
         await call_method_with_optional_chat(method)
+        # Mencetak konfirmasi sukses unmute ke stdout
         print(f"TGMB_CONTROL_OK {command_id} unmute", flush=True)
         return
+
+    # 6. Penanganan aksi mengubah kecepatan pemutaran ("speed")
     if action == "speed":
+        # Mengambil nilai kecepatan baru dari payload
         speed = float(command.get("speed", 1.0))
+        # Validasi batas kecepatan aman antara 0.25x hingga 4.0x
         if speed < 0.25 or speed > 4:
             raise RuntimeError("speed harus di antara 0.25 dan 4")
+        # Mencari metode ubah kecepatan dari library PyTgCalls secara dinamis
         method = getattr(call_client, "set_speed", None) or getattr(call_client, "set_playback_speed", None)
         if not callable(method):
             raise RuntimeError("PyTgCalls runtime ini tidak mendukung speed (method set_speed/set_playback_speed tidak ditemukan)")
+        # Memanggil metode ubah kecepatan dengan mengirimkan chat_id dan nilai kecepatan
         await call_method(method, chat_id, speed)
+        # Mencetak konfirmasi sukses pengubahan kecepatan ke stdout
         print(f"TGMB_CONTROL_OK {command_id} speed", flush=True)
         return
+
+    # 7. Penanganan aksi mengubah volume pemutaran ("volume")
     if action == "volume":
         file_path = str(command.get("file_path", "")).strip()
         if not file_path:
             raise RuntimeError("file_path wajib diisi saat ubah volume stream aktif")
+        # Mengambil detik pemutaran terakhir (seek) agar suara tidak mengulang kembali dari awal saat volume diubah
         seek_seconds = float(command.get("seek_seconds", 0))
+        # Detik seek tidak boleh bernilai negatif
         if seek_seconds < 0:
             raise RuntimeError("seek_seconds tidak boleh negatif")
+        # Membangun ulang dan memutar stream baru dengan volume baru pada detik saat ini
         await play_file_async(file_path, bool_value(command.get("is_video")), seek_seconds, clamp_volume(command.get("volume", 100)))
+        # Mencetak konfirmasi sukses ubah volume ke stdout
         print(f"TGMB_CONTROL_OK {command_id} volume", flush=True)
         return
+
+    # 8. Penanganan aksi lompat ke detik tertentu ("seek")
     if action == "seek":
+        # Mengambil detik tujuan seek dari payload perintah
+        seek_seconds = float(command.get("seek_seconds", 0))
+        # Memvalidasi agar detik seek tidak bernilai negatif
+        if seek_seconds < 0:
+            raise RuntimeError("seek_seconds tidak boleh negatif")
+        # Mengatur ulang stream dan mulai memutar kembali dari detik yang dituju
         await play_file_async(
             str(command.get("file_path", "")),
             bool_value(command.get("is_video")),
-            float(command.get("seek_seconds", 0)),
+            seek_seconds,
             clamp_volume(command.get("volume", 100)),
         )
+        # Mencetak konfirmasi sukses seek ke stdout
         print(f"TGMB_CONTROL_OK {command_id} seek", flush=True)
         return
+
+    # 9. Penanganan aksi menghentikan pemutaran ("stop")
     if action == "stop":
+        # Menjalankan pembersihan/cleaup (memutuskan koneksi dan keluar dari voice call)
         cleanup()
+        # Mencetak konfirmasi sukses stop ke stdout
         print(f"TGMB_CONTROL_OK {command_id} stop", flush=True)
         return
+
+    # Melempar error jika ada aksi tak dikenal yang dikirim oleh Node.js
     raise RuntimeError(f"command tidak dikenal: {action}")
 
 

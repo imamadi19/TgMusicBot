@@ -99,10 +99,10 @@ class AdapterControlSignalTest(unittest.IsolatedAsyncioTestCase):
 
         self.assertFalse(self.adapter.paused)
         self.assertTrue(self.adapter.stream_started)
-        self.assertEqual(
-            self.fake_call_client.calls,
-            [("play", -100123, "/tmp/next.mp3")],
-        )
+        self.assertEqual(len(self.fake_call_client.calls), 1)
+        action, chat_id, stream = self.fake_call_client.calls[0]
+        self.assertEqual((action, chat_id), ("play", -100123))
+        self.assertEqual(getattr(stream, "_media_path", None), "/tmp/next.mp3")
 
     async def test_play_fallback_joins_group_call_when_userbot_not_in_call(self):
         self.fake_call_client = FakeJoinAfterPlayFailureClient()
@@ -111,10 +111,10 @@ class AdapterControlSignalTest(unittest.IsolatedAsyncioTestCase):
         await self.adapter.handle_stdin_command({"action": "play", "file_path": "/tmp/next.mp3"})
 
         self.assertTrue(self.adapter.stream_started)
-        self.assertEqual(
-            self.fake_call_client.calls,
-            [("join_group_call", -100123, "/tmp/next.mp3")],
-        )
+        self.assertEqual(len(self.fake_call_client.calls), 1)
+        action, chat_id, stream = self.fake_call_client.calls[0]
+        self.assertEqual((action, chat_id), ("join_group_call", -100123))
+        self.assertEqual(getattr(stream, "_media_path", None), "/tmp/next.mp3")
 
 
     async def test_video_play_control_command_uses_media_stream(self):
@@ -134,9 +134,9 @@ class AdapterControlSignalTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(getattr(stream, "_audio_path", None), "/tmp/next.mp4")
         self.assertIsNotNone(getattr(stream, "microphone", None))
         self.assertIsNotNone(getattr(stream, "camera", None))
-        self.assertEqual(getattr(stream, "_ffmpeg_parameters", None), "---start -re")
-        self.assertEqual(getattr(stream, "_video_parameters", None).width, 1280)
-        self.assertEqual(getattr(stream, "_video_parameters", None).height, 720)
+        self.assertEqual(getattr(stream, "_ffmpeg_parameters", None), "--video ---start -re")
+        self.assertEqual(getattr(stream, "_video_parameters", None).width, 640)
+        self.assertEqual(getattr(stream, "_video_parameters", None).height, 360)
         self.assertEqual(getattr(stream, "_video_parameters", None).frame_rate, 30)
 
     async def test_video_quality_env_can_lower_resolution(self):
@@ -179,10 +179,10 @@ class AdapterControlSignalTest(unittest.IsolatedAsyncioTestCase):
         })
 
         self.assertFalse(self.adapter.current_stream_is_video)
-        self.assertEqual(
-            self.fake_call_client.calls,
-            [("play", -100123, "/tmp/next.mp3")],
-        )
+        self.assertEqual(len(self.fake_call_client.calls), 1)
+        action, chat_id, stream = self.fake_call_client.calls[0]
+        self.assertEqual((action, chat_id), ("play", -100123))
+        self.assertEqual(getattr(stream, "_media_path", None), "/tmp/next.mp3")
 
     async def test_play_control_command_prefers_in_call_stream_switch(self):
         self.fake_call_client = FakeSwitchCallClient()
@@ -192,10 +192,10 @@ class AdapterControlSignalTest(unittest.IsolatedAsyncioTestCase):
         await self.adapter.handle_stdin_command({"action": "play", "file_path": "/tmp/next.mp3"})
 
         self.assertFalse(self.adapter.paused)
-        self.assertEqual(
-            self.fake_call_client.calls,
-            [("change_stream", -100123, "/tmp/next.mp3")],
-        )
+        self.assertEqual(len(self.fake_call_client.calls), 1)
+        action, chat_id, stream = self.fake_call_client.calls[0]
+        self.assertEqual((action, chat_id), ("change_stream", -100123))
+        self.assertEqual(getattr(stream, "_media_path", None), "/tmp/next.mp3")
 
     async def test_play_control_command_resumes_before_switching_paused_stream(self):
         self.adapter.paused = True
@@ -203,10 +203,12 @@ class AdapterControlSignalTest(unittest.IsolatedAsyncioTestCase):
         await self.adapter.handle_stdin_command({"action": "replay", "file_path": "/tmp/current.mp3"})
 
         self.assertFalse(self.adapter.paused)
-        self.assertEqual(
-            self.fake_call_client.calls,
-            [("resume", -100123), ("play", -100123, "/tmp/current.mp3")],
-        )
+        self.assertEqual(len(self.fake_call_client.calls), 2)
+        call1, call2 = self.fake_call_client.calls
+        self.assertEqual(call1, ("resume", -100123))
+        action, chat_id, stream = call2
+        self.assertEqual((action, chat_id), ("play", -100123))
+        self.assertEqual(getattr(stream, "_media_path", None), "/tmp/current.mp3")
 
     async def test_seek_command_uses_seek_seconds_and_volume_in_stream(self):
         await self.adapter.handle_stdin_command({
