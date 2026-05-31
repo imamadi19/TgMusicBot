@@ -1416,7 +1416,7 @@ async function safeDeleteSearchMessage(ctx, fallbackText) {
       if (currentMessage) {
         if (currentMessage.text) {
           await ctx.editMessageText(fallbackText, { reply_markup: undefined });
-        } else if (currentMessage.caption) {
+        } else {
           await ctx.editMessageCaption({ caption: fallbackText, reply_markup: undefined });
         }
       }
