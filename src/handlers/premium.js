@@ -5,7 +5,7 @@ import { getPremium, isPremiumActive, revokePremium, upsertPremium } from '../co
 import { getPremiumSettings, setPremiumAudioPreset, setPremiumDjMode } from '../core/db/premium-settings.js';
 import { t } from '../i18n/index.js';
 import { commandArgs, isOwner, htmlEscape } from '../utils/telegram.js';
-import { isUserAdminOrAuth } from './filters.js';
+import { isUserAdminOrAuth, enforceDjModeControl } from './filters.js';
 import { isAuthUser } from '../core/db/auth.js';
 
 function formatDate(value) {
@@ -27,7 +27,7 @@ async function isDjOrAdmin(ctx) {
   return isUserAdminOrAuth(ctx, userId);
 }
 
-async function queueLimitForCtx(ctx) {
+export async function getQueueLimitForContext(ctx) {
   const chatId = Number(ctx.chat?.id);
   const userId = Number(ctx.from?.id);
   const [chatPremium, userPremium] = await Promise.all([
@@ -92,7 +92,7 @@ export async function premiumInfoHandler(ctx) {
   const userPremium = userId ? await isPremiumActive('user', userId) : false;
 
   const settings = chatId ? await getPremiumSettings(chatId) : { audioPreset: 'normal', djMode: false };
-  const queueLimit = await queueLimitForCtx(ctx);
+  const queueLimit = await getQueueLimitForContext(ctx);
 
   const text = `<b>Premium Status Info</b>\n\n` +
     `• <b>Chat Premium:</b> ${chatPremium ? '✅ Active' : '❌ Inactive'}\n` +
@@ -104,46 +104,79 @@ export async function premiumInfoHandler(ctx) {
   await ctx.reply(text, { parse_mode: 'HTML' });
 }
 
+async function canUsePremiumQueueMove(ctx) {
+  const chatId = ctx.chat?.id;
+  const userId = ctx.from?.id;
+  if (!userId) return false;
+
+  const isOwnerUser = Number(userId) === Number(config.ownerId) || config.devs.includes(Number(userId));
+  if (isOwnerUser) return true;
+
+  if (chatId) {
+    const adminOrAuth = await isUserAdminOrAuth(ctx, userId);
+    if (adminOrAuth) return true;
+  }
+
+  const userPremium = await isPremiumActive('user', userId);
+  if (userPremium) return true;
+
+  const chatPremium = chatId ? await isPremiumActive('chat', chatId) : false;
+  if (chatPremium) return true;
+
+  return false;
+}
+
 export async function premiumQueueMoveHandler(ctx) {
   const language = await getUserLanguage(ctx.from?.id);
+  const chatId = ctx.chat?.id;
+  if (!chatId) return;
+
+  if (!(await enforceDjModeControl(ctx, 'qmove'))) {
+    return;
+  }
+
+  const hasAccess = await canUsePremiumQueueMove(ctx);
+  if (!hasAccess) {
+    await ctx.reply("Anda tidak memiliki akses premium atau otorisasi untuk menggunakan command ini.");
+    return;
+  }
+
+  const queue = chatCache.getQueue(chatId) || [];
+  if (queue.length <= 1) {
+    await ctx.reply("Antrean kosong atau hanya berisi satu lagu yang sedang diputar. Tidak ada lagu yang bisa dipindahkan.");
+    return;
+  }
+
   const [fromText, toText] = commandArgs(ctx).split(/\s+/).filter(Boolean);
-  const from = Number.parseInt(fromText, 10) - 1;
-  const to = Number.parseInt(toText, 10) - 1;
-  if (!Number.isInteger(from) || !Number.isInteger(to) || from < 1 || to < 1) {
-    await ctx.reply('Usage: /qmove [from>=2] [to>=2]');
+  const fromVal = Number.parseInt(fromText, 10);
+  const toVal = Number.parseInt(toText, 10);
+
+  if (!Number.isInteger(fromVal) || !Number.isInteger(toVal)) {
+    await ctx.reply("Format salah. Gunakan: `/qmove <posisi_asal> <posisi_tujuan>` (angka mulai dari 2).", { parse_mode: 'Markdown' });
     return;
   }
 
-  const chatPremium = await isPremiumActive('chat', ctx.chat?.id);
-  const userPremium = await isPremiumActive('user', ctx.from?.id);
-  
-  if (!chatPremium && !userPremium) {
-    const isOwnerUser = Number(ctx.from?.id) === Number(config.ownerId) || config.devs.includes(Number(ctx.from?.id));
-    if (!isOwnerUser) {
-      await ctx.reply(t(language, 'premium.notActiveFeature'));
-      return;
-    }
+  if (fromVal < 2 || toVal < 2) {
+    await ctx.reply("Lagu nomor 1 sedang diputar dan tidak boleh dipindahkan. Posisi asal dan tujuan harus minimal 2.");
+    return;
   }
 
-  const settings = await getPremiumSettings(ctx.chat?.id);
-  if (settings.djMode) {
-    const isOwnerUser = Number(ctx.from?.id) === Number(config.ownerId) || config.devs.includes(Number(ctx.from?.id));
-    const auth = await isAuthUser(ctx.chat.id, ctx.from?.id) || await isUserAdminOrAuth(ctx, ctx.from?.id);
-    if (!isOwnerUser && !auth && !userPremium) {
-      await ctx.reply('DJ mode is enabled: only admin/auth/premium DJ can move tracks.');
-      return;
-    }
-  }
+  const from = fromVal - 1;
+  const to = toVal - 1;
 
-  const queue = chatCache.getQueue(ctx.chat.id);
   if (from >= queue.length || to >= queue.length) {
-    await ctx.reply(t(language, 'playback.invalidQueue'));
+    await ctx.reply(`Nomor posisi di luar batas antrean. Batas maksimal adalah posisi ${queue.length}.`);
     return;
   }
-  const moved = chatCache.remove(ctx.chat.id, from);
-  chatCache.addSongAt(ctx.chat.id, moved, to);
 
-  const updatedQueue = chatCache.getQueue(ctx.chat.id);
+  const moved = chatCache.remove(chatId, from);
+  if (!moved) {
+    await ctx.reply("Gagal memindahkan lagu. Pastikan posisi antrean benar.");
+    return;
+  }
+  chatCache.addSongAt(chatId, moved, to);
+
+  const updatedQueue = chatCache.getQueue(chatId);
   const queueLines = updatedQueue.slice(0, 5).map((track, idx) => {
     return `${idx + 1}. <b>${htmlEscape(track.name)}</b>`;
   });
@@ -152,7 +185,7 @@ export async function premiumQueueMoveHandler(ctx) {
   }
   const queueText = `\n\n<b>Queue Saat Ini:</b>\n${queueLines.join('\n')}`;
 
-  await ctx.reply(`✅ Berhasil memindahkan <b>${htmlEscape(moved.name)}</b> ke posisi ${to + 1}.${queueText}`, { parse_mode: 'HTML' });
+  await ctx.reply(`✅ Berhasil memindahkan <b>${htmlEscape(moved.name)}</b> ke posisi ${toVal}.${queueText}`, { parse_mode: 'HTML' });
 }
 
 const ALLOWED_PRESETS = new Set(['normal', 'bass', 'nightcore', 'vaporwave']);

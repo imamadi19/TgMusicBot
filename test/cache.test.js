@@ -341,13 +341,13 @@ test('youtube selection keyboard uses carousel navigation with top result select
   const first = youtubeSelectionKeyboard(99, tracks).inline_keyboard;
   assert.deepEqual(first.map((row) => row.map((button) => button.callback_data)), [
     ['searchpage:99:2', 'searchpage:99:1'],
-    ['searchpick:99:0'],
+    ['searchpick:99:0', 'searchcancel:99'],
   ]);
 
   const middle = youtubeSelectionKeyboard(99, tracks, 1).inline_keyboard;
   assert.deepEqual(middle.map((row) => row.map((button) => button.callback_data)), [
     ['searchpage:99:0', 'searchpage:99:2'],
-    ['searchpick:99:1'],
+    ['searchpick:99:1', 'searchcancel:99'],
   ]);
 });
 
@@ -645,11 +645,13 @@ test('scheduled cleanup removes old downloads and keeps cookie file', async () =
 
   const originalDownloadsDir = config.downloadsDir;
   const originalRetentionHours = config.downloadRetentionHours;
+  const originalDownloadCache = config.downloadCache;
   const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'tgmb-download-retention-'));
   const downloadsDir = path.join(tempRoot, 'downloads');
   await fs.mkdir(downloadsDir, { recursive: true });
   config.downloadsDir = downloadsDir;
   config.downloadRetentionHours = 1;
+  config.downloadCache = false;
 
   try {
     const oldTrack = path.join(downloadsDir, 'old.mp3');
@@ -674,6 +676,7 @@ test('scheduled cleanup removes old downloads and keeps cookie file', async () =
   } finally {
     config.downloadsDir = originalDownloadsDir;
     config.downloadRetentionHours = originalRetentionHours;
+    config.downloadCache = originalDownloadCache;
     await fs.rm(tempRoot, { recursive: true, force: true });
   }
 });

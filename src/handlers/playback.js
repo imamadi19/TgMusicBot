@@ -6,6 +6,7 @@ import { getPlaylist } from '../core/db/playlists.js';
 import { searchCache } from '../core/cache/search-cache.js';
 import { InlineKeyboard } from 'grammy';
 import { isPremiumActive } from '../core/db/premium.js';
+import { getQueueLimitForContext } from './premium.js';
 import { getPremiumSettings } from '../core/db/premium-settings.js';
 import { getUserDefaultService, getUserLanguage } from '../core/db/user-settings.js';
 import { config } from '../config/index.js';
@@ -14,11 +15,10 @@ import { commandArgs, htmlEscape, isUrl } from '../utils/telegram.js';
 import { firstName } from '../utils/extras.js';
 import { secondsToClock } from '../utils/duration.js';
 import { completedProgressKeyboard, controlKeyboard, supportKeyboard, searchSelectionKeyboard } from './keyboards.js';
-import { playMode, isUserAdminOrAuth } from './filters.js';
+import { playMode, isUserAdminOrAuth, enforceDjModeControl } from './filters.js';
 import { isAuthUser } from '../core/db/auth.js';
 
 const MAX_QUEUE = 10;
-const PREMIUM_MAX_QUEUE = 50;
 const ASSISTANT_INVITE_EXPIRE_SECONDS = 60 * 60;
 const PROGRESS_UPDATE_INTERVAL_MS = 10000;
 const PANEL_EDIT_MIN_INTERVAL_MS = 1200;
@@ -363,13 +363,7 @@ function getPlayCooldownLeft(chatId, userId) {
 }
 
 async function queueLimitFor(ctx) {
-  const chatId = Number(ctx.chat?.id);
-  const userId = Number(ctx.from?.id);
-  const [chatPremium, userPremium] = await Promise.all([
-    isPremiumActive('chat', chatId),
-    isPremiumActive('user', userId),
-  ]);
-  return chatPremium || userPremium ? config.premiumQueueLimit : MAX_QUEUE;
+  return getQueueLimitForContext(ctx);
 }
 
 async function isPremiumRequester(ctx) {
@@ -380,25 +374,8 @@ async function isPremiumRequester(ctx) {
   return chatPremium || userPremium;
 }
 
-async function isUserAuthorizedForDjControl(ctx) {
-  const userId = ctx.from?.id;
-  if (!userId) return false;
-  const isOwner = Number(userId) === Number(config.ownerId) || config.devs.includes(Number(userId));
-  if (isOwner) return true;
-  if (await isUserAdminOrAuth(ctx, userId)) return true;
-  if (await isPremiumActive('user', userId)) return true;
-  return false;
-}
-
 async function checkDjMode(ctx) {
-  const premiumSettings = await getPremiumSettings(ctx.chat.id);
-  if (premiumSettings.djMode) {
-    if (!(await isUserAuthorizedForDjControl(ctx))) {
-      await ctx.reply('DJ mode is enabled: only admin/auth/premium DJ can control playback.');
-      return false;
-    }
-  }
-  return true;
+  return enforceDjModeControl(ctx);
 }
 
 voicePlayer.onTrackEnd(async ({ chatId, finished, next }) => {
@@ -499,7 +476,12 @@ function selectedTrackIndex(tracks, index = 0) {
 
 function youtubeThumbnail(track) {
   const value = String(track?.thumbnail ?? '').trim();
-  return /^https?:\/\//i.test(value) ? value : '';
+  if (/^https?:\/\//i.test(value)) return value;
+  const trackId = String(track?.trackId ?? '').trim();
+  if (/^[\w-]{11}$/.test(trackId)) {
+    return `https://img.youtube.com/vi/${trackId}/hqdefault.jpg`;
+  }
+  return '';
 }
 
 function formatYouTubeSearchResult(language, track, index, total) {
@@ -607,35 +589,107 @@ async function sendPlaybackPhoto(ctx, statusMessage, track, caption, options = {
   }
 }
 
+async function updateSearchSelectionMessage(ctx, token, selection, newIndex) {
+  const messageId = ctx.callbackQuery?.message?.message_id;
+  const chatId = ctx.chat.id;
+  const safeIndex = selectedTrackIndex(selection.results, newIndex);
+  selection.page = safeIndex;
+
+  const caption = formatSearchSelection(selection.language, selection.results, safeIndex);
+  const thumbnail = youtubeThumbnail(selection.results[safeIndex]);
+  const keyboard = searchSelectionKeyboard(token, selection.results, safeIndex);
+
+  if (selection.hasPhoto && thumbnail) {
+    try {
+      await ctx.api.editMessageMedia(chatId, messageId, {
+        type: 'photo',
+        media: thumbnail,
+        caption,
+        parse_mode: 'HTML',
+      }, {
+        reply_markup: keyboard,
+      });
+      return;
+    } catch (error) {
+      console.warn('Failed to edit search message media, falling back to recreate:', error.message);
+    }
+  }
+
+  if (!selection.hasPhoto && !thumbnail) {
+    try {
+      await ctx.api.editMessageText(chatId, messageId, caption, {
+        parse_mode: 'HTML',
+        reply_markup: keyboard,
+        disable_web_page_preview: true,
+      });
+      return;
+    } catch (error) {
+      console.warn('Failed to edit search message text:', error.message);
+    }
+  }
+
+  try {
+    if (messageId) {
+      await ctx.api.deleteMessage(chatId, messageId).catch(() => {});
+    }
+
+    let newMessage;
+    if (thumbnail) {
+      newMessage = await ctx.replyWithPhoto(thumbnail, {
+        caption,
+        parse_mode: 'HTML',
+        reply_markup: keyboard,
+      });
+      selection.hasPhoto = true;
+    } else {
+      newMessage = await ctx.reply(caption, {
+        parse_mode: 'HTML',
+        reply_markup: keyboard,
+        disable_web_page_preview: true,
+      });
+      selection.hasPhoto = false;
+    }
+  } catch (error) {
+    console.error('Failed to recreate search message:', error);
+  }
+}
+
 async function showSearchSelection(ctx, statusMessage, tracks, isVideo, language, index = 0) {
   const safeIndex = selectedTrackIndex(tracks, index);
   const caption = formatSearchSelection(language, tracks, safeIndex);
   const thumbnail = youtubeThumbnail(tracks[safeIndex]);
+
+  const state = {
+    chatId: ctx.chat.id,
+    userId: ctx.from?.id,
+    isVideo,
+    results: tracks,
+    page: safeIndex,
+    language,
+    hasPhoto: false,
+  };
+  const token = searchCache.save(state);
+
   const selectionMessage = thumbnail
     ? await sendSelectionPhoto(ctx, statusMessage, thumbnail, caption)
     : statusMessage;
   const hasPhoto = selectionMessage.message_id !== statusMessage.message_id && Boolean(thumbnail);
+  state.hasPhoto = hasPhoto;
 
-  chatCache.setSearchSelection(ctx.chat.id, selectionMessage.message_id, {
-    tracks,
-    userId: ctx.from?.id,
-    isVideo,
-    language,
-    hasPhoto,
-  });
+  const keyboard = searchSelectionKeyboard(token, tracks, safeIndex);
 
   if (hasPhoto) {
     await ctx.api.editMessageCaption(ctx.chat.id, selectionMessage.message_id, {
       caption,
       parse_mode: 'HTML',
-      reply_markup: searchSelectionKeyboard(selectionMessage.message_id, tracks, safeIndex),
+      reply_markup: keyboard,
     });
     return;
   }
 
   await editStatus(ctx, selectionMessage, caption, {
     parse_mode: 'HTML',
-    reply_markup: searchSelectionKeyboard(selectionMessage.message_id, tracks, safeIndex),
+    reply_markup: keyboard,
     disable_web_page_preview: true,
   });
 }
@@ -690,7 +744,10 @@ async function queueAndMaybePlay(ctx, statusMessage, track, isVideo, language, d
     await editStatus(ctx, statusMessage, t(language, 'playback.voiceFailed', { error: formatError(error, language) }));
     return;
   }
-  const playbackMessage = await editStatus(ctx, statusMessage, formatTrack(language, saveTrack), { parse_mode: 'HTML', reply_markup: controlKeyboard(language, '', saveTrack), disable_web_page_preview: true });
+  const playbackCaption = formatTrack(language, saveTrack);
+  const playbackMarkup = controlKeyboard(language, '', saveTrack);
+  const playbackMessage = await sendPlaybackPhoto(ctx, statusMessage, saveTrack, playbackCaption, { reply_markup: playbackMarkup, disable_web_page_preview: true })
+    ?? await editStatus(ctx, statusMessage, playbackCaption, { parse_mode: 'HTML', reply_markup: playbackMarkup, disable_web_page_preview: true });
   rememberPlaybackPanel(ctx, playbackMessage ?? statusMessage, language, saveTrack);
   startProgressUpdater(ctx, playbackMessage ?? statusMessage, language);
 }
@@ -817,7 +874,10 @@ async function processPlayRequest(ctx, status, input, isVideo, language, default
         const activeTrack = await startQueuedTrack(ctx, tracks[0], isVideo);
         tracks[0].startedAt = activeTrack?.startedAt;
         if (firstTrackMessage) {
-          const playbackMessage = await editStatus(ctx, firstTrackMessage, formatTrack(language, tracks[0]), { parse_mode: 'HTML', reply_markup: controlKeyboard(language, '', tracks[0]), disable_web_page_preview: true });
+          const playbackCaption = formatTrack(language, tracks[0]);
+          const playbackMarkup = controlKeyboard(language, '', tracks[0]);
+          const playbackMessage = await sendPlaybackPhoto(ctx, firstTrackMessage, tracks[0], playbackCaption, { reply_markup: playbackMarkup, disable_web_page_preview: true })
+            ?? await editStatus(ctx, firstTrackMessage, playbackCaption, { parse_mode: 'HTML', reply_markup: playbackMarkup, disable_web_page_preview: true });
           rememberPlaybackPanel(ctx, playbackMessage ?? firstTrackMessage, language, tracks[0]);
           startProgressUpdater(ctx, playbackMessage ?? firstTrackMessage, language);
         }
@@ -879,23 +939,7 @@ async function processPlayRequest(ctx, status, input, isVideo, language, default
   }
 
   if (!isUrl(normalizedInput) && !input.startsWith('tgpl_')) {
-    const state = {
-      chatId: ctx.chat.id,
-      userId: ctx.from?.id,
-      query: normalizedInput,
-      isVideo,
-      results,
-      page: 0,
-      language,
-    };
-    const token = searchCache.save(state);
-    const text = formatSearchSelectionText(normalizedInput, results, 0, isVideo);
-    const keyboard = makeSearchSelectionKeyboard(token, 0, results.length);
-    await editStatus(ctx, status, text, {
-      parse_mode: 'HTML',
-      reply_markup: keyboard,
-      disable_web_page_preview: true,
-    });
+    await showSearchSelection(ctx, status, results, isVideo, language);
     return;
   }
 
@@ -936,7 +980,10 @@ async function processPlayRequest(ctx, status, input, isVideo, language, default
         const activeTrack = await startQueuedTrack(ctx, tracks[0], isVideo);
         tracks[0].startedAt = activeTrack?.startedAt;
         if (firstTrackMessage) {
-          const playbackMessage = await editStatus(ctx, firstTrackMessage, formatTrack(language, tracks[0]), { parse_mode: 'HTML', reply_markup: controlKeyboard(language, '', tracks[0]), disable_web_page_preview: true });
+          const playbackCaption = formatTrack(language, tracks[0]);
+          const playbackMarkup = controlKeyboard(language, '', tracks[0]);
+          const playbackMessage = await sendPlaybackPhoto(ctx, firstTrackMessage, tracks[0], playbackCaption, { reply_markup: playbackMarkup, disable_web_page_preview: true })
+            ?? await editStatus(ctx, firstTrackMessage, playbackCaption, { parse_mode: 'HTML', reply_markup: playbackMarkup, disable_web_page_preview: true });
           rememberPlaybackPanel(ctx, playbackMessage ?? firstTrackMessage, language, tracks[0]);
           startProgressUpdater(ctx, playbackMessage ?? firstTrackMessage, language);
         }
@@ -1277,54 +1324,6 @@ export async function speedHandler(ctx) {
 }
 
 
-function formatSearchSelectionText(query, results, page, isVideo) {
-  const start = page * 5;
-  const pageTracks = results.slice(start, start + 5);
-  const typeLabel = isVideo ? 'Video' : 'Audio';
-
-  let text = `🔍 <b>Hasil Pencarian ${typeLabel}:</b> "${htmlEscape(query)}"\n`;
-  text += `Halaman ${page + 1}\n\n`;
-
-  pageTracks.forEach((track, index) => {
-    const number = start + index + 1;
-    const title = htmlEscape(track.name || track.title || 'Unknown');
-    const artist = track.artist || track.channel ? htmlEscape(track.artist || track.channel) : '';
-    const duration = track.duration ? `(${secondsToClock(track.duration)})` : '';
-    const artistLine = artist ? ` - ${artist}` : '';
-    text += `${number}. <b>${title}</b>${artistLine} ${duration}\n`;
-  });
-
-  text += `\nSilakan pilih angka di bawah untuk memutar.`;
-  return text;
-}
-
-function makeSearchSelectionKeyboard(token, page, totalResults) {
-  const keyboard = new InlineKeyboard();
-  const start = page * 5;
-  const pageCount = Math.min(5, totalResults - start);
-
-  // Row for 1 to 5 selection
-  for (let i = 0; i < pageCount; i++) {
-    const globalIndex = start + i;
-    keyboard.text(String(i + 1), `searchpick:${token}:${globalIndex}`);
-  }
-  keyboard.row();
-
-  // Navigation row: Prev, Cancel, Next
-  const hasPrev = page > 0;
-  const hasNext = (page + 1) * 5 < totalResults;
-
-  if (hasPrev) {
-    keyboard.text('⬅️ Prev', `searchpage:${token}:${page - 1}`);
-  }
-  keyboard.text('❌ Cancel', `searchcancel:${token}`);
-  if (hasNext) {
-    keyboard.text('Next ➡️', `searchpage:${token}:${page + 1}`);
-  }
-
-  return keyboard;
-}
-
 export async function searchSelectionPageHandler(ctx) {
   const data = ctx.callbackQuery?.data ?? '';
   const [, token, pageText] = data.split(':');
@@ -1341,17 +1340,12 @@ export async function searchSelectionPageHandler(ctx) {
   }
 
   const page = Number.parseInt(pageText, 10) || 0;
-  selection.page = page;
-
-  const text = formatSearchSelectionText(selection.query, selection.results, page, selection.isVideo);
-  const keyboard = makeSearchSelectionKeyboard(token, page, selection.results.length);
+  const totalResults = selection.results?.length ?? 0;
+  const maxPage = Math.max(0, totalResults - 1);
+  const boundedPage = Math.max(0, Math.min(page, maxPage));
 
   await ctx.answerCallbackQuery().catch(() => {});
-  await ctx.editMessageText(text, {
-    parse_mode: 'HTML',
-    reply_markup: keyboard,
-    disable_web_page_preview: true,
-  }).catch(() => {});
+  await updateSearchSelectionMessage(ctx, token, selection, boundedPage);
 }
 
 export async function searchSelectionPickHandler(ctx) {
@@ -1370,17 +1364,42 @@ export async function searchSelectionPickHandler(ctx) {
   }
 
   const index = Number.parseInt(indexText, 10);
+  const totalResults = selection.results?.length ?? 0;
+  if (Number.isNaN(index) || index < 0 || index >= totalResults) {
+    await ctx.answerCallbackQuery({ text: 'Pilihan tidak valid.' }).catch(() => {});
+    return;
+  }
   const track = selection.results[index];
   if (!track) {
     await ctx.answerCallbackQuery({ text: 'Pilihan tidak valid.' }).catch(() => {});
     return;
   }
 
+  const chatId = ctx.chat?.id;
+  if (chatId) {
+    const queueLimit = await getQueueLimitForContext(ctx);
+    if (chatCache.getQueueLength(chatId) >= queueLimit) {
+      await ctx.answerCallbackQuery({ text: `Antrean penuh! Maksimal ${queueLimit} lagu.` }).catch(() => {});
+      const statusMessage = ctx.callbackQuery.message;
+      await editStatus(ctx, statusMessage, `Gagal memutar: Antrean penuh! Maksimal ${queueLimit} lagu.`).catch(() => {});
+      return;
+    }
+  }
+
   searchCache.delete(token);
   await ctx.answerCallbackQuery({ text: `Dipilih: ${track.name}` }).catch(() => {});
 
-  const statusMessage = ctx.callbackQuery.message;
-  await editStatus(ctx, statusMessage, `Dipilih: ${htmlEscape(track.name)}`, { parse_mode: 'HTML' }).catch(() => {});
+  let statusMessage = ctx.callbackQuery.message;
+  if (selection.hasPhoto) {
+    try {
+      await ctx.api.deleteMessage(ctx.chat.id, statusMessage.message_id).catch(() => {});
+      statusMessage = await ctx.reply(`Dipilih: ${htmlEscape(track.name)}`, { parse_mode: 'HTML' });
+    } catch (e) {
+      console.warn('Failed to delete selection photo and send text status:', e.message);
+    }
+  } else {
+    await editStatus(ctx, statusMessage, `Dipilih: ${htmlEscape(track.name)}`, { parse_mode: 'HTML' }).catch(() => {});
+  }
 
   const defaultService = await getUserDefaultService(ctx.from?.id);
   enqueueChatTask(ctx.chat.id, 'Proses pilihan search', () => queueAndMaybePlay(ctx, statusMessage, track, Boolean(selection.isVideo), selection.language, defaultService));
@@ -1397,13 +1416,23 @@ export async function searchSelectionCancelHandler(ctx) {
   }
 
   if (selection.userId && selection.userId !== ctx.from?.id) {
-    await ctx.answerCallbackQuery({ text: 'Hanya requester yang bisa memilih hasil ini.' }).catch(() => {});
+    await ctx.answerCallbackQuery({ text: 'Hanya requester yang bisa membatalkan hasil ini.' }).catch(() => {});
     return;
   }
 
   searchCache.delete(token);
   await ctx.answerCallbackQuery({ text: 'Pencarian dibatalkan.' }).catch(() => {});
-  await ctx.editMessageText('Pencarian dibatalkan.').catch(() => {});
+
+  if (selection.hasPhoto) {
+    try {
+      await ctx.api.deleteMessage(ctx.chat.id, ctx.callbackQuery.message.message_id).catch(() => {});
+      await ctx.reply('Pencarian dibatalkan.').catch(() => {});
+    } catch (e) {
+      console.warn('Failed to delete selection photo:', e.message);
+    }
+  } else {
+    await ctx.editMessageText('Pencarian dibatalkan.').catch(() => {});
+  }
 }
 
 

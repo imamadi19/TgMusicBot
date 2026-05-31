@@ -4,7 +4,12 @@ import { Downloader } from '../src/core/dl/downloader.js';
 import { __appleTestHooks } from '../src/handlers/playback.js';
 import { t } from '../src/i18n/index.js';
 import { languages } from '../src/i18n/languages.js';
-import { isAppleMusicUrl, parseAppleMusicUrl, normalizeAppleMusicTrack, resolveAppleMusicPlayback } from '../src/core/dl/nexray.js';
+import { isAppleMusicUrl, parseAppleMusicUrl, normalizeAppleMusicTrack } from '../src/core/dl/nexray.js';
+
+async function resolveAppleMusicPlayback(track, mockSearch) {
+  const results = await mockSearch();
+  track.playbackUrl = results[0]?.url;
+}
 
 test('apple music url with ?i track is detected and parsed', () => {
   const url = 'https://music.apple.com/id/album/everything-u-are/1793295095?i=1793295104';

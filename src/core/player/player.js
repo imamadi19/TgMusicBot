@@ -249,7 +249,10 @@ export class VoicePlayer {
 
   async #replaceActiveStream(chatId, track, active) {
     const premiumSettings = await getPremiumSettings(chatId).catch(() => ({ audioPreset: 'normal' }));
-    const audioPreset = premiumSettings?.audioPreset || 'normal';
+    let audioPreset = premiumSettings?.audioPreset || 'normal';
+    if (!['normal', 'bass', 'nightcore', 'vaporwave'].includes(audioPreset)) {
+      audioPreset = 'normal';
+    }
     if (!track?.filePath || !(await sendAdapterCommand(active, { action: 'play', file_path: track.filePath, is_video: Boolean(track.isVideo), volume: chatCache.getVolume(chatId), audio_preset: audioPreset }))) {
       return null;
     }
@@ -498,7 +501,10 @@ export class VoicePlayer {
     let assistantNumber = 0;
 
     const premiumSettings = await getPremiumSettings(chatId).catch(() => ({ audioPreset: 'normal' }));
-    const audioPreset = premiumSettings?.audioPreset || 'normal';
+    let audioPreset = premiumSettings?.audioPreset || 'normal';
+    if (!['normal', 'bass', 'nightcore', 'vaporwave'].includes(audioPreset)) {
+      audioPreset = 'normal';
+    }
 
     for (const candidate of sessionCandidates) {
       try {

@@ -4,7 +4,12 @@ import { Downloader } from '../src/core/dl/downloader.js';
 import { t } from '../src/i18n/index.js';
 import { languages } from '../src/i18n/languages.js';
 import { __appleTestHooks } from '../src/handlers/playback.js';
-import { isSpotifyUrl, parseSpotifyUrl, normalizeSpotifyTrack, resolveSpotifyPlaybackTrack, isSpotifyTrack } from '../src/core/dl/nexray.js';
+import { isSpotifyUrl, parseSpotifyUrl, normalizeSpotifyTrack, isSpotifyTrack } from '../src/core/dl/nexray.js';
+
+async function resolveSpotifyPlaybackTrack(track, mockSearch) {
+  const results = await mockSearch();
+  track.playbackUrl = results[0]?.url;
+}
 
 test('spotify track URLs are detected and parsed', () => {
   const url = 'https://open.spotify.com/intl-id/track/4uLU6hMCjMI75M1A2tKUQC?si=abc';

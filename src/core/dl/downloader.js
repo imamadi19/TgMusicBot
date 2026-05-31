@@ -6,6 +6,8 @@ import { isUrl } from '../../utils/telegram.js';
 import { parseDuration } from '../../utils/duration.js';
 import { isAppleMusicUrl, isSpotifyUrl, resolveAppleMusicUrlMetadata, resolveSpotifyTrackMetadata, searchNexRayByService, searchNexRayYouTube } from './nexray.js';
 import { downloadViaPlatformProvider, isPlatformTrackRequiringProvider } from './platform-downloader.js';
+import { isFileCurrentlyInUse } from '../cache/active-files.js';
+import { voicePlayer } from '../player/player.js';
 
 const SUPPORTED_HOSTS = ['youtube.com', 'youtu.be', 'open.spotify.com', 'music.apple.com', 'soundcloud.com'];
 const INVALID_PLAYLIST_TITLE_PATTERNS = [/^\[private video\]$/i, /^\[deleted video\]$/i, /\b(private|deleted|unavailable|blocked|age[-\s]?restricted)\b/i];
@@ -120,6 +122,7 @@ function run(command, args, { timeoutMs = config.ytdlpTimeoutMs } = {}) {
 }
 
 async function findCachedFile(downloadsDir, safeId, isVideo) {
+  if (!config.downloadCache) return null;
   try {
     const files = await fs.readdir(downloadsDir);
     const prefix = `${safeId}.`;
@@ -132,6 +135,18 @@ async function findCachedFile(downloadsDir, safeId, isVideo) {
           const filePath = path.join(downloadsDir, file);
           const stats = await fs.stat(filePath);
           if (stats.size > 0) {
+            const ageMs = Date.now() - stats.mtimeMs;
+            const maxAgeMs = config.downloadCacheMaxAgeHours * 60 * 60 * 1000;
+            if (ageMs > maxAgeMs) {
+              // expired cache hit
+              const activeCalls = typeof voicePlayer !== 'undefined' && typeof voicePlayer.activeCalls === 'function'
+                ? voicePlayer.activeCalls()
+                : [];
+              if (!isFileCurrentlyInUse(filePath, activeCalls)) {
+                await fs.rm(filePath, { force: true }).catch(() => {});
+              }
+              continue;
+            }
             return filePath;
           }
         }
@@ -340,7 +355,7 @@ export class Downloader {
       name: entry.title ?? this.input,
       url: entry.webpage_url ?? entry.original_url ?? entry.url ?? this.input,
       duration: Number(entry.duration) || parseDuration(entry.duration_string),
-      thumbnail: entry.thumbnail ?? '',
+      thumbnail: bestThumbnail(entry),
       platform: this.detectPlatform(),
     };
   }

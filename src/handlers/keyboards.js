@@ -120,12 +120,14 @@ export function searchSelectionKeyboard(messageId, tracks, index = 0) {
     const previous = safeIndex === 0 ? total - 1 : safeIndex - 1;
     const next = safeIndex === total - 1 ? 0 : safeIndex + 1;
     keyboard
-      .text('⬅️', `searchpage:${messageId}:${previous}`)
-      .text('➡️', `searchpage:${messageId}:${next}`)
+      .text('⬅️ Prev', `searchpage:${messageId}:${previous}`)
+      .text('Next ➡️', `searchpage:${messageId}:${next}`)
       .row();
   }
 
-  return keyboard.text('✅ Select', `searchpick:${messageId}:${safeIndex}`);
+  return keyboard
+    .text('✅ Select', `searchpick:${messageId}:${safeIndex}`)
+    .text('❌ Cancel', `searchcancel:${messageId}`);
 }
 
 export const youtubeSelectionKeyboard = searchSelectionKeyboard;

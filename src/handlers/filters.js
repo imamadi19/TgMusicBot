@@ -3,6 +3,9 @@ import { isAuthUser } from '../core/db/auth.js';
 import { ADMIN_MODE, getAdminMode, getPlayMode } from '../core/db/chat-settings.js';
 import { getUserLanguage } from '../core/db/user-settings.js';
 import { t } from '../i18n/index.js';
+import { config } from '../config/index.js';
+import { isPremiumActive } from '../core/db/premium.js';
+import { getPremiumSettings } from '../core/db/premium-settings.js';
 
 function isPrivate(ctx) {
   return ctx.chat?.type === 'private';
@@ -113,5 +116,37 @@ export async function playMode(ctx) {
 
   if (await isUserAdminOrAuth(ctx, ctx.from?.id)) return true;
   await ctx.reply(t(language, 'filters.playModeAdminOnly'));
+  return false;
+}
+
+export async function canControlInDjMode(ctx) {
+  const chatId = ctx.chat?.id;
+  if (!chatId) return true;
+  
+  const settings = await getPremiumSettings(chatId);
+  if (!settings.djMode) {
+    return true;
+  }
+
+  const userId = ctx.from?.id;
+  if (!userId) return false;
+
+  const isOwnerUser = Number(userId) === Number(config.ownerId) || config.devs.includes(Number(userId));
+  if (isOwnerUser) return true;
+
+  const adminOrAuth = await isUserAdminOrAuth(ctx, userId);
+  if (adminOrAuth) return true;
+
+  const userPremium = await isPremiumActive('user', userId);
+  if (userPremium) return true;
+
+  return false;
+}
+
+export async function enforceDjModeControl(ctx, actionName) {
+  const allowed = await canControlInDjMode(ctx);
+  if (allowed) return true;
+  
+  await ctx.reply("DJ mode aktif. Hanya admin, auth user, atau premium user yang bisa menggunakan kontrol ini.");
   return false;
 }

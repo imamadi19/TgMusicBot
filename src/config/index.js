@@ -7,6 +7,14 @@ const toInt = (value, fallback = 0) => {
   return Number.isFinite(parsed) ? parsed : fallback;
 };
 
+export function finiteNumber(value, fallback) {
+  if (value === undefined || value === null || String(value).trim() === '') {
+    return fallback;
+  }
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
 const toBool = (value, fallback = false) => {
   if (value == null || value === '') return fallback;
   return ['1', 'true', 'yes', 'on'].includes(String(value).toLowerCase());
@@ -47,12 +55,15 @@ export const config = {
   ytdlpTimeoutMs: toInt(process.env.YTDLP_TIMEOUT_MS, 180000),
   songDurationLimit: toInt(process.env.SONG_DURATION_LIMIT, 3600),
   downloadsDir: process.env.DOWNLOADS_DIR || path.resolve('downloads'),
-  downloadRetentionHours: toInt(process.env.DOWNLOAD_RETENTION_HOURS, 24),
-  downloadCleanupIntervalMinutes: toInt(process.env.DOWNLOAD_CLEANUP_INTERVAL_MINUTES, 30),
+  downloadRetentionHours: finiteNumber(process.env.DOWNLOAD_RETENTION_HOURS, 24),
+  downloadCleanupIntervalMinutes: finiteNumber(process.env.DOWNLOAD_CLEANUP_INTERVAL_MINUTES, 30),
   downloadCache: toBool(process.env.DOWNLOAD_CACHE, true),
-  downloadCacheMaxAgeHours: toInt(process.env.DOWNLOAD_CACHE_MAX_AGE_HOURS, 24),
-  downloadCacheMaxSizeMb: toInt(process.env.DOWNLOAD_CACHE_MAX_SIZE_MB, 2048),
-  premiumQueueLimit: toInt(process.env.PREMIUM_QUEUE_LIMIT, 50),
+  downloadCacheMaxAgeHours: finiteNumber(process.env.DOWNLOAD_CACHE_MAX_AGE_HOURS, 24),
+  downloadCacheMaxSizeMb: finiteNumber(process.env.DOWNLOAD_CACHE_MAX_SIZE_MB, 2048),
+  premiumQueueLimit: (() => {
+    const parsed = finiteNumber(process.env.PREMIUM_QUEUE_LIMIT, 50);
+    return parsed < 10 ? 50 : parsed;
+  })(),
   supportGroup: process.env.SUPPORT_GROUP ?? '',
   supportChannel: process.env.SUPPORT_CHANNEL ?? '',
   sourceUrl: process.env.SOURCE_URL ?? '',

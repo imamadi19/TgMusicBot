@@ -7,11 +7,12 @@ import { voicePlayer } from '../player/player.js';
 const COOKIE_FILE_NAME = 'yt-dlp-cookies.txt';
 
 export async function cleanupOldDownloads({ now = Date.now() } = {}) {
-  const maxAgeHours = process.env.DOWNLOAD_CACHE_MAX_AGE_HOURS !== undefined
-    ? (Number(config.downloadCacheMaxAgeHours) ?? 24)
-    : (Number(config.downloadRetentionHours) ?? 24);
+  const isCacheActive = config.downloadCache;
+  const maxAgeHours = isCacheActive
+    ? config.downloadCacheMaxAgeHours
+    : config.downloadRetentionHours;
   const ttlMs = maxAgeHours * 60 * 60 * 1000;
-  const maxSizeMb = Number(config.downloadCacheMaxSizeMb) ?? 2048;
+  const maxSizeMb = config.downloadCacheMaxSizeMb;
   const maxSizeBytes = maxSizeMb * 1024 * 1024;
 
   await fs.mkdir(config.downloadsDir, { recursive: true });
@@ -65,24 +66,26 @@ export async function cleanupOldDownloads({ now = Date.now() } = {}) {
     }
   }
 
-  // 2. Check total size. If > max size, delete oldest files first, EXCEPT those in use
-  let totalSize = remainingFiles.reduce((sum, f) => sum + f.size, 0);
-  if (totalSize > maxSizeBytes) {
-    console.log(`[Cache Cleanup] Directory size (${(totalSize / 1024 / 1024).toFixed(1)} MB) exceeds limit (${maxSizeMb} MB). Cleaning oldest files.`);
-    // Sort by mtimeMs ascending (oldest first)
-    remainingFiles.sort((a, b) => a.mtimeMs - b.mtimeMs);
+  // 2. Check total size. If > max size, delete oldest files first, EXCEPT those in use (only if cache is active)
+  if (isCacheActive) {
+    let totalSize = remainingFiles.reduce((sum, f) => sum + f.size, 0);
+    if (totalSize > maxSizeBytes) {
+      console.log(`[Cache Cleanup] Directory size (${(totalSize / 1024 / 1024).toFixed(1)} MB) exceeds limit (${maxSizeMb} MB). Cleaning oldest files.`);
+      // Sort by mtimeMs ascending (oldest first)
+      remainingFiles.sort((a, b) => a.mtimeMs - b.mtimeMs);
 
-    for (const file of remainingFiles) {
-      if (totalSize <= maxSizeBytes) break;
-      if (isFileCurrentlyInUse(file.path, activeCalls)) continue;
+      for (const file of remainingFiles) {
+        if (totalSize <= maxSizeBytes) break;
+        if (isFileCurrentlyInUse(file.path, activeCalls)) continue;
 
-      try {
-        await fs.rm(file.path, { force: true });
-        totalSize -= file.size;
-        removed += 1;
-        console.log(`[Cache Cleanup] Size limit exceeded. Removed oldest file: ${file.name} (Size: ${(file.size / 1024 / 1024).toFixed(1)} MB)`);
-      } catch (err) {
-        console.warn(`[Cache Cleanup] Failed to remove ${file.name} during size cleanup`, err);
+        try {
+          await fs.rm(file.path, { force: true });
+          totalSize -= file.size;
+          removed += 1;
+          console.log(`[Cache Cleanup] Size limit exceeded. Removed oldest file: ${file.name} (Size: ${(file.size / 1024 / 1024).toFixed(1)} MB)`);
+        } catch (err) {
+          console.warn(`[Cache Cleanup] Failed to remove ${file.name} during size cleanup`, err);
+        }
       }
     }
   }
@@ -91,8 +94,8 @@ export async function cleanupOldDownloads({ now = Date.now() } = {}) {
 }
 
 export function scheduleDownloadCleanup() {
-  const intervalMs = Math.max(1, Number(config.downloadCleanupIntervalMinutes) || 0) * 60 * 1000;
-  if (!intervalMs) return () => {};
+  const cleanupMinutes = config.downloadCleanupIntervalMinutes;
+  const intervalMs = (Number.isFinite(cleanupMinutes) && cleanupMinutes > 0 ? cleanupMinutes : 30) * 60 * 1000;
 
   const run = () => cleanupOldDownloads().catch((error) => console.warn('Download cleanup failed', error));
   run();
