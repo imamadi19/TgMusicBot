@@ -73,6 +73,7 @@ export const config = {
   cookiesUrl: splitList(process.env.COOKIES_URL),
   voiceAdapterCommand: process.env.VOICE_ADAPTER_COMMAND ?? 'python3 scripts/pytgcalls_adapter.py',
   startImg: process.env.START_IMG ?? '',
+  groupStartImg: process.env.GROUP_START_IMG ?? '',
   port: process.env.PORT ?? '8080',
   autoLeave: toBool(process.env.AUTO_LEAVE, true),
   streamDirect: toBool(process.env.STREAM_DIRECT, false),

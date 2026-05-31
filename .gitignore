@@ -13,3 +13,7 @@ libntgcalls.so
 libtdjson.so.*
 libtdjson.so
 /node_modules
+cookies.txt
+unknown_errors.txt
+.antigravitycli/
+__pycache__/

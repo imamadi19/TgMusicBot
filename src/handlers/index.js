@@ -3,7 +3,7 @@ import { addAuthHandler, authListHandler, removeAuthHandler } from './auth.js';
 import { broadcastHandler, cancelBroadcastHandler } from './broadcast.js';
 import { vcPlayCallbackHandler } from './callbacks.js';
 import { clearAssistantsHandler, devActiveVcHandler, leaveAllHandler, loggerToggleHandler } from './devs.js';
-import { helpCallback, languageMenuHandler, languageSelectHandler, startHandler } from './help.js';
+import { helpCallback, languageMenuHandler, languageSelectHandler, startHandler, startSetupHandler, startFeaturesHandler, startPlaylistHandler, startPremiumHandler, groupPlayHintHandler, groupVplayHintHandler, groupQueueHintHandler, groupSkipHintHandler, groupDjmodeHintHandler, startHomeHandler } from './help.js';
 import { loopHandler, muteHandler, pauseHandler, playHandler, queueHandler, removeHandler, resumeHandler, searchSelectionCancelHandler, searchSelectionPageHandler, searchSelectionPickHandler, seekHandler, shuffleHandler, skipHandler, speedHandler, stopHandler, unmuteHandler, volumeHandler } from './playback.js';
 import { addToPlaylistHandler, createPlaylistHandler, deletePlaylistHandler, myPlaylistsHandler, playlistInfoHandler, removeFromPlaylistHandler } from './playlists.js';
 import { premiumDjModeHandler, premiumFeaturesHandler, premiumGrantHandler, premiumInfoHandler, premiumProfileHandler, premiumQueueMoveHandler, premiumRevokeHandler, premiumSetPresetHandler } from './premium.js';
@@ -68,4 +68,14 @@ export function loadHandlers(bot) {
   bot.callbackQuery(/^searchpick:/, searchSelectionPickHandler);
   bot.callbackQuery(/^searchcancel:/, searchSelectionCancelHandler);
   bot.callbackQuery(/^(?:vcplay_|play_)/, vcPlayCallbackHandler);
+  bot.callbackQuery('start_setup', startSetupHandler);
+  bot.callbackQuery('start_features', startFeaturesHandler);
+  bot.callbackQuery('start_playlist', startPlaylistHandler);
+  bot.callbackQuery('start_premium', startPremiumHandler);
+  bot.callbackQuery('group_play_hint', groupPlayHintHandler);
+  bot.callbackQuery('group_vplay_hint', groupVplayHintHandler);
+  bot.callbackQuery('group_queue_hint', groupQueueHintHandler);
+  bot.callbackQuery('group_skip_hint', groupSkipHintHandler);
+  bot.callbackQuery('group_djmode_hint', groupDjmodeHintHandler);
+  bot.callbackQuery('start_home', startHomeHandler);
 }

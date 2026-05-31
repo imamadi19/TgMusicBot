@@ -1405,34 +1405,48 @@ export async function searchSelectionPickHandler(ctx) {
   enqueueChatTask(ctx.chat.id, 'Proses pilihan search', () => queueAndMaybePlay(ctx, statusMessage, track, Boolean(selection.isVideo), selection.language, defaultService));
 }
 
+async function safeDeleteSearchMessage(ctx, fallbackText) {
+  try {
+    await ctx.deleteMessage();
+    return true;
+  } catch (error) {
+    console.warn('Failed to delete search message:', error.message);
+    try {
+      const currentMessage = ctx.callbackQuery?.message;
+      if (currentMessage) {
+        if (currentMessage.text) {
+          await ctx.editMessageText(fallbackText, { reply_markup: undefined });
+        } else if (currentMessage.caption) {
+          await ctx.editMessageCaption({ caption: fallbackText, reply_markup: undefined });
+        }
+      }
+    } catch (editError) {
+      console.warn('Fallback edit failed:', editError.message);
+    }
+    return false;
+  }
+}
+
 export async function searchSelectionCancelHandler(ctx) {
   const data = ctx.callbackQuery?.data ?? '';
   const [, token] = data.split(':');
   const selection = searchCache.get(token);
+
   if (!selection) {
-    await ctx.answerCallbackQuery({ text: 'Hasil pencarian sudah kedaluwarsa. Jalankan /play lagi.' }).catch(() => {});
-    await ctx.editMessageText('Hasil pencarian sudah kedaluwarsa. Jalankan /play lagi.').catch(() => {});
+    await safeDeleteSearchMessage(ctx, 'Hasil pencarian sudah kedaluwarsa.');
+    await ctx.answerCallbackQuery({ text: 'Hasil pencarian sudah kedaluwarsa.' }).catch(() => {});
     return;
   }
 
   if (selection.userId && selection.userId !== ctx.from?.id) {
-    await ctx.answerCallbackQuery({ text: 'Hanya requester yang bisa membatalkan hasil ini.' }).catch(() => {});
+    await ctx.answerCallbackQuery({ text: 'Hanya requester yang bisa menutup hasil ini.' }).catch(() => {});
     return;
   }
 
   searchCache.delete(token);
-  await ctx.answerCallbackQuery({ text: 'Pencarian dibatalkan.' }).catch(() => {});
-
-  if (selection.hasPhoto) {
-    try {
-      await ctx.api.deleteMessage(ctx.chat.id, ctx.callbackQuery.message.message_id).catch(() => {});
-      await ctx.reply('Pencarian dibatalkan.').catch(() => {});
-    } catch (e) {
-      console.warn('Failed to delete selection photo:', e.message);
-    }
-  } else {
-    await ctx.editMessageText('Pencarian dibatalkan.').catch(() => {});
-  }
+  
+  await safeDeleteSearchMessage(ctx, 'Pencarian ditutup.');
+  await ctx.answerCallbackQuery({ text: 'Pencarian ditutup.' }).catch(() => {});
 }
 
 

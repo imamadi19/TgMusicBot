@@ -131,3 +131,54 @@ export function searchSelectionKeyboard(messageId, tracks, index = 0) {
 }
 
 export const youtubeSelectionKeyboard = searchSelectionKeyboard;
+
+export function privateStartKeyboard(language = 'en') {
+  const botUsername = String(config.botUsername || 'TgMusikGlobalBot').replace(/^@+/, '');
+  const addToGroupUrl = `https://t.me/${botUsername}?startgroup=true`;
+
+  const keyboard = new InlineKeyboard()
+    .url(`➕ ${t(language, 'buttons.addToGroup') || 'Tambahkan ke Grup'}`, addToGroupUrl)
+    .row()
+    .text(`📖 Panduan Setup`, 'start_setup')
+    .text(`🎧 Fitur Musik`, 'start_features')
+    .row()
+    .text(`🎼 Playlist Saya`, 'start_playlist')
+    .text(`⭐ Premium`, 'start_premium')
+    .row()
+    .text(t(language, 'buttons.language') || '🌐 Bahasa', 'language_menu')
+    .text(t(language, 'buttons.settings') || '⚙️ Pengaturan', 'settings_menu');
+
+  const supportUrl = config.supportGroup;
+  const channelUrl = config.supportChannel;
+  if (supportUrl || channelUrl) {
+    keyboard.row();
+    if (supportUrl) {
+      keyboard.url(`👥 Support`, supportUrl);
+    }
+    if (channelUrl) {
+      keyboard.url(`📢 Channel`, channelUrl);
+    }
+  }
+
+  return keyboard;
+}
+
+export function groupStartKeyboard(language = 'en') {
+  return new InlineKeyboard()
+    .text(`▶️ Play Musik`, 'group_play_hint')
+    .text(`🎬 Play Video`, 'group_vplay_hint')
+    .row()
+    .text(`📜 Queue`, 'group_queue_hint')
+    .text(`⏭ Skip`, 'group_skip_hint')
+    .row()
+    .text(`⚙️ Settings Grup`, 'settings_menu')
+    .text(`🎧 DJ Mode`, 'group_djmode_hint')
+    .row()
+    .text(t(language, 'buttons.help') || '📖 Help', 'help_all')
+    .text(`⭐ Premium`, 'start_premium');
+}
+
+export function backToStartKeyboard(language = 'en') {
+  return new InlineKeyboard().text(`Kembali`, 'start_home');
+}
+
