@@ -38,3 +38,46 @@ export async function setPlayMode(chatId, enabled) {
   );
   return Boolean(enabled);
 }
+
+const inMemoryLyricsEnabled = new Map();
+const inMemoryLyricsMode = new Map();
+const inMemoryLyricsProvider = new Map();
+
+export async function getLyricsEnabled(chatId) {
+  if (!isDatabaseConnected()) {
+    return Boolean(inMemoryLyricsEnabled.get(String(chatId)));
+  }
+  const chat = await db().collection('chats').findOne({ chatId: Number(chatId) }, { projection: { lyricsEnabled: 1 } });
+  return Boolean(chat?.lyricsEnabled);
+}
+
+export async function setLyricsEnabled(chatId, enabled) {
+  const isEnabled = Boolean(enabled);
+  if (!isDatabaseConnected()) {
+    inMemoryLyricsEnabled.set(String(chatId), isEnabled);
+    return isEnabled;
+  }
+  await db().collection('chats').updateOne(
+    { chatId: Number(chatId) },
+    { $set: { chatId: Number(chatId), lyricsEnabled: isEnabled, updatedAt: new Date() }, $setOnInsert: { createdAt: new Date() } },
+    { upsert: true },
+  );
+  return isEnabled;
+}
+
+export async function getLyricsMode(chatId) {
+  if (!isDatabaseConnected()) {
+    return inMemoryLyricsMode.get(String(chatId)) || 'line';
+  }
+  const chat = await db().collection('chats').findOne({ chatId: Number(chatId) }, { projection: { lyricsMode: 1 } });
+  return chat?.lyricsMode || 'line';
+}
+
+export async function getLyricsProvider(chatId) {
+  if (!isDatabaseConnected()) {
+    return inMemoryLyricsProvider.get(String(chatId)) || 'lrclib';
+  }
+  const chat = await db().collection('chats').findOne({ chatId: Number(chatId) }, { projection: { lyricsProvider: 1 } });
+  return chat?.lyricsProvider || 'lrclib';
+}
+

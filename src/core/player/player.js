@@ -244,6 +244,23 @@ export class VoicePlayer {
     if (track.filePath) {
       markFileActive(track.filePath);
     }
+
+    // Auto-start lyrics if enabled for this chat
+    import('../db/chat-settings.js')
+      .then(({ getLyricsEnabled }) => getLyricsEnabled(key))
+      .then((enabled) => {
+        if (enabled) {
+          import('../lyrics/lyrics-runner.js').then(({ startLyricsForChat }) => {
+            startLyricsForChat(key, null, activeTrack).catch((err) => {
+              console.warn(`Failed to auto-start lyrics for chat ${key}:`, err);
+            });
+          });
+        }
+      })
+      .catch((err) => {
+        console.warn(`Error checking lyrics enabled state for chat ${key}:`, err);
+      });
+
     return activeTrack;
   }
 
@@ -304,6 +321,13 @@ export class VoicePlayer {
     }
     this.#active.delete(key);
     if (scheduleLeave) this.#scheduleLeaveChat(key);
+
+    // Stop lyrics runner when playback stops/clears
+    import('../lyrics/lyrics-runner.js').then(({ stopLyricsForChat }) => {
+      stopLyricsForChat(key);
+    }).catch((err) => {
+      console.warn(`Failed to stop lyrics for chat ${key}:`, err);
+    });
   }
 
   #scheduleTrackEnd(chatId, track, child, delayMs = null) {

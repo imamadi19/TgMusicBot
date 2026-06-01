@@ -8,8 +8,12 @@ import { loopHandler, muteHandler, pauseHandler, playHandler, queueHandler, remo
 import { addToPlaylistHandler, createPlaylistHandler, deletePlaylistHandler, myPlaylistsHandler, playlistInfoHandler, removeFromPlaylistHandler } from './playlists.js';
 import { premiumDjModeHandler, premiumFeaturesHandler, premiumGrantHandler, premiumInfoHandler, premiumProfileHandler, premiumQueueMoveHandler, premiumRevokeHandler, premiumSetPresetHandler } from './premium.js';
 import { noopHandler, pingHandler, privacyHandler, serviceSelectHandler, settingsHandler, settingsCloseHandler, settingsServiceHandler, settingsLanguageHandler, settingsLanguageSelectHandler, settingsHelpHandler, settingsPresetHintHandler, settingsDjModeHintHandler, settingsPremiumInfoHandler, shellHandler, statsHandler } from './misc.js';
+import { lyricsHandler } from './lyrics.js';
+import { setGlobalBotApi } from '../core/lyrics/lyrics-runner.js';
 
 export function loadHandlers(bot) {
+  setGlobalBotApi(bot.api);
+  bot.command('lyrics', lyricsHandler);
   bot.command('start', startHandler);
   bot.command('help', async (ctx) => {
     await startHandler(ctx);

@@ -125,6 +125,25 @@ export const translations = {
       closed: 'Closed.'
     },
     admin: { groupOnly: 'This command can only be used in groups.', reloadWait: 'Please wait {time} before using this command again.', reloadStarted: 'Reloading administrator cache...', reloadSuccess: 'Administrator cache reloaded successfully. Cached {count} admin(s).', reloadFailed: 'Failed to reload administrator cache: {error}' },
+    lyrics: {
+      enabled: 'Synced lyrics enabled.',
+      disabled: 'Synced lyrics disabled.',
+      noActiveTrack: 'No active song is playing.',
+      willStartNext: 'Lyrics will activate when the next song starts playing.',
+      fetching: 'Searching synced lyrics...',
+      notFound: 'Synced lyrics are not available for this song.',
+      syncedAvailable: 'Synced lyrics are available. Use <code>/lyrics on</code> to enable.',
+      plainOnly: 'Only plain lyrics are available, synced lyrics are not available.',
+      started: 'Synced lyrics started.',
+      stopped: 'Synced lyrics stopped.',
+      status: 'Lyrics Status',
+      statusEnabled: 'Enabled',
+      statusDisabled: 'Disabled',
+      provider: 'Provider',
+      currentTrack: 'Current song',
+      adminOnly: 'Only admins/auth users can toggle lyrics in groups.',
+      error: 'Failed to process lyrics: {error}'
+    }
   },
 };
 
@@ -248,7 +267,26 @@ const aliases = {
     playback: { nowPlaying: 'Sedang diputar', addedToQueue: 'Ditambahkan ke antrean: {count}', queueEmpty: 'Antrean kosong.', nothingPlaying: 'Tidak ada yang sedang diputar.', stopped: 'Pemutaran dihentikan dan antrean dibersihkan.', paused: 'Pemutaran dijeda.', resumed: 'Pemutaran dilanjutkan.', noTracks: 'Tidak ada lagu ditemukan.', playlistNotFound: '❌ Playlist tidak ditemukan.', playlistEmpty: '❌ Playlist kosong.', duplicate: 'Lagu sudah ada di antrean atau sedang diputar.', queueTitle: 'Antrean:', queueEnded: 'Musik telah selesai.', searchingDownload: '🔍 Mencari dan mengunduh...', chooseTrack: 'Pilih hasil YouTube:', downloadingSelected: '⬇️ Mengunduh trek terpilih: {title}', channel: 'Channel', views: 'Dilihat', upload: 'Diunggah', url: 'URL' },
     misc: { pinging: 'Menguji...', privacy: 'Privasi: bot ini menyimpan pengaturan chat, data otorisasi, dan playlist yang diperlukan untuk pemutaran. Bot ini tidak menjual data pengguna.', notConfigured: 'belum dikonfigurasi' },
     playlist: { notFound: '❌ Playlist tidak ditemukan.', empty: 'Kosong', none: 'Kamu belum memiliki playlist.' },
-    callbacks: { requesterOnly: 'Hanya pengguna yang request lagu ini yang bisa memakai tombol ini.' }
+    callbacks: { requesterOnly: 'Hanya pengguna yang request lagu ini yang bisa memakai tombol ini.' },
+    lyrics: {
+      enabled: 'Lirik sinkron diaktifkan.',
+      disabled: 'Lirik sinkron dimatikan.',
+      noActiveTrack: 'Tidak ada lagu yang sedang diputar.',
+      willStartNext: 'Lirik akan aktif saat lagu berikutnya diputar.',
+      fetching: 'Mencari lirik sinkron...',
+      notFound: 'Lirik sinkron tidak tersedia untuk lagu ini.',
+      syncedAvailable: 'Lirik sinkron tersedia. Gunakan <code>/lyrics on</code> untuk menyalakan.',
+      plainOnly: 'Hanya lirik biasa yang tersedia, lirik sinkron tidak tersedia.',
+      started: 'Lirik sinkron dimulai.',
+      stopped: 'Lirik sinkron dihentikan.',
+      status: 'Status lirik',
+      statusEnabled: 'Aktif',
+      statusDisabled: 'Nonaktif',
+      provider: 'Provider',
+      currentTrack: 'Lagu saat ini',
+      adminOnly: 'Hanya admin/auth yang bisa mengubah lirik di grup.',
+      error: 'Gagal memproses lirik: {error}'
+    }
   },
   ru: {
     buttons: {
