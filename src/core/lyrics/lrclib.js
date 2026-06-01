@@ -1,13 +1,22 @@
 /**
  * LRCLIB API service to fetch lyrics.
+ * Features: configurable timeout, in-flight request deduplication,
+ * scored search result matching, prefetch support.
  */
 
+import { config } from '../../config/index.js';
 import { parseLrc } from './lrc-parser.js';
-import { getCachedLyrics, setCachedLyrics } from './lyrics-cache.js';
+import { getCachedLyrics, setCachedLyrics, lyricsCacheKey } from './lyrics-cache.js';
 
 const LRCLIB_BASE = 'https://lrclib.net';
 const USER_AGENT = 'TgMusicBot/1.0.0 (https://github.com/imamadi19/TgMusicBot)';
-const FETCH_TIMEOUT_MS = 10000;
+
+/** In-flight request deduplication map: cacheKey -> Promise */
+const inFlightRequests = new Map();
+
+function debugLog(...args) {
+  if (config.lyricsDebug) console.log('[lyrics]', ...args);
+}
 
 /**
  * Normalizes track title to improve lyrics search matching on LRCLIB.
@@ -31,13 +40,14 @@ export function normalizeTitle(title) {
 }
 
 /**
- * Helper to make a JSON fetch request with timeout.
+ * Helper to make a JSON fetch request with configurable timeout.
  * @param {string} url
  * @returns {Promise<any>}
  */
 async function fetchJson(url) {
+  const timeoutMs = config.lyricsFetchTimeoutMs ?? 5000;
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
     const response = await fetch(url, {
@@ -66,24 +76,74 @@ async function fetchJson(url) {
 }
 
 /**
- * Fetches lyrics for a track, first checking cache, then trying LRCLIB API.
- * Uses exact match endpoint (/api/get) and falls back to search endpoint (/api/search).
- * @param {object} track
- * @returns {Promise<object|null>} The lyric data object
+ * Normalize a string for fuzzy comparison.
+ * @param {string} str
+ * @returns {string}
  */
-export async function getLyrics(track) {
-  if (!track) return null;
+function normalizeForMatch(str) {
+  return String(str || '').trim().toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ');
+}
 
-  // 1. Check in-memory cache
-  const cached = getCachedLyrics(track);
-  if (cached) {
-    return cached;
+/**
+ * Score a search result against the query criteria.
+ * Higher score = better match.
+ * @param {object} result - LRCLIB search result
+ * @param {string} queryTitle - normalized title
+ * @param {string} queryArtist - artist string
+ * @param {number} queryDuration - duration in seconds
+ * @returns {number}
+ */
+function scoreResult(result, queryTitle, queryArtist, queryDuration) {
+  let score = 0;
+
+  // Title match
+  const resultTitle = normalizeForMatch(result.trackName || result.name || '');
+  const normalizedQueryTitle = normalizeForMatch(queryTitle);
+  if (resultTitle === normalizedQueryTitle) {
+    score += 100;
+  } else if (resultTitle.includes(normalizedQueryTitle) || normalizedQueryTitle.includes(resultTitle)) {
+    score += 50;
   }
 
+  // Artist match
+  if (queryArtist) {
+    const resultArtist = normalizeForMatch(result.artistName || '');
+    const normalizedQueryArtist = normalizeForMatch(queryArtist);
+    if (resultArtist === normalizedQueryArtist) {
+      score += 80;
+    } else if (resultArtist.includes(normalizedQueryArtist) || normalizedQueryArtist.includes(resultArtist)) {
+      score += 40;
+    }
+  }
+
+  // Duration match (within 3 seconds)
+  if (queryDuration > 0 && result.duration > 0) {
+    const diff = Math.abs(queryDuration - result.duration);
+    if (diff <= 3) {
+      score += 60;
+    } else if (diff <= 10) {
+      score += 30;
+    }
+  }
+
+  // Synced lyrics availability (strongly preferred)
+  if (result.syncedLyrics) {
+    score += 200;
+  } else if (result.plainLyrics) {
+    score += 20;
+  }
+
+  return score;
+}
+
+/**
+ * Internal fetch function that does the actual LRCLIB API calls.
+ * @param {object} track
+ * @returns {Promise<object|null>}
+ */
+async function fetchLyricsInternal(track) {
   const rawTitle = track.title || track.name || '';
-  if (!rawTitle.trim()) {
-    return null;
-  }
+  if (!rawTitle.trim()) return null;
 
   const title = normalizeTitle(rawTitle);
   const artist = (track.artist || '').trim();
@@ -117,10 +177,12 @@ export async function getLyrics(track) {
     if (durationSeconds > 0) params.append('duration', String(durationSeconds));
 
     const url = `${LRCLIB_BASE}/api/get?${params.toString()}`;
+    debugLog('exact lookup:', url);
     const result = await fetchJson(url);
 
     if (result) {
       lyricsData = result;
+      debugLog('exact match found, id:', result.id);
     }
   } catch (error) {
     console.warn(`LRCLIB /api/get lookup failed, attempting fallback search: ${error.message}`);
@@ -130,21 +192,27 @@ export async function getLyrics(track) {
   if (!lyricsData || (!lyricsData.syncedLyrics && !lyricsData.instrumental)) {
     try {
       const searchParams = new URLSearchParams();
-      // Prepare a search query 'q' which is flexible
       const queryStr = artist ? `${artist} - ${title}` : title;
       searchParams.append('q', queryStr);
 
       const url = `${LRCLIB_BASE}/api/search?${searchParams.toString()}`;
+      debugLog('search:', url);
       const searchResults = await fetchJson(url);
 
       if (Array.isArray(searchResults) && searchResults.length > 0) {
-        // Find first item with synced lyrics
-        const matched = searchResults.find(item => item.syncedLyrics);
-        if (matched) {
-          lyricsData = matched;
+        // Score all results and pick the best one
+        const scored = searchResults
+          .map(item => ({ item, score: scoreResult(item, title, artist, durationSeconds) }))
+          .sort((a, b) => b.score - a.score);
+
+        debugLog('search results:', scored.length, 'best score:', scored[0]?.score);
+
+        const bestMatch = scored[0];
+        if (bestMatch && bestMatch.item.syncedLyrics) {
+          lyricsData = bestMatch.item;
         } else if (!lyricsData) {
-          // If no synced lyrics, fallback to the first item with plain lyrics as reference
-          lyricsData = searchResults[0];
+          // No exact match had synced, take best search result even if plain only
+          lyricsData = scored.find(s => s.item.syncedLyrics)?.item || scored[0]?.item || null;
         }
       }
     } catch (error) {
@@ -153,7 +221,7 @@ export async function getLyrics(track) {
   }
 
   if (!lyricsData) {
-    // Cache the failure so we don't spam the API for non-existing lyrics
+    debugLog('no lyrics found for:', rawTitle);
     const emptyResult = {
       provider: 'lrclib',
       synced: false,
@@ -194,5 +262,61 @@ export async function getLyrics(track) {
   };
 
   setCachedLyrics(track, finalResult);
+  debugLog('cached lyrics, synced:', finalResult.synced, 'lines:', finalResult.lines.length);
   return finalResult;
+}
+
+/**
+ * Fetches lyrics for a track with in-flight deduplication.
+ * First checks cache, then tries LRCLIB API.
+ * @param {object} track
+ * @returns {Promise<object|null>} The lyric data object
+ */
+export async function getLyrics(track) {
+  if (!track) return null;
+
+  // 1. Check in-memory cache
+  const cached = getCachedLyrics(track);
+  if (cached) {
+    debugLog('cache hit for:', track.title || track.name);
+    return cached;
+  }
+
+  const key = lyricsCacheKey(track);
+  if (!key) return null;
+
+  // 2. Check if there's an in-flight request for the same track
+  if (inFlightRequests.has(key)) {
+    debugLog('deduped in-flight request for:', track.title || track.name);
+    return inFlightRequests.get(key);
+  }
+
+  // 3. Create new fetch promise with deduplication
+  const fetchPromise = fetchLyricsInternal(track)
+    .catch(error => {
+      console.error(`Failed to fetch lyrics for track:`, error);
+      return null;
+    })
+    .finally(() => {
+      inFlightRequests.delete(key);
+    });
+
+  inFlightRequests.set(key, fetchPromise);
+  return fetchPromise;
+}
+
+/**
+ * Prefetch lyrics for a track (fire-and-forget, safe).
+ * Returns the promise but does not throw.
+ * @param {object} track
+ * @returns {Promise<object|null>}
+ */
+export async function prefetchLyrics(track) {
+  try {
+    debugLog('prefetch started for:', track?.title || track?.name);
+    return await getLyrics(track);
+  } catch (error) {
+    debugLog('prefetch failed for:', track?.title || track?.name, error?.message);
+    return null;
+  }
 }

@@ -17,6 +17,9 @@ import { secondsToClock } from '../utils/duration.js';
 import { completedProgressKeyboard, controlKeyboard, supportKeyboard, searchSelectionKeyboard } from './keyboards.js';
 import { playMode, isUserAdminOrAuth, enforceDjModeControl } from './filters.js';
 import { isAuthUser } from '../core/db/auth.js';
+import { getLyricsEnabled } from '../core/db/chat-settings.js';
+import { startLyricsForChatIfEnabled, stopLyricsForChat, resyncLyricsForChat } from '../core/lyrics/lyrics-runner.js';
+import { prefetchLyrics } from '../core/lyrics/lrclib.js';
 
 const MAX_QUEUE = 10;
 const ASSISTANT_INVITE_EXPIRE_SECONDS = 60 * 60;
@@ -378,19 +381,59 @@ async function checkDjMode(ctx) {
   return enforceDjModeControl(ctx);
 }
 
+/**
+ * Non-blocking prefetch lyrics for a track if lyrics are enabled.
+ * @param {string|number} chatId
+ * @param {object} track
+ */
+function maybePrefetchLyrics(chatId, track) {
+  if (!config.lyricsPrefetch) return;
+  getLyricsEnabled(chatId)
+    .then((enabled) => {
+      if (!enabled) return;
+      return prefetchLyrics(track);
+    })
+    .catch(() => {});
+}
+
+/**
+ * Prefetch lyrics for the next track in the queue.
+ * @param {string|number} chatId
+ */
+function prefetchNextLyrics(chatId) {
+  if (!config.lyricsPrefetch) return;
+  getLyricsEnabled(chatId).then(enabled => {
+    if (!enabled) return;
+    const queue = chatCache.getQueue(chatId);
+    const next = queue?.[1];
+    if (next) prefetchLyrics(next).catch(() => {});
+  }).catch(() => {});
+}
+
 voicePlayer.onTrackEnd(async ({ chatId, finished, next }) => {
   if (!next) {
+    stopLyricsForChat(chatId);
     await updatePlaybackPanelsForAdvance(chatId, finished, null, null);
     cleanupTrackDownload(finished, { chatId });
     return;
   }
+
+  // Stop old lyrics runner before starting next track
+  stopLyricsForChat(chatId);
 
   try {
     const activeTrack = await startCachedTrack(chatId, next);
     next.startedAt = activeTrack?.startedAt;
     await updatePlaybackPanelsForAdvance(chatId, finished, next, activeTrack);
     if (finished?.trackId !== next?.trackId) cleanupTrackDownload(finished, { chatId });
+
+    // Auto-start lyrics for next track (silent, prefer cache from prefetch)
+    startLyricsForChatIfEnabled(chatId, null, activeTrack ?? next).catch(() => {});
+
+    // Prefetch lyrics for the track after next
+    prefetchNextLyrics(chatId);
   } catch (error) {
+    stopLyricsForChat(chatId);
     const failedNext = chatCache.shift(chatId);
     cleanupTrackDownload(failedNext, { chatId });
     if (chatCache.getQueueLength(chatId) === 0) {
@@ -718,6 +761,7 @@ async function queueAndMaybePlay(ctx, statusMessage, track, isVideo, language, d
     : chatCache.addSong(chatId, saveTrack);
   if (length > 1) {
     preloadTrack(saveTrack, isVideo, { chatId });
+    maybePrefetchLyrics(chatId, saveTrack);
     const queueCaption = formatTrack(language, saveTrack, length);
     const queueMessage = await sendPlaybackPhoto(ctx, statusMessage, saveTrack, queueCaption, { disable_web_page_preview: true })
       ?? await editStatus(ctx, statusMessage, queueCaption, { parse_mode: 'HTML', disable_web_page_preview: true });
@@ -750,6 +794,10 @@ async function queueAndMaybePlay(ctx, statusMessage, track, isVideo, language, d
     ?? await editStatus(ctx, statusMessage, playbackCaption, { parse_mode: 'HTML', reply_markup: playbackMarkup, disable_web_page_preview: true });
   rememberPlaybackPanel(ctx, playbackMessage ?? statusMessage, language, saveTrack);
   startProgressUpdater(ctx, playbackMessage ?? statusMessage, language);
+
+  // Auto-start lyrics for first track and prefetch next
+  startLyricsForChatIfEnabled(chatId, ctx.api, saveTrack).catch(() => {});
+  prefetchNextLyrics(chatId);
 }
 
 async function sendPlaylistQueuePanels(ctx, tracks, language, queueStartLength, fallbackMessage) {
@@ -866,6 +914,8 @@ async function processPlayRequest(ctx, status, input, isVideo, language, default
     const queueWasEmpty = queueBefore === 0;
     const length = chatCache.addSongs(chatId, tracks);
     preloadTracks(queueWasEmpty ? tracks.slice(1) : tracks, { chatId });
+    // Prefetch lyrics for all queued playlist tracks
+    for (const tr of tracks) maybePrefetchLyrics(chatId, tr);
     const playlistSummary = t(language, 'playback.addedPlaylistTracks', { count: tracks.length, length });
     await editStatus(ctx, status, playlistSummary, { parse_mode: 'HTML', disable_web_page_preview: true });
     const [firstTrackMessage] = await sendPlaylistQueuePanels(ctx, tracks, language, queueBefore, status);
@@ -881,6 +931,9 @@ async function processPlayRequest(ctx, status, input, isVideo, language, default
           rememberPlaybackPanel(ctx, playbackMessage ?? firstTrackMessage, language, tracks[0]);
           startProgressUpdater(ctx, playbackMessage ?? firstTrackMessage, language);
         }
+        // Auto-start lyrics for playlist first track
+        startLyricsForChatIfEnabled(chatId, ctx.api, tracks[0]).catch(() => {});
+        prefetchNextLyrics(chatId);
       } catch (error) {
         chatCache.shift(chatId);
         if (isVoiceChatInactiveError(error)) {
@@ -969,6 +1022,8 @@ async function processPlayRequest(ctx, status, input, isVideo, language, default
     const queueWasEmpty = queueBefore === 0;
     const length = chatCache.addSongs(chatId, tracks);
     preloadTracks(queueWasEmpty ? tracks.slice(1) : tracks, { chatId });
+    // Prefetch lyrics for all URL playlist tracks
+    for (const tr of tracks) maybePrefetchLyrics(chatId, tr);
     const notScannedCount = Math.max(0, results.length - candidates.length);
     const skipSummary = `${skippedCount > 0 ? `\n${skippedCount} item dilewati karena tidak tersedia/duplikat.` : ''}${notScannedCount > 0 ? '\nBeberapa item playlist tidak dicek agar proses tetap ringan.' : ''}`;
     const playlistSummary = `${t(language, 'playback.addedPlaylistTracks', { count: tracks.length, length })}${skipSummary}`;
@@ -987,6 +1042,9 @@ async function processPlayRequest(ctx, status, input, isVideo, language, default
           rememberPlaybackPanel(ctx, playbackMessage ?? firstTrackMessage, language, tracks[0]);
           startProgressUpdater(ctx, playbackMessage ?? firstTrackMessage, language);
         }
+        // Auto-start lyrics for URL playlist first track
+        startLyricsForChatIfEnabled(chatId, ctx.api, tracks[0]).catch(() => {});
+        prefetchNextLyrics(chatId);
       } catch (error) {
         chatCache.shift(chatId);
         if (isVoiceChatInactiveError(error)) {
@@ -1090,6 +1148,9 @@ export async function skipHandler(ctx) {
     return;
   }
 
+  // Stop lyrics for the current track before skipping
+  stopLyricsForChat(ctx.chat.id);
+
   const { skipped, next, activeTrack: reusedTrack } = await voicePlayer.skip(ctx.chat.id, { reuseActive: true });
   if (!skipped) {
     await ctx.reply(t(language, 'playback.nothingPlaying'));
@@ -1107,7 +1168,12 @@ export async function skipHandler(ctx) {
     await updatePlaybackPanelsForAdvance(ctx.chat.id, skipped, next, activeTrack);
     cleanupTrackDownload(skipped, { chatId: ctx.chat.id });
     await ctx.reply(t(language, 'playback.skippedNow', { skipped: skipped.name, next: next.name }));
+
+    // Auto-start lyrics for the new track and prefetch next
+    startLyricsForChatIfEnabled(ctx.chat.id, ctx.api, activeTrack ?? next).catch(() => {});
+    prefetchNextLyrics(ctx.chat.id);
   } catch (error) {
+    stopLyricsForChat(ctx.chat.id);
     const failedNext = chatCache.shift(ctx.chat.id);
     cleanupTrackDownload(failedNext, { chatId: ctx.chat.id });
     if (isVoiceChatInactiveError(error)) {
@@ -1133,6 +1199,9 @@ export async function stopHandler(ctx) {
     return;
   }
 
+  // Stop lyrics before stopping playback
+  stopLyricsForChat(ctx.chat.id);
+
   const { stopped, next, activeTrack: reusedTrack, cleared } = await voicePlayer.stopOrAdvance(ctx.chat.id, { reuseActive: true });
   if (cleared || !next) {
     stopProgressUpdater(ctx.chat.id);
@@ -1147,7 +1216,12 @@ export async function stopHandler(ctx) {
     await updatePlaybackPanelsForAdvance(ctx.chat.id, stopped, next, activeTrack);
     cleanupTrackDownload(stopped, { chatId: ctx.chat.id });
     await ctx.reply(t(language, 'playback.skippedNow', { skipped: stopped.name, next: next.name }));
+
+    // Auto-start lyrics for the new track
+    startLyricsForChatIfEnabled(ctx.chat.id, ctx.api, activeTrack ?? next).catch(() => {});
+    prefetchNextLyrics(ctx.chat.id);
   } catch (error) {
+    stopLyricsForChat(ctx.chat.id);
     const failedNext = chatCache.shift(ctx.chat.id);
     cleanupTrackDownload(failedNext, { chatId: ctx.chat.id });
     if (isVoiceChatInactiveError(error)) {
@@ -1275,6 +1349,10 @@ export async function seekHandler(ctx) {
     await ctx.reply(t(language, 'playback.voiceFailed', { error: 'Gagal memindahkan posisi playback.' }));
     return;
   }
+
+  // Resync lyrics runner position after seek
+  resyncLyricsForChat(ctx.chat.id);
+
   await ctx.reply(t(language, 'playback.seeked', { position: secondsToClock(target) }));
 }
 

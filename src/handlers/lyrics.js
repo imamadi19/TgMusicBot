@@ -8,10 +8,12 @@ import { t } from '../i18n/index.js';
 import { voicePlayer } from '../core/player/player.js';
 import { getLyricsEnabled, setLyricsEnabled, getLyricsProvider } from '../core/db/chat-settings.js';
 import { startLyricsForChat, stopLyricsForChat, getLyricsStatus } from '../core/lyrics/lyrics-runner.js';
-import { getLyrics } from '../core/lyrics/lrclib.js';
+import { getLyrics, prefetchLyrics } from '../core/lyrics/lrclib.js';
+import { getCachedLyrics } from '../core/lyrics/lyrics-cache.js';
 import { config } from '../config/index.js';
 import { isUserAdminOrAuth } from './filters.js';
 import { isPremiumActive } from '../core/db/premium.js';
+import { secondsToClock } from '../utils/duration.js';
 
 export async function lyricsHandler(ctx) {
   const language = await getUserLanguage(ctx.from?.id);
@@ -106,11 +108,19 @@ export async function lyricsHandler(ctx) {
 
     if (activeTrack) {
       currentTrackText = activeTrack.title || activeTrack.name || 'Unknown Track';
-      const lyricsResult = await getLyrics(activeTrack).catch(() => null);
-      if (lyricsResult?.synced) {
-        lyricsAvailableText = t(language, 'lyrics.syncedAvailable');
-      } else if (lyricsResult?.plainLyrics) {
-        lyricsAvailableText = t(language, 'lyrics.plainOnly');
+      
+      // Use cache-first approach to avoid slow fetches on status check
+      const cachedResult = getCachedLyrics(activeTrack);
+      if (cachedResult) {
+        if (cachedResult.synced) {
+          lyricsAvailableText = t(language, 'lyrics.syncedAvailable');
+        } else if (cachedResult.plainLyrics) {
+          lyricsAvailableText = t(language, 'lyrics.plainOnly');
+        }
+      } else {
+        lyricsAvailableText = t(language, 'lyrics.waitingForCache');
+        // Trigger a background prefetch so next status check has data
+        prefetchLyrics(activeTrack).catch(() => {});
       }
     }
 
@@ -118,11 +128,22 @@ export async function lyricsHandler(ctx) {
       ? `\n• Last line sent: <code>${htmlEscape(runnerStatus.lastSentText)}</code>` 
       : '';
 
+    // Enhanced status with runner details
+    let runnerDetails = '';
+    if (runnerStatus.active) {
+      runnerDetails = `\n• ${t(language, 'lyrics.currentPosition')}: <code>${secondsToClock(runnerStatus.currentPosition)}</code>` +
+        `\n• ${t(language, 'lyrics.linesLoaded')}: <code>${runnerStatus.totalLines}</code>` +
+        `\n• Line: <code>${runnerStatus.lastSentIndex + 1}/${runnerStatus.totalLines}</code>`;
+      if (runnerStatus.syncOffsetMs !== 0) {
+        runnerDetails += `\n• ${t(language, 'lyrics.syncOffset')}: <code>${runnerStatus.syncOffsetMs}ms</code>`;
+      }
+    }
+
     const response = `<b>ℹ️ ${t(language, 'lyrics.status')}</b>\n` +
       `• Status: <b>${isEnabled ? t(language, 'lyrics.statusEnabled') : t(language, 'lyrics.statusDisabled')}</b>\n` +
       `• ${t(language, 'lyrics.provider')}: <code>${provider.toUpperCase()}</code>\n` +
       `• ${t(language, 'lyrics.currentTrack')}: <i>${htmlEscape(currentTrackText)}</i>\n` +
-      `• ${lyricsAvailableText}${lastSentLine}`;
+      `• ${lyricsAvailableText}${runnerDetails}${lastSentLine}`;
 
     await ctx.reply(response, { parse_mode: 'HTML' });
     return;

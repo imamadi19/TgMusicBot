@@ -1,37 +1,62 @@
 /**
  * In-memory cache for lyrics.
- * TTL is 24 hours by default, configurable via env.
+ * TTL is configurable via config. Supports shorter TTL for not-found results.
  */
 
-const TTL_HOURS = parseInt(process.env.LYRICS_CACHE_TTL_HOURS || '24', 10);
-const CACHE_TTL_MS = TTL_HOURS * 60 * 60 * 1000;
+import { config } from '../../config/index.js';
+
+const CACHE_TTL_MS = () => (config.lyricsCacheTtlHours ?? 24) * 60 * 60 * 1000;
+const NOT_FOUND_TTL_MS = 60 * 60 * 1000; // 1 hour for empty/not-found results
 
 // Map to hold cache items: key -> cacheObject
 const cache = new Map();
 
 /**
- * Generates a unique cache key for a track.
- * Uses trackId/url first, then falls back to title + artist + duration.
+ * Generates a stable unique cache key for a track.
+ * Priority: trackId > normalized source URL > normalized title+artist+duration
  * @param {object} track
  * @returns {string}
  */
-export function getCacheKey(track) {
+export function lyricsCacheKey(track) {
   if (!track) return '';
-  const id = track.trackId || track.url || '';
+
+  // 1. Use trackId if available (most stable)
+  if (track.trackId) {
+    return `tid:${String(track.trackId).trim()}`;
+  }
+
+  // 2. Use normalized source URL
+  const url = String(track.url || track.sourceUrl || '').trim();
+  if (url) {
+    try {
+      const parsed = new URL(url);
+      // Remove tracking params for YouTube
+      if (parsed.hostname.includes('youtube.com') || parsed.hostname.includes('youtu.be')) {
+        const videoId = parsed.searchParams.get('v') || parsed.pathname.replace('/', '');
+        if (videoId) return `tid:${videoId}`;
+      }
+      return `url:${parsed.href}`;
+    } catch {
+      return `url:${url}`;
+    }
+  }
+
+  // 3. Fallback to title + artist + duration
   const title = (track.title || track.name || '').trim().toLowerCase();
   const artist = (track.artist || '').trim().toLowerCase();
-  // Duration can be a string or number, normalize to integer seconds if possible
   let duration = '';
   if (track.duration) {
     if (typeof track.duration === 'number') {
-      duration = Math.round(track.duration);
+      duration = String(Math.round(track.duration));
     } else {
-      // duration can be "mm:ss" or seconds as string
       duration = String(track.duration).trim();
     }
   }
-  return `${id}_${title}_${artist}_${duration}`;
+  return `meta:${title}|${artist}|${duration}`;
 }
+
+// Keep backward-compatible alias
+export const getCacheKey = lyricsCacheKey;
 
 /**
  * Gets cached lyrics for a track.
@@ -39,14 +64,19 @@ export function getCacheKey(track) {
  * @returns {object|null} cache item or null if expired/not found
  */
 export function getCachedLyrics(track) {
-  const key = getCacheKey(track);
+  const key = lyricsCacheKey(track);
   if (!key) return null;
 
   const item = cache.get(key);
   if (!item) return null;
 
   const now = Date.now();
-  if (now - item.fetchedAt > CACHE_TTL_MS) {
+  // Use shorter TTL for not-found/empty results
+  const ttl = (item.synced === false && item.lines.length === 0 && !item.plainLyrics)
+    ? NOT_FOUND_TTL_MS
+    : CACHE_TTL_MS();
+
+  if (now - item.fetchedAt > ttl) {
     cache.delete(key);
     return null;
   }
@@ -60,7 +90,7 @@ export function getCachedLyrics(track) {
  * @param {object} lyricsData
  */
 export function setCachedLyrics(track, lyricsData) {
-  const key = getCacheKey(track);
+  const key = lyricsCacheKey(track);
   if (!key) return;
 
   cache.set(key, {
@@ -81,8 +111,9 @@ export function setCachedLyrics(track, lyricsData) {
  */
 function cleanupExpired() {
   const now = Date.now();
+  const maxTtl = CACHE_TTL_MS();
   for (const [key, item] of cache.entries()) {
-    if (now - item.fetchedAt > CACHE_TTL_MS) {
+    if (now - item.fetchedAt > maxTtl) {
       cache.delete(key);
     }
   }

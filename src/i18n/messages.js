@@ -142,7 +142,13 @@ export const translations = {
       provider: 'Provider',
       currentTrack: 'Current song',
       adminOnly: 'Only admins/auth users can toggle lyrics in groups.',
-      error: 'Failed to process lyrics: {error}'
+      error: 'Failed to process lyrics: {error}',
+      prefetching: 'Preparing lyrics...',
+      cached: 'Lyrics are available in cache.',
+      syncOffset: 'Sync offset',
+      currentPosition: 'Current position',
+      linesLoaded: 'Lyrics lines loaded',
+      waitingForCache: 'Lyrics are being prepared in the background.'
     }
   },
 };
@@ -285,7 +291,13 @@ const aliases = {
       provider: 'Provider',
       currentTrack: 'Lagu saat ini',
       adminOnly: 'Hanya admin/auth yang bisa mengubah lirik di grup.',
-      error: 'Gagal memproses lirik: {error}'
+      error: 'Gagal memproses lirik: {error}',
+      prefetching: 'Menyiapkan lirik...',
+      cached: 'Lirik sudah tersedia di cache.',
+      syncOffset: 'Offset sinkronisasi',
+      currentPosition: 'Posisi saat ini',
+      linesLoaded: 'Baris lirik dimuat',
+      waitingForCache: 'Lirik sedang disiapkan di background.'
     }
   },
   ru: {

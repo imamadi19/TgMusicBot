@@ -77,6 +77,18 @@ export const config = {
   port: process.env.PORT ?? '8080',
   autoLeave: toBool(process.env.AUTO_LEAVE, true),
   streamDirect: toBool(process.env.STREAM_DIRECT, false),
+  lyricsProvider: process.env.LYRICS_PROVIDER ?? 'lrclib',
+  lyricsEnabledDefault: toBool(process.env.LYRICS_ENABLED_DEFAULT, false),
+  lyricsCacheTtlHours: finiteNumber(process.env.LYRICS_CACHE_TTL_HOURS, 24),
+  lyricsFetchTimeoutMs: finiteNumber(process.env.LYRICS_FETCH_TIMEOUT_MS, 5000),
+  lyricsPrefetch: toBool(process.env.LYRICS_PREFETCH, true),
+  lyricsSyncOffsetMs: finiteNumber(process.env.LYRICS_SYNC_OFFSET_MS, 0),
+  lyricsMinSendIntervalMs: finiteNumber(process.env.LYRICS_MIN_SEND_INTERVAL_MS, 1200),
+  lyricsTickIntervalMs: finiteNumber(process.env.LYRICS_TICK_INTERVAL_MS, 300),
+  lyricsMaxLineLength: finiteNumber(process.env.LYRICS_MAX_LINE_LENGTH, 300),
+  lyricsStartGraceSeconds: finiteNumber(process.env.LYRICS_START_GRACE_SECONDS, 1.5),
+  lyricsSkipOldLineThresholdSeconds: finiteNumber(process.env.LYRICS_SKIP_OLD_LINE_THRESHOLD_SECONDS, 3),
+  lyricsDebug: toBool(process.env.LYRICS_DEBUG, false),
 };
 
 export function validateConfig() {
