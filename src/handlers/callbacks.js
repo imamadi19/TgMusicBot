@@ -6,7 +6,8 @@ import { requesterKey, voicePlayer } from '../core/player/player.js';
 import { config } from '../config/index.js';
 import { t } from '../i18n/index.js';
 import { controlKeyboard, progressLabel } from './keyboards.js';
-import { markPlaybackPanelStatus, updatePlaybackPanelsForAdvance } from './playback.js';
+import { markPlaybackPanelStatus, updatePlaybackPanelsForAdvance, startLyricsAuto, prefetchNextLyrics } from './playback.js';
+import { stopLyricsForChat } from '../core/lyrics/lyrics-runner.js';
 
 const requesterOnlyActions = new Set(['skip', 'stop', 'pause', 'resume', 'replay', 'mute', 'unmute']);
 
@@ -104,6 +105,10 @@ export async function vcPlayCallbackHandler(ctx) {
         const queuedNext = chatCache.getQueue(chatId)[1] ?? null;
         await answer(ctx, t(language, 'callbacks.trackSkipped'));
         if (queuedNext) await ensureDownloaded(queuedNext);
+        
+        // Stop lyrics for current track before skipping
+        stopLyricsForChat(chatId, 'callback-skip');
+        
         const { skipped, next, activeTrack: reusedTrack } = await voicePlayer.skip(chatId, { reuseActive: true });
         if (!skipped) return;
         if (!next) {
@@ -116,6 +121,10 @@ export async function vcPlayCallbackHandler(ctx) {
         cleanupTrackDownload(skipped, { chatId });
         const { activated } = await updatePlaybackPanelsForAdvance(chatId, skipped, next, activeTrack);
         if (!activated) await editPlaybackControls(ctx, language, '', activeTrack);
+        
+        // Auto-start lyrics for next track
+        startLyricsAuto(chatId, ctx.api, activeTrack ?? next, 'callback-skip');
+        prefetchNextLyrics(chatId);
         return;
       }
       case 'stop': {
@@ -125,6 +134,10 @@ export async function vcPlayCallbackHandler(ctx) {
         const currentRequester = requesterKey(queuedCurrent);
         const nextRequester = requesterKey(queuedNext);
         if (queuedNext && currentRequester && nextRequester && currentRequester !== nextRequester) await ensureDownloaded(queuedNext);
+        
+        // Stop lyrics runner before stopping or advancing
+        stopLyricsForChat(chatId, 'callback-stop');
+        
         const { stopped, next, activeTrack: reusedTrack, cleared, hadPlayback } = await voicePlayer.stopOrAdvance(chatId, { reuseActive: true });
         if (cleared || !next) {
           if (!hadPlayback && !stopped) {
@@ -143,6 +156,10 @@ export async function vcPlayCallbackHandler(ctx) {
         await answer(ctx, t(language, 'callbacks.trackSkipped'));
         const { activated } = await updatePlaybackPanelsForAdvance(chatId, stopped, next, activeTrack);
         if (!activated) await editPlaybackControls(ctx, language, '', activeTrack);
+        
+        // Auto-start lyrics for the new track
+        startLyricsAuto(chatId, ctx.api, activeTrack ?? next, 'callback-stop-advance');
+        prefetchNextLyrics(chatId);
         return;
       }
       case 'pause': {

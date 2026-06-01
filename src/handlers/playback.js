@@ -381,45 +381,88 @@ async function checkDjMode(ctx) {
   return enforceDjModeControl(ctx);
 }
 
+export function startLyricsAuto(chatId, api, track, reason = 'unknown') {
+  if (!track) return;
+  startLyricsForChatIfEnabled(chatId, api, track, { silent: true, reason })
+    .then((result) => {
+      if (config.lyricsDebug) {
+        console.log(`[lyrics] auto-start ${reason} chat=${chatId} success=${result?.success} message=${result?.message || ''}`);
+      }
+    })
+    .catch((error) => {
+      console.warn(`[lyrics] auto-start failed (${reason}) for chat ${chatId}:`, error?.message || error);
+    });
+}
+
+async function shouldPrefetchLyrics(chatId) {
+  if (!config.lyricsPrefetch) return false;
+  if (!config.lyricsPrefetchOnlyWhenEnabled) return true;
+  return await getLyricsEnabled(chatId);
+}
+
 /**
- * Non-blocking prefetch lyrics for a track if lyrics are enabled.
+ * Non-blocking prefetch lyrics for a track.
  * @param {string|number} chatId
  * @param {object} track
  */
 function maybePrefetchLyrics(chatId, track) {
-  if (!config.lyricsPrefetch) return;
-  getLyricsEnabled(chatId)
-    .then((enabled) => {
-      if (!enabled) return;
-      return prefetchLyrics(track);
+  shouldPrefetchLyrics(chatId)
+    .then((should) => {
+      if (!should) return;
+      if (config.lyricsDebug) {
+        console.log(`[lyrics] prefetch scheduled (maybePrefetch) for chat=${chatId} track=${track?.name || track?.title}`);
+      }
+      prefetchLyrics(track).catch((error) => {
+        if (config.lyricsDebug) {
+          console.error(`[lyrics] prefetch failed for track ${track?.name || track?.title}:`, error);
+        }
+      });
     })
-    .catch(() => {});
+    .catch((err) => {
+      if (config.lyricsDebug) {
+        console.error(`[lyrics] shouldPrefetchLyrics error:`, err);
+      }
+    });
 }
 
 /**
  * Prefetch lyrics for the next track in the queue.
  * @param {string|number} chatId
  */
-function prefetchNextLyrics(chatId) {
-  if (!config.lyricsPrefetch) return;
-  getLyricsEnabled(chatId).then(enabled => {
-    if (!enabled) return;
-    const queue = chatCache.getQueue(chatId);
-    const next = queue?.[1];
-    if (next) prefetchLyrics(next).catch(() => {});
-  }).catch(() => {});
+export function prefetchNextLyrics(chatId) {
+  shouldPrefetchLyrics(chatId)
+    .then((should) => {
+      if (!should) return;
+      const queue = chatCache.getQueue(chatId);
+      const next = queue?.[1];
+      if (next) {
+        if (config.lyricsDebug) {
+          console.log(`[lyrics] prefetch scheduled (prefetchNext) for chat=${chatId} track=${next?.name || next?.title}`);
+        }
+        prefetchLyrics(next).catch((error) => {
+          if (config.lyricsDebug) {
+            console.error(`[lyrics] prefetch failed for track ${next?.name || next?.title}:`, error);
+          }
+        });
+      }
+    })
+    .catch((err) => {
+      if (config.lyricsDebug) {
+        console.error(`[lyrics] prefetchNextLyrics shouldPrefetch check error:`, err);
+      }
+    });
 }
 
 voicePlayer.onTrackEnd(async ({ chatId, finished, next }) => {
   if (!next) {
-    stopLyricsForChat(chatId);
+    stopLyricsForChat(chatId, 'queue-ended');
     await updatePlaybackPanelsForAdvance(chatId, finished, null, null);
     cleanupTrackDownload(finished, { chatId });
     return;
   }
 
   // Stop old lyrics runner before starting next track
-  stopLyricsForChat(chatId);
+  stopLyricsForChat(chatId, 'track-ended');
 
   try {
     const activeTrack = await startCachedTrack(chatId, next);
@@ -427,13 +470,13 @@ voicePlayer.onTrackEnd(async ({ chatId, finished, next }) => {
     await updatePlaybackPanelsForAdvance(chatId, finished, next, activeTrack);
     if (finished?.trackId !== next?.trackId) cleanupTrackDownload(finished, { chatId });
 
-    // Auto-start lyrics for next track (silent, prefer cache from prefetch)
-    startLyricsForChatIfEnabled(chatId, null, activeTrack ?? next).catch(() => {});
+    // Auto-start lyrics for next track
+    startLyricsAuto(chatId, null, activeTrack ?? next, 'auto-next');
 
     // Prefetch lyrics for the track after next
     prefetchNextLyrics(chatId);
   } catch (error) {
-    stopLyricsForChat(chatId);
+    stopLyricsForChat(chatId, 'auto-next-error');
     const failedNext = chatCache.shift(chatId);
     cleanupTrackDownload(failedNext, { chatId });
     if (chatCache.getQueueLength(chatId) === 0) {
@@ -776,8 +819,9 @@ async function queueAndMaybePlay(ctx, statusMessage, track, isVideo, language, d
     await editStatus(ctx, statusMessage, t(language, 'playback.downloadFailed', { error: formatError(error, language) }));
     return;
   }
+  let activeTrack;
   try {
-    const activeTrack = await startQueuedTrack(ctx, saveTrack, isVideo);
+    activeTrack = await startQueuedTrack(ctx, saveTrack, isVideo);
     saveTrack.startedAt = activeTrack?.startedAt;
   } catch (error) {
     chatCache.shift(chatId);
@@ -796,7 +840,7 @@ async function queueAndMaybePlay(ctx, statusMessage, track, isVideo, language, d
   startProgressUpdater(ctx, playbackMessage ?? statusMessage, language);
 
   // Auto-start lyrics for first track and prefetch next
-  startLyricsForChatIfEnabled(chatId, ctx.api, saveTrack).catch(() => {});
+  startLyricsAuto(chatId, ctx.api, activeTrack ?? saveTrack, 'first-track');
   prefetchNextLyrics(chatId);
 }
 
@@ -920,8 +964,9 @@ async function processPlayRequest(ctx, status, input, isVideo, language, default
     await editStatus(ctx, status, playlistSummary, { parse_mode: 'HTML', disable_web_page_preview: true });
     const [firstTrackMessage] = await sendPlaylistQueuePanels(ctx, tracks, language, queueBefore, status);
     if (queueWasEmpty) {
+      let activeTrack;
       try {
-        const activeTrack = await startQueuedTrack(ctx, tracks[0], isVideo);
+        activeTrack = await startQueuedTrack(ctx, tracks[0], isVideo);
         tracks[0].startedAt = activeTrack?.startedAt;
         if (firstTrackMessage) {
           const playbackCaption = formatTrack(language, tracks[0]);
@@ -932,7 +977,7 @@ async function processPlayRequest(ctx, status, input, isVideo, language, default
           startProgressUpdater(ctx, playbackMessage ?? firstTrackMessage, language);
         }
         // Auto-start lyrics for playlist first track
-        startLyricsForChatIfEnabled(chatId, ctx.api, tracks[0]).catch(() => {});
+        startLyricsAuto(chatId, ctx.api, activeTrack ?? tracks[0], 'playlist-first-track');
         prefetchNextLyrics(chatId);
       } catch (error) {
         chatCache.shift(chatId);
@@ -1030,9 +1075,10 @@ async function processPlayRequest(ctx, status, input, isVideo, language, default
     await editStatus(ctx, status, playlistSummary, { parse_mode: 'HTML', disable_web_page_preview: true });
     const [firstTrackMessage] = await sendPlaylistQueuePanels(ctx, tracks, language, queueBefore, status);
     if (queueWasEmpty) {
+      let activeTrack;
       try {
         await ensureDownloaded(tracks[0], isVideo);
-        const activeTrack = await startQueuedTrack(ctx, tracks[0], isVideo);
+        activeTrack = await startQueuedTrack(ctx, tracks[0], isVideo);
         tracks[0].startedAt = activeTrack?.startedAt;
         if (firstTrackMessage) {
           const playbackCaption = formatTrack(language, tracks[0]);
@@ -1043,7 +1089,7 @@ async function processPlayRequest(ctx, status, input, isVideo, language, default
           startProgressUpdater(ctx, playbackMessage ?? firstTrackMessage, language);
         }
         // Auto-start lyrics for URL playlist first track
-        startLyricsForChatIfEnabled(chatId, ctx.api, tracks[0]).catch(() => {});
+        startLyricsAuto(chatId, ctx.api, activeTrack ?? tracks[0], 'url-playlist-first-track');
         prefetchNextLyrics(chatId);
       } catch (error) {
         chatCache.shift(chatId);
@@ -1149,7 +1195,7 @@ export async function skipHandler(ctx) {
   }
 
   // Stop lyrics for the current track before skipping
-  stopLyricsForChat(ctx.chat.id);
+  stopLyricsForChat(ctx.chat.id, 'manual-skip');
 
   const { skipped, next, activeTrack: reusedTrack } = await voicePlayer.skip(ctx.chat.id, { reuseActive: true });
   if (!skipped) {
@@ -1170,10 +1216,10 @@ export async function skipHandler(ctx) {
     await ctx.reply(t(language, 'playback.skippedNow', { skipped: skipped.name, next: next.name }));
 
     // Auto-start lyrics for the new track and prefetch next
-    startLyricsForChatIfEnabled(ctx.chat.id, ctx.api, activeTrack ?? next).catch(() => {});
+    startLyricsAuto(ctx.chat.id, ctx.api, activeTrack ?? next, 'manual-skip');
     prefetchNextLyrics(ctx.chat.id);
   } catch (error) {
-    stopLyricsForChat(ctx.chat.id);
+    stopLyricsForChat(ctx.chat.id, 'manual-skip-error');
     const failedNext = chatCache.shift(ctx.chat.id);
     cleanupTrackDownload(failedNext, { chatId: ctx.chat.id });
     if (isVoiceChatInactiveError(error)) {
@@ -1200,7 +1246,7 @@ export async function stopHandler(ctx) {
   }
 
   // Stop lyrics before stopping playback
-  stopLyricsForChat(ctx.chat.id);
+  stopLyricsForChat(ctx.chat.id, 'manual-stop');
 
   const { stopped, next, activeTrack: reusedTrack, cleared } = await voicePlayer.stopOrAdvance(ctx.chat.id, { reuseActive: true });
   if (cleared || !next) {
@@ -1218,10 +1264,10 @@ export async function stopHandler(ctx) {
     await ctx.reply(t(language, 'playback.skippedNow', { skipped: stopped.name, next: next.name }));
 
     // Auto-start lyrics for the new track
-    startLyricsForChatIfEnabled(ctx.chat.id, ctx.api, activeTrack ?? next).catch(() => {});
+    startLyricsAuto(ctx.chat.id, ctx.api, activeTrack ?? next, 'manual-stop-advance');
     prefetchNextLyrics(ctx.chat.id);
   } catch (error) {
-    stopLyricsForChat(ctx.chat.id);
+    stopLyricsForChat(ctx.chat.id, 'manual-stop-error');
     const failedNext = chatCache.shift(ctx.chat.id);
     cleanupTrackDownload(failedNext, { chatId: ctx.chat.id });
     if (isVoiceChatInactiveError(error)) {

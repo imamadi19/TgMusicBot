@@ -79,6 +79,8 @@ export const config = {
   streamDirect: toBool(process.env.STREAM_DIRECT, false),
   lyricsProvider: process.env.LYRICS_PROVIDER ?? 'lrclib',
   lyricsEnabledDefault: toBool(process.env.LYRICS_ENABLED_DEFAULT, false),
+  lyricsAutoStart: toBool(process.env.LYRICS_AUTO_START, true),
+  lyricsPrefetchOnlyWhenEnabled: toBool(process.env.LYRICS_PREFETCH_ONLY_WHEN_ENABLED, false),
   lyricsCacheTtlHours: finiteNumber(process.env.LYRICS_CACHE_TTL_HOURS, 24),
   lyricsFetchTimeoutMs: finiteNumber(process.env.LYRICS_FETCH_TIMEOUT_MS, 5000),
   lyricsPrefetch: toBool(process.env.LYRICS_PREFETCH, true),

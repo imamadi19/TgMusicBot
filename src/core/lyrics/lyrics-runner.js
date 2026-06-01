@@ -128,7 +128,7 @@ async function runTick(chatId) {
   const activeTrack = voicePlayer.activeTrack(chatId);
   if (!activeTrack) {
     debugLog('no active track, stopping runner for', key);
-    stopLyricsForChat(chatId);
+    stopLyricsForChat(chatId, 'no-active-track');
     return;
   }
 
@@ -140,7 +140,7 @@ async function runTick(chatId) {
 
   if (!isSameTrack) {
     debugLog('track changed, stopping runner for', key);
-    stopLyricsForChat(chatId);
+    stopLyricsForChat(chatId, 'track-changed');
     return;
   }
 
@@ -203,13 +203,12 @@ async function runTick(chatId) {
 
     debugLog(`[${key}] sending line ${targetIndex} at ${elapsedSeconds.toFixed(1)}s: "${text.slice(0, 50)}..."`);
 
-    // TODO: send lyrics through assistant voice chat messages if supported by Pyrogram/PyTgCalls.
     runner.api.sendMessage(chatId, messageText, { parse_mode: 'HTML' })
       .catch((error) => {
         console.warn(`Lyrics runner failed to send message to chat ${chatId}: ${error.message}`);
         // Terminate runner if chat is inaccessible or bot is kicked
         if (error.message.includes('chat not found') || error.message.includes('forbidden')) {
-          stopLyricsForChat(chatId);
+          stopLyricsForChat(chatId, 'send-message-error');
         }
       });
   }
@@ -230,11 +229,12 @@ export async function startLyricsForChat(chatId, ctxOrApi, track, options = {}) 
   const { silent = false, preferCache = false } = options;
   
   // Stop existing runner first
-  stopLyricsForChat(key);
+  stopLyricsForChat(key, 'restart');
 
   const api = ctxOrApi?.api || ctxOrApi || globalBotApi;
   if (!api) {
-    return { success: false, message: 'Bot API instance is not available' };
+    console.warn(`[lyrics-runner] Bot API instance is not available for chat ${chatId} (globalBotApi is not set)`);
+    return { success: false, message: 'apiUnavailable' };
   }
 
   try {
@@ -264,10 +264,25 @@ export async function startLyricsForChat(chatId, ctxOrApi, track, options = {}) 
 
     // Calculate initial position from active track
     const activeTrack = voicePlayer.activeTrack(chatId);
-    const currentPosition = activeTrack ? playbackPositionSeconds(activeTrack) : 0;
+    if (!activeTrack) {
+      debugLog('no active track in voicePlayer, aborting start for chat', key);
+      return { success: false, message: 'noActiveTrack' };
+    }
+    const isSameTrack = 
+      (activeTrack.trackId && activeTrack.trackId === track.trackId) ||
+      (activeTrack.url && activeTrack.url === track.url) ||
+      (activeTrack.name && activeTrack.name === track.name);
+    if (!isSameTrack) {
+      debugLog('active track is different from requested track, aborting start for chat', key);
+      return { success: false, message: 'trackMismatch' };
+    }
+
+    const currentPosition = playbackPositionSeconds(activeTrack);
     const initialLastSentIndex = findInitialLastSentIndex(lyricsResult.lines, currentPosition);
 
-    debugLog(`starting runner for ${key}, position: ${currentPosition.toFixed(1)}s, initialIndex: ${initialLastSentIndex}, totalLines: ${lyricsResult.lines.length}`);
+    if (config.lyricsDebug) {
+      console.log(`[lyrics-runner] runner started for chat=${key} position=${currentPosition.toFixed(2)}s initialIndex=${initialLastSentIndex} totalLines=${lyricsResult.lines.length} provider=${lyricsResult.provider || 'lrclib'}`);
+    }
 
     const runner = {
       chatId: key,
@@ -305,31 +320,61 @@ export async function startLyricsForChat(chatId, ctxOrApi, track, options = {}) 
  * Starts lyrics for a chat only if lyrics are enabled for that chat.
  * Used for auto-start scenarios (auto-next, first play, etc.)
  * @param {string|number} chatId
- * @param {any} api
+ * @param {any} ctxOrApi
  * @param {object} track
- * @returns {Promise<void>}
+ * @param {object} [options={}]
+ * @returns {Promise<{success: boolean, message?: string, skipped?: boolean}>}
  */
-export async function startLyricsForChatIfEnabled(chatId, api, track) {
+export async function startLyricsForChatIfEnabled(chatId, ctxOrApi, track, options = {}) {
   try {
     const { getLyricsEnabled } = await import('../db/chat-settings.js');
     const enabled = await getLyricsEnabled(chatId);
-    if (!enabled) return;
-    await startLyricsForChat(chatId, api, track, { silent: true, preferCache: true });
+    
+    if (config.lyricsDebug) {
+      console.log(`[lyrics-runner] startLyricsForChatIfEnabled check: chat=${chatId} enabled=${enabled}`);
+    }
+
+    if (!enabled) {
+      return { success: false, skipped: true, message: 'disabled' };
+    }
+
+    const api = ctxOrApi?.api || ctxOrApi || globalBotApi;
+    const apiAvailable = !!api;
+    if (config.lyricsDebug) {
+      console.log(`[lyrics-runner] api available check: chat=${chatId} available=${apiAvailable}`);
+    }
+
+    if (!api) {
+      console.warn(`[lyrics-runner] Bot API instance is not available for auto-start in chat ${chatId}`);
+      return { success: false, message: 'apiUnavailable' };
+    }
+
+    const result = await startLyricsForChat(chatId, api, track, { silent: true, preferCache: true, ...options });
+    
+    if (config.lyricsDebug) {
+      console.log(`[lyrics-runner] startLyricsForChat result for chat=${chatId}: success=${result.success} message=${result.message || ''}`);
+    }
+
+    return result;
   } catch (error) {
-    debugLog('startLyricsForChatIfEnabled error:', error?.message);
+    console.error(`[lyrics-runner] startLyricsForChatIfEnabled error for chat ${chatId}:`, error);
+    return { success: false, message: 'error', error: error?.message };
   }
 }
 
 /**
  * Stops the lyrics runner for a chat.
  * @param {string|number} chatId
+ * @param {string} [reason='unknown']
  * @returns {boolean} True if a runner was stopped
  */
-export function stopLyricsForChat(chatId) {
+export function stopLyricsForChat(chatId, reason = 'unknown') {
   const key = String(chatId);
   const runner = activeRunners.get(key);
   if (runner) {
-    debugLog('stopping runner for', key);
+    if (config.lyricsDebug) {
+      console.log(`[lyrics-runner] stopping runner for chat=${key} reason=${reason}`);
+    }
     if (runner.timer) {
       clearInterval(runner.timer);
     }
@@ -356,6 +401,9 @@ export function resyncLyricsForChat(chatId) {
   debugLog(`resync for ${key}: position=${pos.toFixed(1)}s, oldIndex=${runner.lastSentIndex}, newIndex=${newIndex}`);
   runner.lastSentIndex = newIndex;
   runner.lastSentTimeMs = 0; // Allow immediate send after resync
+  
+  // Immediately run a tick to send the lyric at the seeked position without waiting
+  runTick(key).catch(err => console.error(`Error in resync lyrics tick for chat ${key}:`, err));
 }
 
 /**

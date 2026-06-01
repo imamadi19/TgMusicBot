@@ -1,4 +1,5 @@
 import { db, isDatabaseConnected } from './mongo.js';
+import { config } from '../../config/index.js';
 
 export const ADMIN_MODE = {
   everyone: 'everyone',
@@ -45,10 +46,16 @@ const inMemoryLyricsProvider = new Map();
 
 export async function getLyricsEnabled(chatId) {
   if (!isDatabaseConnected()) {
-    return Boolean(inMemoryLyricsEnabled.get(String(chatId)));
+    if (inMemoryLyricsEnabled.has(String(chatId))) {
+      return Boolean(inMemoryLyricsEnabled.get(String(chatId)));
+    }
+    return config.lyricsEnabledDefault;
   }
   const chat = await db().collection('chats').findOne({ chatId: Number(chatId) }, { projection: { lyricsEnabled: 1 } });
-  return Boolean(chat?.lyricsEnabled);
+  if (chat && chat.lyricsEnabled !== undefined) {
+    return Boolean(chat.lyricsEnabled);
+  }
+  return config.lyricsEnabledDefault;
 }
 
 export async function setLyricsEnabled(chatId, enabled) {
