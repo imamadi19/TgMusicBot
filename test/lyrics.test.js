@@ -3,6 +3,7 @@ import assert from 'node:assert';
 import { parseLrc } from '../src/core/lyrics/lrc-parser.js';
 import { normalizeTitle } from '../src/core/lyrics/lrclib.js';
 import { getCacheKey, getCachedLyrics, setCachedLyrics, clearCache } from '../src/core/lyrics/lyrics-cache.js';
+import { normalizeLyricsMetadata } from '../src/core/lyrics/track-metadata.js';
 
 test('LRC Parser', () => {
   const lrcText = `
@@ -83,4 +84,22 @@ test('Lyrics Cache', () => {
   assert.strictEqual(cached.lines.length, 1);
   assert.strictEqual(cached.plainLyrics, 'Test lyrics');
   assert.strictEqual(cached.sourceId, '12345');
+});
+
+test('Metadata Normalization', () => {
+  // Test case 1
+  const res1 = normalizeLyricsMetadata({ title: 'Alan Walker - Faded (Official Music Video)', artist: '' });
+  assert.strictEqual(res1.artist, 'Alan Walker');
+  assert.strictEqual(res1.title, 'Faded');
+  assert.ok(res1.candidates.some(c => c.artist === 'Alan Walker' && c.title === 'Faded'));
+
+  // Test case 2
+  const res2 = normalizeLyricsMetadata({ title: 'BLACKPINK - ‘Pink Venom’ M/V', artist: '' });
+  assert.strictEqual(res2.artist, 'BLACKPINK');
+  assert.strictEqual(res2.title, 'Pink Venom');
+
+  // Test case 3
+  const res3 = normalizeLyricsMetadata({ title: 'Taylor Swift - Anti-Hero (Official Music Video)', artist: '' });
+  assert.strictEqual(res3.artist, 'Taylor Swift');
+  assert.strictEqual(res3.title, 'Anti-Hero');
 });

@@ -89,6 +89,7 @@ export const config = {
   lyricsStartGraceSeconds: finiteNumber(process.env.LYRICS_START_GRACE_SECONDS, 1.5),
   lyricsSkipOldLineThresholdSeconds: finiteNumber(process.env.LYRICS_SKIP_OLD_LINE_THRESHOLD_SECONDS, 3),
   lyricsDebug: toBool(process.env.LYRICS_DEBUG, false),
+  lyricsNotFoundCacheTtlMinutes: finiteNumber(process.env.LYRICS_NOT_FOUND_CACHE_TTL_MINUTES, 5),
 };
 
 export function validateConfig() {

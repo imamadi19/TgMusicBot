@@ -148,7 +148,16 @@ export const translations = {
       syncOffset: 'Sync offset',
       currentPosition: 'Current position',
       linesLoaded: 'Lyrics lines loaded',
-      waitingForCache: 'Lyrics are being prepared in the background.'
+      waitingForCache: 'Lyrics are being prepared in the background.',
+      cacheCleared: 'Lyrics cache for this song has been cleared.',
+      cacheMiss: 'Cache: miss',
+      cacheHit: 'Cache: hit',
+      refreshing: 'Refreshing lyrics...',
+      debugTitle: 'Lyrics Debug',
+      notFoundReason: 'Not found reason',
+      noCache: 'No cache for this song.',
+      lookupCandidates: 'Search candidates',
+      bestMatch: 'Best match'
     }
   },
 };
@@ -297,7 +306,16 @@ const aliases = {
       syncOffset: 'Offset sinkronisasi',
       currentPosition: 'Posisi saat ini',
       linesLoaded: 'Baris lirik dimuat',
-      waitingForCache: 'Lirik sedang disiapkan di background.'
+      waitingForCache: 'Lirik sedang disiapkan di background.',
+      cacheCleared: 'Cache lirik untuk lagu ini dihapus.',
+      cacheMiss: 'Cache: miss',
+      cacheHit: 'Cache: hit',
+      refreshing: 'Mengambil ulang lirik...',
+      debugTitle: 'Debug Lirik',
+      notFoundReason: 'Alasan tidak ditemukan',
+      noCache: 'Belum ada cache untuk lagu ini.',
+      lookupCandidates: 'Kandidat pencarian',
+      bestMatch: 'Hasil terbaik'
     }
   },
   ru: {
