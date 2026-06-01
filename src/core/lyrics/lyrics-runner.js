@@ -308,8 +308,13 @@ export async function startLyricsForChat(chatId, ctxOrApi, track, options = {}) 
 
     if (!lyricsResult || !lyricsResult.synced || lyricsResult.lines.length === 0) {
       const isPlainOnly = lyricsResult?.plainLyrics || lyricsResult?.status === 'plainOnly';
-      const msg = isPlainOnly ? 'plainOnly' : 'notFound';
-      const result = { success: false, message: msg };
+      let msg = isPlainOnly ? 'plainOnly' : 'notFound';
+      let errReason = undefined;
+      if (lyricsResult?.status === 'error') {
+        msg = 'error';
+        errReason = lyricsResult.reason;
+      }
+      const result = { success: false, message: msg, error: errReason };
       lastStartResult.set(key, result);
       if (silent) {
         debugLog('no synced lyrics (silent mode), skipping for', track.title || track.name);

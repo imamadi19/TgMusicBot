@@ -94,6 +94,8 @@ export async function buildLyricsPanelText(ctx, language) {
       cacheText = t(language, 'lyrics.cachePlainOnly');
     } else if (item.status === 'notFound') {
       cacheText = t(language, 'lyrics.cacheNotFound');
+    } else if (item.status === 'error') {
+      cacheText = item.reason === 'timeout' ? t(language, 'lyrics.providerTimeout') : t(language, 'lyrics.providerError');
     } else {
       cacheText = item.status;
     }
@@ -284,7 +286,11 @@ export async function lyricsHandler(ctx) {
       if (result.message === 'plainOnly') {
         errorMsg = t(language, 'lyrics.plainOnly');
       } else if (result.message === 'error') {
-        errorMsg = t(language, 'lyrics.error', { error: result.error });
+        if (result.error === 'timeout') {
+          errorMsg = t(language, 'lyrics.providerTimeout');
+        } else {
+          errorMsg = t(language, 'lyrics.providerError');
+        }
       }
       await ctx.api.editMessageText(chatId, infoMsg.message_id, `${t(language, 'lyrics.enabled')}\n\n⚠️ ${errorMsg}`);
     }
@@ -325,6 +331,9 @@ export async function lyricsHandler(ctx) {
           lyricsAvailableText = t(language, 'lyrics.plainOnly');
         } else if (item.status === 'notFound') {
           lyricsAvailableText = `${t(language, 'lyrics.notFound')} (Cache: ${cacheInfo.ageSeconds}s yang lalu)`;
+        } else if (item.status === 'error') {
+          const errText = item.reason === 'timeout' ? t(language, 'lyrics.providerTimeout') : t(language, 'lyrics.providerError');
+          lyricsAvailableText = `${errText} (Cache: ${cacheInfo.ageSeconds}s yang lalu)`;
         } else {
           lyricsAvailableText = `${t(language, 'lyrics.notFound')} (Cache: ${item.status}, ${cacheInfo.ageSeconds}s yang lalu)`;
         }
@@ -491,6 +500,8 @@ export async function lyricsHandler(ctx) {
           statusText = t(language, 'lyrics.syncedAvailable');
         } else if (result.plainLyrics) {
           statusText = t(language, 'lyrics.plainOnly');
+        } else if (result.status === 'error') {
+          statusText = result.reason === 'timeout' ? t(language, 'lyrics.providerTimeout') : t(language, 'lyrics.providerError');
         }
         await ctx.api.editMessageText(chatId, infoMsg.message_id, `✅ ${t(language, 'lyrics.cacheCleared')}\n\n• ${t(language, 'lyrics.currentTrack')}: <i>${htmlEscape(activeTrack.title || activeTrack.name)}</i>\n• Hasil: <b>${statusText}</b>`, { parse_mode: 'HTML' });
       } else {

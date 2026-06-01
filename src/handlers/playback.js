@@ -18,7 +18,7 @@ import { completedProgressKeyboard, controlKeyboard, supportKeyboard, searchSele
 import { playMode, isUserAdminOrAuth, enforceDjModeControl } from './filters.js';
 import { isAuthUser } from '../core/db/auth.js';
 import { getLyricsEnabled } from '../core/db/chat-settings.js';
-import { startLyricsForChatIfEnabled, stopLyricsForChat, resyncLyricsForChat } from '../core/lyrics/lyrics-runner.js';
+import { startLyricsForChatIfEnabled, stopLyricsForChat, resyncLyricsForChat, sameTrackLoose } from '../core/lyrics/lyrics-runner.js';
 import { prefetchLyrics } from '../core/lyrics/lrclib.js';
 
 const MAX_QUEUE = 10;
@@ -33,6 +33,11 @@ const panelEditTasks = new Map();
 const panelEditLastAt = new Map();
 const recentPlayRequests = new Map();
 const FREE_PLAY_COOLDOWN_MS = 5000;
+
+const progressUpdateRunning = new Map();
+const progressPauseUntil = new Map();
+const lyricsRetryState = new Map();
+const lyricsPrefetchTasks = new Map();
 
 function appendUniqueInviteLink(links, link) {
   const value = String(link ?? '').trim();
@@ -120,6 +125,35 @@ function parseRetryAfterSeconds(error) {
   return matched ? Number(matched[1]) : 0;
 }
 
+async function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function withTelegramRetry(label, task, maxRetries = 2, chatId = '') {
+  let attempts = 0;
+  while (true) {
+    try {
+      return await task();
+    } catch (error) {
+      const retryAfter = parseRetryAfterSeconds(error);
+      const isRateLimit = retryAfter > 0 || error.code === 429 || String(error.message).includes('retry after') || String(error.description).includes('retry after');
+      
+      if (isRateLimit) {
+        const actualRetryAfter = retryAfter > 0 ? retryAfter : 5;
+        console.log(`[playback] Telegram rate limited ${label} chat=${chatId} retryAfter=${actualRetryAfter}s`);
+        
+        if (attempts < maxRetries) {
+          attempts++;
+          const waitMs = actualRetryAfter * 1000 + 250;
+          await sleep(waitMs);
+          continue;
+        }
+      }
+      throw error;
+    }
+  }
+}
+
 function enqueuePanelEdit(panel, task) {
   const key = panelMessageKey(panel);
   if (!key || !panel?.messageId) return task();
@@ -162,18 +196,16 @@ async function editPanelMarkup(panel, replyMarkup) {
   if (!panel?.api || !panel?.messageId) return false;
   return enqueuePanelEdit(panel, async () => {
     try {
-      await panel.api.editMessageReplyMarkup(panel.chatId, panel.messageId, { reply_markup: replyMarkup });
+      await withTelegramRetry('editPanelMarkup', () =>
+        panel.api.editMessageReplyMarkup(panel.chatId, panel.messageId, { reply_markup: replyMarkup })
+      , 2, panel.chatId);
       return true;
     } catch (error) {
       const description = String(error?.description ?? error?.message ?? error).toLowerCase();
       if (description.includes('message is not modified')) return true;
-      const retryAfter = parseRetryAfterSeconds(error);
-      if (retryAfter > 0) {
-        await delay((retryAfter * 1000) + 250);
-        await panel.api.editMessageReplyMarkup(panel.chatId, panel.messageId, { reply_markup: replyMarkup });
-        return true;
+      if (!String(error.message).includes('retry after') && !String(error.description).includes('retry after')) {
+        console.warn(`Failed to edit playback controls for chat ${panel.chatId}`, error);
       }
-      console.warn(`Failed to edit playback controls for chat ${panel.chatId}`, error);
       return false;
     }
   });
@@ -210,24 +242,46 @@ async function activatePlaybackPanel(chatId, track, activeTrack) {
   const text = formatTrack(panel.language, track, 1, 'playing');
   const replyMarkup = controlKeyboard(panel.language, '', activeTrack);
   const thumbnail = youtubeThumbnail(track);
-  const sentMessage = await (thumbnail
-    ? panel.api.sendPhoto(panel.chatId, thumbnail, {
-      caption: String(text).slice(0, 1024),
-      parse_mode: 'HTML',
-      reply_markup: replyMarkup,
-    })
-    : panel.api.sendMessage(panel.chatId, text, {
-      parse_mode: 'HTML',
-      disable_web_page_preview: true,
-      reply_markup: replyMarkup,
-    })).catch((error) => {
-    console.warn(`Failed to send new playback panel for chat ${panel.chatId}`, error);
+
+  const deleteOldPanel = async () => {
+    if (panel.messageId && typeof panel.api.deleteMessage === 'function') {
+      try {
+        await withTelegramRetry('deleteMessage', () => panel.api.deleteMessage(panel.chatId, panel.messageId), 2, panel.chatId);
+      } catch (error) {
+        const desc = String(error?.description ?? error?.message ?? '').toLowerCase();
+        if (!desc.includes('message to delete not found') && !desc.includes('message can\'t be deleted')) {
+          console.warn(`Failed to delete old playback panel for chat ${panel.chatId}: ${error.message}`);
+        }
+      }
+    }
+  };
+
+  const sendNewPanel = async () => {
+    return await withTelegramRetry('sendPlaybackPanel', () => {
+      return thumbnail
+        ? panel.api.sendPhoto(panel.chatId, thumbnail, {
+          caption: String(text).slice(0, 1024),
+          parse_mode: 'HTML',
+          reply_markup: replyMarkup,
+        })
+        : panel.api.sendMessage(panel.chatId, text, {
+          parse_mode: 'HTML',
+          disable_web_page_preview: true,
+          reply_markup: replyMarkup,
+        });
+    }, 2, panel.chatId);
+  };
+
+  const sentMessage = await sendNewPanel().catch((error) => {
+    if (!String(error.message).includes('retry after') && !String(error.description).includes('retry after')) {
+      console.warn(`Failed to send new playback panel for chat ${panel.chatId}`, error);
+    }
     return null;
   });
+
   if (!sentMessage?.message_id) return false;
-  if (panel.messageId && typeof panel.api.deleteMessage === 'function') {
-    await panel.api.deleteMessage(panel.chatId, panel.messageId).catch(() => {});
-  }
+
+  await deleteOldPanel();
 
   const oldKey = panelKey(chatId, track);
   playbackPanels.set(oldKey, {
@@ -259,9 +313,9 @@ async function editPanelTextAndMarkup(panel, text, replyMarkup) {
   return enqueuePanelEdit(panel, async () => {
     try {
       if (panel.prefersCaption) {
-        await editCaption();
+        await withTelegramRetry('editCaption', editCaption, 2, panel.chatId);
       } else {
-        await editText();
+        await withTelegramRetry('editText', editText, 2, panel.chatId);
       }
       return true;
     } catch (error) {
@@ -270,27 +324,22 @@ async function editPanelTextAndMarkup(panel, text, replyMarkup) {
 
       try {
         if (panel.prefersCaption || description.includes('there is no text in the message')) {
-          await editCaption();
+          await withTelegramRetry('editCaptionFallback', editCaption, 2, panel.chatId);
           panel.prefersCaption = true;
         } else {
-          await editText();
+          await withTelegramRetry('editTextFallback', editText, 2, panel.chatId);
           panel.prefersCaption = false;
         }
         return true;
       } catch (fallbackError) {
         const fallbackDescription = String(fallbackError?.description ?? fallbackError?.message ?? fallbackError).toLowerCase();
         if (fallbackDescription.includes('message is not modified')) return true;
-        const retryAfter = parseRetryAfterSeconds(fallbackError);
-        if (retryAfter > 0) {
-          await delay((retryAfter * 1000) + 250);
-          if (panel.prefersCaption) await editCaption();
-          else await editText();
-          return true;
+        if (!String(fallbackError.message).includes('retry after') && !String(fallbackError.description).includes('retry after')) {
+          console.warn(`Failed to edit playback panel for chat ${panel.chatId}`, {
+            primaryError: error.message,
+            fallbackError: fallbackError.message,
+          });
         }
-        console.warn(`Failed to edit playback panel for chat ${panel.chatId}`, {
-          primaryError: error,
-          fallbackError,
-        });
         return false;
       }
     }
@@ -317,24 +366,61 @@ function startProgressUpdater(ctx, message, language) {
   if (!chatId || !message?.message_id) return;
   const key = String(chatId);
   stopProgressUpdater(key);
+
   const timer = setInterval(async () => {
+    const pauseUntil = progressPauseUntil.get(key) ?? 0;
+    if (Date.now() < pauseUntil) {
+      return;
+    }
+
+    if (progressUpdateRunning.get(key)) {
+      return;
+    }
+
     const activeTrack = voicePlayer.activeTrack(key);
     if (!activeTrack) {
       if (chatCache.getQueueLength(key) === 0) stopProgressUpdater(key);
       return;
     }
     if (chatCache.isPaused(key)) return;
-    try {
-      await ctx.api.editMessageReplyMarkup(chatId, message.message_id, {
-        reply_markup: controlKeyboard(language, '', activeTrack),
-      });
-    } catch (error) {
-      const description = String(error?.description ?? error?.message ?? error).toLowerCase();
-      if (!description.includes('message is not modified')) {
-        console.warn(`Failed to refresh playback progress for chat ${key}`, error);
+
+    const pKey = panelKey(chatId, activeTrack);
+    const panel = playbackPanels.get(pKey);
+    if (panel) {
+      const msgKey = panelMessageKey(panel);
+      const lastAt = panelEditLastAt.get(msgKey) ?? 0;
+      if (Date.now() - lastAt < PANEL_EDIT_MIN_INTERVAL_MS) {
+        return;
       }
     }
+
+    progressUpdateRunning.set(key, true);
+
+    try {
+      await withTelegramRetry('progressUpdate', async () => {
+        await ctx.api.editMessageReplyMarkup(chatId, message.message_id, {
+          reply_markup: controlKeyboard(language, '', activeTrack),
+        });
+      }, 1, chatId);
+    } catch (error) {
+      const retryAfter = parseRetryAfterSeconds(error);
+      const isRateLimit = retryAfter > 0 || error.code === 429 || String(error.message).includes('retry after') || String(error.description).includes('retry after');
+      
+      if (isRateLimit) {
+        const actualRetryAfter = retryAfter > 0 ? retryAfter : 5;
+        progressPauseUntil.set(key, Date.now() + (actualRetryAfter * 1000));
+        await sleep(actualRetryAfter * 1000);
+      } else {
+        const description = String(error?.description ?? error?.message ?? error).toLowerCase();
+        if (!description.includes('message is not modified')) {
+          console.warn(`Failed to refresh playback progress for chat ${key}`, error);
+        }
+      }
+    } finally {
+      progressUpdateRunning.set(key, false);
+    }
   }, PROGRESS_UPDATE_INTERVAL_MS);
+
   timer.unref?.();
   progressUpdaters.set(key, timer);
 }
@@ -385,13 +471,131 @@ export function startLyricsAuto(chatId, api, track, reason = 'unknown') {
   if (!track) return;
   startLyricsForChatIfEnabled(chatId, api, track, { silent: true, reason })
     .then((result) => {
-      if (config.lyricsDebug || (!result?.success && result?.message !== 'disabled' && result?.message !== 'notFound')) {
-        console.log(`[lyrics] auto-start ${reason} chat=${chatId} success=${result?.success} message=${result?.message || ''}`);
+      if (!result?.success) {
+        const errType = result?.error || result?.message;
+        const retryableErrors = ['timeout', 'providerError', 'apiUnavailable', 'rateLimited', 'error', 'network'];
+        if (retryableErrors.includes(errType)) {
+          scheduleLyricsAutoRetry(chatId, api, track, reason, errType);
+        }
       }
     })
     .catch((error) => {
-      console.warn(`[lyrics] auto-start failed (${reason}) chat=${chatId}:`, error?.message || error);
+      scheduleLyricsAutoRetry(chatId, api, track, reason, error?.message || 'unknown');
     });
+}
+
+function scheduleLyricsAutoRetry(chatId, api, track, reason, lastMessage) {
+  const key = String(chatId);
+  const state = lyricsRetryState.get(key) || { trackId: track.trackId || track.name, attempts: 0 };
+  
+  const currentTrackId = track.trackId || track.name;
+  if (state.trackId !== currentTrackId) {
+    state.trackId = currentTrackId;
+    state.attempts = 0;
+  }
+  
+  if (state.attempts >= 2) {
+    if (config.lyricsDebug) {
+      console.log(`[lyrics] auto-next lyrics retry limit reached (2) for chat=${chatId}`);
+    }
+    lyricsRetryState.delete(key);
+    return;
+  }
+  
+  state.attempts++;
+  
+  const delayMs = state.attempts === 1 ? 5000 : 12000;
+  
+  console.log(`[lyrics] auto-next lyrics retry scheduled reason=${lastMessage} delay=${delayMs}ms attempt=${state.attempts} chat=${chatId}`);
+  
+  if (state.timeoutId) {
+    clearTimeout(state.timeoutId);
+  }
+  
+  state.timeoutId = setTimeout(async () => {
+    try {
+      const enabled = await getLyricsEnabled(chatId);
+      if (!enabled) {
+        if (config.lyricsDebug) {
+          console.log(`[lyrics] retry cancelled, lyrics disabled for chat=${chatId}`);
+        }
+        lyricsRetryState.delete(key);
+        return;
+      }
+      
+      const activeTrack = voicePlayer.activeTrack(chatId);
+      if (!activeTrack || !sameTrackLoose(activeTrack, track)) {
+        if (config.lyricsDebug) {
+          console.log(`[lyrics] retry cancelled, active track changed or no active track for chat=${chatId}`);
+        }
+        lyricsRetryState.delete(key);
+        return;
+      }
+      
+      startLyricsForChatIfEnabled(chatId, api, track, { silent: true, reason })
+        .then(result => {
+          if (!result?.success) {
+            const errType = result?.error || result?.message;
+            const retryableErrors = ['timeout', 'providerError', 'apiUnavailable', 'rateLimited', 'error', 'network'];
+            if (retryableErrors.includes(errType)) {
+              scheduleLyricsAutoRetry(chatId, api, track, reason, errType);
+            } else {
+              lyricsRetryState.delete(key);
+            }
+          } else {
+            lyricsRetryState.delete(key);
+          }
+        })
+        .catch(error => {
+          scheduleLyricsAutoRetry(chatId, api, track, reason, error.message);
+        });
+    } catch (err) {
+      console.warn(`[lyrics] retry error for chat=${chatId}:`, err);
+      lyricsRetryState.delete(key);
+    }
+  }, delayMs);
+  
+  lyricsRetryState.set(key, state);
+}
+
+function scheduleLyricsPrefetch(chatId, track) {
+  const key = String(chatId);
+  const state = lyricsPrefetchTasks.get(key) || { running: false, nextTrack: null };
+  
+  if (state.running) {
+    state.nextTrack = track;
+    lyricsPrefetchTasks.set(key, state);
+    return;
+  }
+  
+  state.running = true;
+  lyricsPrefetchTasks.set(key, state);
+  
+  const runPrefetch = async (currentTrack) => {
+    try {
+      if (config.lyricsDebug) {
+        console.log(`[lyrics] prefetch running for chat=${chatId} track=${currentTrack?.name || currentTrack?.title}`);
+      }
+      await prefetchLyrics(currentTrack);
+    } catch (error) {
+      if (config.lyricsDebug) {
+        console.error(`[lyrics] prefetch failed for track ${currentTrack?.name || currentTrack?.title}:`, error);
+      }
+    } finally {
+      const currentState = lyricsPrefetchTasks.get(key);
+      if (currentState && currentState.nextTrack) {
+        const next = currentState.nextTrack;
+        currentState.nextTrack = null;
+        runPrefetch(next);
+      } else {
+        if (currentState) {
+          currentState.running = false;
+        }
+      }
+    }
+  };
+  
+  runPrefetch(track);
 }
 
 async function shouldPrefetchLyrics(chatId) {
@@ -400,23 +604,11 @@ async function shouldPrefetchLyrics(chatId) {
   return await getLyricsEnabled(chatId);
 }
 
-/**
- * Non-blocking prefetch lyrics for a track.
- * @param {string|number} chatId
- * @param {object} track
- */
 function maybePrefetchLyrics(chatId, track) {
   shouldPrefetchLyrics(chatId)
     .then((should) => {
-      if (!should) return;
-      if (config.lyricsDebug) {
-        console.log(`[lyrics] prefetch scheduled (maybePrefetch) for chat=${chatId} track=${track?.name || track?.title}`);
-      }
-      prefetchLyrics(track).catch((error) => {
-        if (config.lyricsDebug) {
-          console.error(`[lyrics] prefetch failed for track ${track?.name || track?.title}:`, error);
-        }
-      });
+      if (!should || !track) return;
+      scheduleLyricsPrefetch(chatId, track);
     })
     .catch((err) => {
       if (config.lyricsDebug) {
@@ -425,10 +617,6 @@ function maybePrefetchLyrics(chatId, track) {
     });
 }
 
-/**
- * Prefetch lyrics for the next track in the queue.
- * @param {string|number} chatId
- */
 export function prefetchNextLyrics(chatId) {
   shouldPrefetchLyrics(chatId)
     .then((should) => {
@@ -436,14 +624,7 @@ export function prefetchNextLyrics(chatId) {
       const queue = chatCache.getQueue(chatId);
       const next = queue?.[1];
       if (next) {
-        if (config.lyricsDebug) {
-          console.log(`[lyrics] prefetch scheduled (prefetchNext) for chat=${chatId} track=${next?.name || next?.title}`);
-        }
-        prefetchLyrics(next).catch((error) => {
-          if (config.lyricsDebug) {
-            console.error(`[lyrics] prefetch failed for track ${next?.name || next?.title}:`, error);
-          }
-        });
+        scheduleLyricsPrefetch(chatId, next);
       }
     })
     .catch((err) => {
@@ -461,14 +642,15 @@ voicePlayer.onTrackEnd(async ({ chatId, finished, next }) => {
     return;
   }
 
-  // Stop old lyrics runner before starting next track
   stopLyricsForChat(chatId, 'track-end');
 
   try {
     const activeTrack = await startCachedTrack(chatId, next);
     next.startedAt = activeTrack?.startedAt;
-    await updatePlaybackPanelsForAdvance(chatId, finished, next, activeTrack);
-    if (finished?.trackId !== next?.trackId) cleanupTrackDownload(finished, { chatId });
+
+    const panelUpdatePromise = updatePlaybackPanelsForAdvance(chatId, finished, next, activeTrack).catch((err) => {
+      console.warn(`[playback] panel update failed for auto-next in chat ${chatId}:`, err.message);
+    });
 
     const lyricsTrack = activeTrack 
       ? { 
@@ -482,11 +664,13 @@ voicePlayer.onTrackEnd(async ({ chatId, finished, next }) => {
         } 
       : next;
 
-    // Auto-start lyrics for next track
     startLyricsAuto(chatId, null, lyricsTrack, 'auto-next');
 
-    // Prefetch lyrics for the track after next
     prefetchNextLyrics(chatId);
+
+    await panelUpdatePromise;
+
+    if (finished?.trackId !== next?.trackId) cleanupTrackDownload(finished, { chatId });
   } catch (error) {
     stopLyricsForChat(chatId, 'auto-next-error');
     const failedNext = chatCache.shift(chatId);

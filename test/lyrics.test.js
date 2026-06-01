@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert';
 import { parseLrc } from '../src/core/lyrics/lrc-parser.js';
-import { normalizeTitle } from '../src/core/lyrics/lrclib.js';
+import { normalizeTitle, classifyFetchError, isAbortError } from '../src/core/lyrics/lrclib.js';
 import { getCacheKey, getCachedLyrics, setCachedLyrics, clearCache } from '../src/core/lyrics/lyrics-cache.js';
 import { normalizeLyricsMetadata } from '../src/core/lyrics/track-metadata.js';
 
@@ -125,3 +125,51 @@ test('Lyrics Panel Keyboard Generator', () => {
   assert.strictEqual(kb2.inline_keyboard[2][0].callback_data, 'lyrics_clear_refresh');
   assert.strictEqual(kb2.inline_keyboard[3][0].callback_data, 'lyrics_close');
 });
+
+test('LRCLIB Error Handling and Classification', () => {
+  // Test isAbortError
+  const abortErr = new Error('The user aborted a request.');
+  abortErr.name = 'AbortError';
+  assert.strictEqual(isAbortError(abortErr), true);
+
+  const regularErr = new Error('Some standard error');
+  assert.strictEqual(isAbortError(regularErr), false);
+
+  // Test classifyFetchError
+  assert.strictEqual(classifyFetchError(abortErr), 'timeout');
+  assert.strictEqual(classifyFetchError(new Error('getaddrinfo ENOTFOUND lrclib.net')), 'network');
+  assert.strictEqual(classifyFetchError(new Error('read ECONNRESET')), 'network');
+  assert.strictEqual(classifyFetchError(new Error('connect ETIMEDOUT')), 'timeout');
+  assert.strictEqual(classifyFetchError(new Error('some random http error')), 'http_or_unknown');
+});
+
+test('Lyrics Error Caching', () => {
+  clearCache();
+
+  const track = {
+    trackId: 'track_err_test',
+    title: 'Error Song',
+    artist: 'Error Artist',
+    duration: 180
+  };
+
+  const errorData = {
+    provider: 'lrclib',
+    synced: false,
+    lines: [],
+    plainLyrics: '',
+    sourceId: '',
+    status: 'error',
+    reason: 'timeout',
+    transient: true
+  };
+
+  setCachedLyrics(track, errorData);
+  const cached = getCachedLyrics(track);
+
+  assert.ok(cached);
+  assert.strictEqual(cached.status, 'error');
+  assert.strictEqual(cached.reason, 'timeout');
+  assert.strictEqual(cached.synced, false);
+});
+
