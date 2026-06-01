@@ -103,3 +103,25 @@ test('Metadata Normalization', () => {
   assert.strictEqual(res3.artist, 'Taylor Swift');
   assert.strictEqual(res3.title, 'Anti-Hero');
 });
+
+import { lyricsPanelKeyboard } from '../src/handlers/lyrics.js';
+
+test('Lyrics Panel Keyboard Generator', () => {
+  // Test case 1: no active track
+  const kb1 = lyricsPanelKeyboard('en', { hasActiveTrack: false });
+  assert.ok(kb1.inline_keyboard);
+  assert.strictEqual(kb1.inline_keyboard.length, 2);
+  assert.strictEqual(kb1.inline_keyboard[0][0].callback_data, 'lyrics_on');
+  assert.strictEqual(kb1.inline_keyboard[1][0].callback_data, 'lyrics_close');
+
+  // Test case 2: has active track
+  const kb2 = lyricsPanelKeyboard('en', { hasActiveTrack: true });
+  assert.ok(kb2.inline_keyboard);
+  assert.strictEqual(kb2.inline_keyboard.length, 4);
+  assert.strictEqual(kb2.inline_keyboard[0][0].callback_data, 'lyrics_on');
+  assert.strictEqual(kb2.inline_keyboard[0][1].callback_data, 'lyrics_off');
+  assert.strictEqual(kb2.inline_keyboard[1][0].callback_data, 'lyrics_refresh');
+  assert.strictEqual(kb2.inline_keyboard[1][1].callback_data, 'lyrics_clearcache');
+  assert.strictEqual(kb2.inline_keyboard[2][0].callback_data, 'lyrics_clear_refresh');
+  assert.strictEqual(kb2.inline_keyboard[3][0].callback_data, 'lyrics_close');
+});

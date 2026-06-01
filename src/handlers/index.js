@@ -8,7 +8,7 @@ import { loopHandler, muteHandler, pauseHandler, playHandler, queueHandler, remo
 import { addToPlaylistHandler, createPlaylistHandler, deletePlaylistHandler, myPlaylistsHandler, playlistInfoHandler, removeFromPlaylistHandler } from './playlists.js';
 import { premiumDjModeHandler, premiumFeaturesHandler, premiumGrantHandler, premiumInfoHandler, premiumProfileHandler, premiumQueueMoveHandler, premiumRevokeHandler, premiumSetPresetHandler } from './premium.js';
 import { noopHandler, pingHandler, privacyHandler, serviceSelectHandler, settingsHandler, settingsCloseHandler, settingsServiceHandler, settingsLanguageHandler, settingsLanguageSelectHandler, settingsHelpHandler, settingsPresetHintHandler, settingsDjModeHintHandler, settingsPremiumInfoHandler, shellHandler, statsHandler } from './misc.js';
-import { lyricsHandler } from './lyrics.js';
+import { lyricsHandler, lyricsOnCallbackHandler, lyricsOffCallbackHandler, lyricsRefreshCallbackHandler, lyricsClearCacheCallbackHandler, lyricsClearRefreshCallbackHandler, lyricsCloseCallbackHandler } from './lyrics.js';
 import { setGlobalBotApi } from '../core/lyrics/lyrics-runner.js';
 
 export function loadHandlers(bot) {
@@ -104,4 +104,12 @@ export function loadHandlers(bot) {
   bot.callbackQuery('group_djmode_hint', groupDjmodeHintHandler);
   bot.callbackQuery('start_home', startHomeHandler);
   bot.callbackQuery('start_close', startCloseHandler);
+
+  // Lyrics panel callbacks
+  bot.callbackQuery('lyrics_on', lyricsOnCallbackHandler);
+  bot.callbackQuery('lyrics_off', lyricsOffCallbackHandler);
+  bot.callbackQuery('lyrics_refresh', lyricsRefreshCallbackHandler);
+  bot.callbackQuery('lyrics_clearcache', lyricsClearCacheCallbackHandler);
+  bot.callbackQuery('lyrics_clear_refresh', lyricsClearRefreshCallbackHandler);
+  bot.callbackQuery('lyrics_close', lyricsCloseCallbackHandler);
 }

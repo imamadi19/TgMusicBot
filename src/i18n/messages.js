@@ -3,7 +3,13 @@ export const translations = {
     buttons: {
       support: 'Support', channel: 'Channel', source: 'Source', addToGroup: 'Add me to your group', user: 'User', admin: 'Admin', playlist: 'Playlist', owner: 'Owner', developer: 'Developer', back: 'Back', pause: '⏸ Pause', resume: '▶️ Resume', skip: '⏭ Skip', stop: '⏹ Stop', mute: '🔇 Mute', unmute: '🔊 Unmute', addToPlaylist: '➕ Playlist', close: 'Close', language: '🌐 Language', help: 'Help', settings: 'Settings', chooseLanguage: 'Choose language',
       setupGuide: 'Setup Guide', musicFeatures: 'Music Features', myPlaylists: 'My Playlists', premium: 'Premium', playMusic: 'Play Music', playVideo: 'Play Video', queue: 'Queue', groupSettings: 'Group Settings', djMode: 'DJ Mode',
-      defaultService: 'Default Service', audioPreset: 'Audio Preset', premiumInfo: 'Premium Info'
+      defaultService: 'Default Service', audioPreset: 'Audio Preset', premiumInfo: 'Premium Info',
+      lyricsOn: 'Turn On',
+      lyricsOff: 'Turn Off',
+      lyricsRefresh: 'Refresh',
+      lyricsClearCache: 'Clear Cache',
+      lyricsClearRefresh: 'Clear + Refresh',
+      lyricsOnNext: 'Turn On for Next Song'
     },
     general: { user: 'User', openingHelp: 'Opening help menu...', unknownHelp: 'Unknown help category.', chooseHelp: 'Choose a help category:', useBack: 'Use the button below to go back.' },
     language: { choose: 'Please choose your language. Your choice will be saved until you change it again.', saved: 'Language saved: {language}', invalid: 'Unsupported language.', current: 'Current language: {language}' },
@@ -157,7 +163,24 @@ export const translations = {
       notFoundReason: 'Not found reason',
       noCache: 'No cache for this song.',
       lookupCandidates: 'Search candidates',
-      bestMatch: 'Best match'
+      bestMatch: 'Best match',
+      panelTitle: 'Lyrics',
+      track: 'Track',
+      statusLabel: 'Status',
+      cache: 'Cache',
+      synced: 'Synced',
+      lines: 'Lines',
+      chooseAction: 'Choose action below:',
+      cacheSynced: 'Cache: synced',
+      cachePlainOnly: 'Cache: plain lyrics only',
+      cacheNotFound: 'Cache: not found',
+      refreshDone: 'Lyrics refresh completed.',
+      clearRefresh: 'Clear + Refresh',
+      permissionDenied: 'Only admins/auth/requester/premium can change lyrics.',
+      closed: 'Closed.',
+      notAvailable: 'Not available',
+      available: 'Available',
+      unknown: 'Not checked'
     }
   },
 };
@@ -195,7 +218,13 @@ const aliases = {
       playVideo: 'Play Video',
       queue: 'Queue',
       groupSettings: 'Settings Grup',
-      djMode: 'DJ Mode'
+      djMode: 'DJ Mode',
+      lyricsOn: 'Nyalakan',
+      lyricsOff: 'Matikan',
+      lyricsRefresh: 'Refresh',
+      lyricsClearCache: 'Clear Cache',
+      lyricsClearRefresh: 'Clear + Refresh',
+      lyricsOnNext: 'Nyalakan untuk lagu berikutnya'
     },
     language: {
       choose: 'Silakan pilih bahasa. Pilihanmu akan disimpan sampai kamu mengubahnya lagi.',
@@ -315,7 +344,24 @@ const aliases = {
       notFoundReason: 'Alasan tidak ditemukan',
       noCache: 'Belum ada cache untuk lagu ini.',
       lookupCandidates: 'Kandidat pencarian',
-      bestMatch: 'Hasil terbaik'
+      bestMatch: 'Hasil terbaik',
+      panelTitle: 'Lirik',
+      track: 'Lagu',
+      statusLabel: 'Status',
+      cache: 'Cache',
+      synced: 'Sinkron',
+      lines: 'Baris',
+      chooseAction: 'Pilih aksi di bawah:',
+      cacheSynced: 'Cache: lirik sinkron',
+      cachePlainOnly: 'Cache: hanya lirik biasa',
+      cacheNotFound: 'Cache: tidak ditemukan',
+      refreshDone: 'Refresh lirik selesai.',
+      clearRefresh: 'Clear + Refresh',
+      permissionDenied: 'Hanya admin/auth/requester/premium yang bisa mengubah lirik.',
+      closed: 'Ditutup.',
+      notAvailable: 'Tidak tersedia',
+      available: 'Tersedia',
+      unknown: 'Belum dicek'
     }
   },
   ru: {

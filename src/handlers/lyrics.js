@@ -1,5 +1,5 @@
 /**
- * Command handler for /lyrics.
+ * Command and callback handlers for /lyrics.
  */
 
 import { commandArgs, htmlEscape } from '../utils/telegram.js';
@@ -16,12 +16,207 @@ import { isUserAdminOrAuth } from './filters.js';
 import { isPremiumActive } from '../core/db/premium.js';
 import { secondsToClock } from '../utils/duration.js';
 
+// Button styling helper (matches styledCallbackButton pattern from keyboards.js)
+function styledCallbackButton(text, callbackData, style) {
+  return {
+    text,
+    callback_data: callbackData,
+    style,
+  };
+}
+
+function rawKeyboard(rows) {
+  return {
+    inline_keyboard: rows,
+  };
+}
+
+// 1. Keyboard layout generator
+export function lyricsPanelKeyboard(language, options = {}) {
+  const hasActiveTrack = options.hasActiveTrack ?? false;
+
+  if (!hasActiveTrack) {
+    return rawKeyboard([
+      [
+        styledCallbackButton(t(language, 'buttons.lyricsOnNext'), 'lyrics_on', 'success')
+      ],
+      [
+        styledCallbackButton(`❌ ${t(language, 'buttons.close')}`, 'lyrics_close', 'danger')
+      ]
+    ]);
+  }
+
+  // Row 1: [▶️ Nyalakan] [⏹ Matikan]
+  // Row 2: [🔄 Refresh] [🧹 Clear Cache]
+  // Row 3: [🔁 Clear + Refresh]
+  // Row 4: [❌ Tutup]
+  return rawKeyboard([
+    [
+      styledCallbackButton(`▶️ ${t(language, 'buttons.lyricsOn')}`, 'lyrics_on', 'success'),
+      styledCallbackButton(`⏹ ${t(language, 'buttons.lyricsOff')}`, 'lyrics_off', 'danger')
+    ],
+    [
+      styledCallbackButton(`🔄 ${t(language, 'buttons.lyricsRefresh')}`, 'lyrics_refresh', 'primary'),
+      styledCallbackButton(`🧹 ${t(language, 'buttons.lyricsClearCache')}`, 'lyrics_clearcache', 'danger')
+    ],
+    [
+      styledCallbackButton(`🔁 ${t(language, 'buttons.lyricsClearRefresh')}`, 'lyrics_clear_refresh', 'danger')
+    ],
+    [
+      styledCallbackButton(`❌ ${t(language, 'buttons.close')}`, 'lyrics_close', 'danger')
+    ]
+  ]);
+}
+
+// 2. Panel status text builder
+export async function buildLyricsPanelText(ctx, language) {
+  const chatId = ctx.chat.id;
+  const activeTrack = voicePlayer.activeTrack(chatId);
+
+  if (!activeTrack) {
+    return `🎤 <b>${t(language, 'lyrics.panelTitle')}</b>\n\n${t(language, 'lyrics.noActiveTrack')}`;
+  }
+
+  const enabled = await getLyricsEnabled(chatId);
+  const provider = await getLyricsProvider(chatId);
+  const cacheInfo = getLyricsCacheInfo(activeTrack);
+  const title = htmlEscape(activeTrack.title || activeTrack.name || 'Unknown Track');
+
+  let cacheText = t(language, 'lyrics.unknown');
+  let syncedText = t(language, 'lyrics.unknown');
+  let linesCount = 0;
+
+  if (cacheInfo && !cacheInfo.isExpired) {
+    const item = cacheInfo.item;
+    if (item.status === 'synced') {
+      cacheText = t(language, 'lyrics.cacheSynced');
+    } else if (item.status === 'plainOnly') {
+      cacheText = t(language, 'lyrics.cachePlainOnly');
+    } else if (item.status === 'notFound') {
+      cacheText = t(language, 'lyrics.cacheNotFound');
+    } else {
+      cacheText = item.status;
+    }
+    syncedText = item.synced ? t(language, 'lyrics.available') : t(language, 'lyrics.notAvailable');
+    linesCount = item.lines?.length || 0;
+  }
+
+  const statusText = enabled ? t(language, 'lyrics.statusEnabled') : t(language, 'lyrics.statusDisabled');
+
+  return `🎤 <b>${t(language, 'lyrics.panelTitle')}</b>\n\n` +
+         `🎵 <b>${t(language, 'lyrics.track')}:</b> ${title}\n` +
+         `🔌 <b>${t(language, 'lyrics.provider')}:</b> ${provider.toUpperCase()}\n` +
+         `📌 <b>${t(language, 'lyrics.statusLabel')}:</b> ${statusText}\n` +
+         `📦 <b>${t(language, 'lyrics.cache')}:</b> ${cacheText}\n` +
+         `🎼 <b>${t(language, 'lyrics.synced')}:</b> ${syncedText}\n` +
+         `⏱ <b>${t(language, 'lyrics.lines')}:</b> ${linesCount}\n\n` +
+         `${t(language, 'lyrics.chooseAction')}`;
+}
+
+// 3. Callback alert helper
+export async function safeAnswerCallback(ctx, text = '', options = {}) {
+  try {
+    await ctx.answerCallbackQuery({ text, ...options });
+  } catch (e) {
+    // ignore
+  }
+}
+
+// 4. Panel edit helper
+export async function editLyricsPanel(ctx, text, keyboard) {
+  const replyMarkup = keyboard;
+  try {
+    if (ctx.callbackQuery && ctx.callbackQuery.message) {
+      const message = ctx.callbackQuery.message;
+      if (message.text !== undefined) {
+        await ctx.editMessageText(text, {
+          parse_mode: 'HTML',
+          reply_markup: replyMarkup
+        });
+        return;
+      } else if (message.caption !== undefined) {
+        await ctx.editMessageCaption({
+          caption: text,
+          parse_mode: 'HTML',
+          reply_markup: replyMarkup
+        });
+        return;
+      }
+    }
+  } catch (e) {
+    console.warn('Failed to edit lyrics panel:', e);
+  }
+
+  // Fallback: send new reply
+  try {
+    await ctx.reply(text, {
+      parse_mode: 'HTML',
+      reply_markup: replyMarkup
+    });
+  } catch (e) {
+    console.error('Failed fallback reply for lyrics panel:', e);
+  }
+}
+
+// 5. Panel delete helper
+export async function deleteLyricsPanel(ctx) {
+  try {
+    await ctx.deleteMessage();
+  } catch (e) {
+    try {
+      await ctx.editMessageReplyMarkup({ reply_markup: undefined });
+    } catch (err) {
+      // ignore
+    }
+  }
+}
+
+// 6. Permission check helper for panel interactions
+export async function checkLyricsPermission(ctx, activeTrack) {
+  const userId = ctx.from?.id;
+  if (!userId) return false;
+
+  // PM is open to everyone
+  if (ctx.chat?.type === 'private') {
+    return true;
+  }
+
+  // Owner/Devs bypass
+  if (userId === config.ownerId || config.devs.includes(userId)) {
+    return true;
+  }
+
+  // Requester of the active track (if data requester is available)
+  if (activeTrack) {
+    const requesterId = activeTrack.userId ?? activeTrack.requesterId ?? activeTrack.requestedById;
+    if (requesterId && userId === Number(requesterId)) {
+      return true;
+    }
+  }
+
+  // Premium User
+  try {
+    const isPremium = await isPremiumActive('user', userId);
+    if (isPremium) return true;
+  } catch (e) {
+    // Ignore DB error
+  }
+
+  // Admin or Auth status
+  try {
+    return await isUserAdminOrAuth(ctx, userId);
+  } catch (e) {
+    return false;
+  }
+}
+
+// Command Handler for /lyrics
 export async function lyricsHandler(ctx) {
   const language = await getUserLanguage(ctx.from?.id);
   const chatId = ctx.chat.id;
   const arg = commandArgs(ctx).trim().toLowerCase();
 
-  // Permission validation helper
+  // Permission validation helper for fallback legacy commands
   const checkPermission = async () => {
     const userId = ctx.from?.id;
     if (!userId) return false;
@@ -53,6 +248,17 @@ export async function lyricsHandler(ctx) {
   };
 
   const activeTrack = voicePlayer.activeTrack(chatId);
+
+  // Default lookup check (when no arguments are provided): /lyrics panel
+  if (!arg) {
+    const text = await buildLyricsPanelText(ctx, language);
+    const keyboard = lyricsPanelKeyboard(language, { hasActiveTrack: !!activeTrack });
+    await ctx.reply(text, {
+      parse_mode: 'HTML',
+      reply_markup: keyboard
+    });
+    return;
+  }
 
   // 1. Activate lyrics: /lyrics on
   if (arg === 'on') {
@@ -110,7 +316,6 @@ export async function lyricsHandler(ctx) {
     if (activeTrack) {
       currentTrackText = activeTrack.title || activeTrack.name || 'Unknown Track';
 
-      // Enhanced cache info check to avoid calling getLyrics (which does slow fetches)
       const cacheInfo = getLyricsCacheInfo(activeTrack);
       if (cacheInfo && !cacheInfo.isExpired) {
         const item = cacheInfo.item;
@@ -125,7 +330,6 @@ export async function lyricsHandler(ctx) {
         }
       } else {
         lyricsAvailableText = t(language, 'lyrics.noCache');
-        // Trigger a background prefetch so subsequent status check has data
         prefetchLyrics(activeTrack).catch(() => {});
       }
     }
@@ -195,7 +399,6 @@ export async function lyricsHandler(ctx) {
 
       await ctx.api.editMessageText(chatId, testMsg.message_id, summary, { parse_mode: 'HTML' });
 
-      // Construct detailed candidates, queries, and scored results message
       let details = `Candidates:\n`;
       meta.candidates.forEach((c, idx) => {
         details += `${idx + 1}. [${c.reason}] "${c.artist}" - "${c.title}"\n`;
@@ -262,13 +465,11 @@ export async function lyricsHandler(ctx) {
 
     const infoMsg = await ctx.reply(t(language, 'lyrics.refreshing'));
 
-    // Clear cache first
     clearLyricsCacheForTrack(activeTrack);
 
     try {
       const result = await getLyrics(activeTrack);
 
-      // Restart lyrics runner if it is currently running to pick up refreshed lyrics
       const runnerStatus = getLyricsStatus(chatId);
       if (runnerStatus.active) {
         stopLyricsForChat(chatId);
@@ -291,22 +492,182 @@ export async function lyricsHandler(ctx) {
     }
     return;
   }
+}
 
-  // 7. Default lookup check (when no arguments are provided): /lyrics
-  if (!activeTrack) {
-    await ctx.reply(t(language, 'lyrics.noActiveTrack'));
+// Callback query handlers
+export async function lyricsOnCallbackHandler(ctx) {
+  const language = await getUserLanguage(ctx.from?.id);
+  const chatId = ctx.chat?.id;
+  if (!chatId) return;
+  const activeTrack = voicePlayer.activeTrack(chatId);
+
+  if (!(await checkLyricsPermission(ctx, activeTrack))) {
+    await safeAnswerCallback(ctx, t(language, 'lyrics.permissionDenied'), { show_alert: true });
     return;
   }
 
-  const checkMsg = await ctx.reply(t(language, 'lyrics.fetching'));
-  try {
-    const lyricsResult = await getLyrics(activeTrack);
-    if (lyricsResult?.synced) {
-      await ctx.api.editMessageText(chatId, checkMsg.message_id, t(language, 'lyrics.syncedAvailable'));
-    } else {
-      await ctx.api.editMessageText(chatId, checkMsg.message_id, t(language, 'lyrics.notFound'));
+  await setLyricsEnabled(chatId, true);
+
+  if (activeTrack) {
+    const cacheInfo = getLyricsCacheInfo(activeTrack);
+    if (cacheInfo && !cacheInfo.isExpired && cacheInfo.item.synced) {
+      await startLyricsForChat(chatId, ctx, activeTrack);
     }
-  } catch (error) {
-    await ctx.api.editMessageText(chatId, checkMsg.message_id, t(language, 'lyrics.error', { error: error.message }));
   }
+
+  await safeAnswerCallback(ctx, t(language, 'lyrics.enabled'));
+
+  const text = await buildLyricsPanelText(ctx, language);
+  const keyboard = lyricsPanelKeyboard(language, { hasActiveTrack: !!activeTrack });
+  await editLyricsPanel(ctx, text, keyboard);
+}
+
+export async function lyricsOffCallbackHandler(ctx) {
+  const language = await getUserLanguage(ctx.from?.id);
+  const chatId = ctx.chat?.id;
+  if (!chatId) return;
+  const activeTrack = voicePlayer.activeTrack(chatId);
+
+  if (!(await checkLyricsPermission(ctx, activeTrack))) {
+    await safeAnswerCallback(ctx, t(language, 'lyrics.permissionDenied'), { show_alert: true });
+    return;
+  }
+
+  await setLyricsEnabled(chatId, false);
+  stopLyricsForChat(chatId);
+
+  await safeAnswerCallback(ctx, t(language, 'lyrics.disabled'));
+
+  const text = await buildLyricsPanelText(ctx, language);
+  const keyboard = lyricsPanelKeyboard(language, { hasActiveTrack: !!activeTrack });
+  await editLyricsPanel(ctx, text, keyboard);
+}
+
+export async function lyricsRefreshCallbackHandler(ctx) {
+  const language = await getUserLanguage(ctx.from?.id);
+  const chatId = ctx.chat?.id;
+  if (!chatId) return;
+  const activeTrack = voicePlayer.activeTrack(chatId);
+
+  if (!(await checkLyricsPermission(ctx, activeTrack))) {
+    await safeAnswerCallback(ctx, t(language, 'lyrics.permissionDenied'), { show_alert: true });
+    return;
+  }
+
+  if (!activeTrack) {
+    await safeAnswerCallback(ctx, t(language, 'lyrics.noActiveTrack'), { show_alert: true });
+    const text = await buildLyricsPanelText(ctx, language);
+    const keyboard = lyricsPanelKeyboard(language, { hasActiveTrack: false });
+    await editLyricsPanel(ctx, text, keyboard);
+    return;
+  }
+
+  await safeAnswerCallback(ctx, t(language, 'lyrics.refreshing'));
+
+  const refreshingText = `🎤 <b>${t(language, 'lyrics.panelTitle')}</b>\n\n` +
+    `🎵 <b>${t(language, 'lyrics.track')}:</b> ${htmlEscape(activeTrack.title || activeTrack.name)}\n` +
+    `🔄 <i>${t(language, 'lyrics.refreshing')}</i>`;
+  const keyboard = lyricsPanelKeyboard(language, { hasActiveTrack: true });
+  await editLyricsPanel(ctx, refreshingText, keyboard);
+
+  clearLyricsCacheForTrack(activeTrack);
+
+  try {
+    const result = await getLyrics(activeTrack);
+
+    const isEnabled = await getLyricsEnabled(chatId);
+    if (isEnabled && result?.synced) {
+      stopLyricsForChat(chatId);
+      await startLyricsForChat(chatId, ctx, activeTrack);
+    }
+
+    await safeAnswerCallback(ctx, t(language, 'lyrics.refreshDone'));
+  } catch (e) {
+    console.error('Lyrics refresh failed:', e);
+    await safeAnswerCallback(ctx, `Error: ${e.message}`, { show_alert: true });
+  }
+
+  const text = await buildLyricsPanelText(ctx, language);
+  await editLyricsPanel(ctx, text, keyboard);
+}
+
+export async function lyricsClearCacheCallbackHandler(ctx) {
+  const language = await getUserLanguage(ctx.from?.id);
+  const chatId = ctx.chat?.id;
+  if (!chatId) return;
+  const activeTrack = voicePlayer.activeTrack(chatId);
+
+  if (!(await checkLyricsPermission(ctx, activeTrack))) {
+    await safeAnswerCallback(ctx, t(language, 'lyrics.permissionDenied'), { show_alert: true });
+    return;
+  }
+
+  if (!activeTrack) {
+    await safeAnswerCallback(ctx, t(language, 'lyrics.noActiveTrack'), { show_alert: true });
+    const text = await buildLyricsPanelText(ctx, language);
+    const keyboard = lyricsPanelKeyboard(language, { hasActiveTrack: false });
+    await editLyricsPanel(ctx, text, keyboard);
+    return;
+  }
+
+  clearLyricsCacheForTrack(activeTrack);
+
+  await safeAnswerCallback(ctx, t(language, 'lyrics.cacheCleared'));
+
+  const text = await buildLyricsPanelText(ctx, language);
+  const keyboard = lyricsPanelKeyboard(language, { hasActiveTrack: true });
+  await editLyricsPanel(ctx, text, keyboard);
+}
+
+export async function lyricsClearRefreshCallbackHandler(ctx) {
+  const language = await getUserLanguage(ctx.from?.id);
+  const chatId = ctx.chat?.id;
+  if (!chatId) return;
+  const activeTrack = voicePlayer.activeTrack(chatId);
+
+  if (!(await checkLyricsPermission(ctx, activeTrack))) {
+    await safeAnswerCallback(ctx, t(language, 'lyrics.permissionDenied'), { show_alert: true });
+    return;
+  }
+
+  if (!activeTrack) {
+    await safeAnswerCallback(ctx, t(language, 'lyrics.noActiveTrack'), { show_alert: true });
+    const text = await buildLyricsPanelText(ctx, language);
+    const keyboard = lyricsPanelKeyboard(language, { hasActiveTrack: false });
+    await editLyricsPanel(ctx, text, keyboard);
+    return;
+  }
+
+  await safeAnswerCallback(ctx, t(language, 'lyrics.refreshing'));
+
+  const refreshingText = `🎤 <b>${t(language, 'lyrics.panelTitle')}</b>\n\n` +
+    `🎵 <b>${t(language, 'lyrics.track')}:</b> ${htmlEscape(activeTrack.title || activeTrack.name)}\n` +
+    `🔄 <i>${t(language, 'lyrics.refreshing')}</i>`;
+  const keyboard = lyricsPanelKeyboard(language, { hasActiveTrack: true });
+  await editLyricsPanel(ctx, refreshingText, keyboard);
+
+  clearLyricsCacheForTrack(activeTrack);
+
+  try {
+    const result = await getLyrics(activeTrack);
+
+    const isEnabled = await getLyricsEnabled(chatId);
+    if (isEnabled && result?.synced) {
+      stopLyricsForChat(chatId);
+      await startLyricsForChat(chatId, ctx, activeTrack);
+    }
+
+    await safeAnswerCallback(ctx, t(language, 'lyrics.refreshDone'));
+  } catch (e) {
+    console.error('Lyrics clear + refresh failed:', e);
+    await safeAnswerCallback(ctx, `Error: ${e.message}`, { show_alert: true });
+  }
+
+  const text = await buildLyricsPanelText(ctx, language);
+  await editLyricsPanel(ctx, text, keyboard);
+}
+
+export async function lyricsCloseCallbackHandler(ctx) {
+  await deleteLyricsPanel(ctx);
+  await safeAnswerCallback(ctx);
 }
