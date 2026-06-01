@@ -16,17 +16,20 @@ export function cleanTitleTags(text) {
   let cleaned = text;
 
   // Remove text in parentheses/brackets representing video types or extra details
-  cleaned = cleaned.replace(/[\(\[](?:official\s+video|official\s+music\s+video|official\s+audio|lyric\s+video|lyrics|audio|hd|visualizer|mv|m\/v|lirik|official|music\s+video|lirik\s+video)[\)\]]/gi, '');
+  cleaned = cleaned.replace(/[\(\[](?:official\s+video|official\s+music\s+video|official\s+audio|lyric\s+video|lyrics|audio|hd|4k|hq|visualizer|mv|m\/v|lirik|official|music\s+video|lirik\s+video)[\)\]]/gi, '');
 
   // Remove quotes around official video / lyrics etc.
-  cleaned = cleaned.replace(/["'](?:official\s+video|official\s+music\s+video|lyrics|audio|hd|lirik)["']/gi, '');
+  cleaned = cleaned.replace(/["'](?:official\s+video|official\s+music\s+video|lyrics|audio|hd|4k|hq|lirik)["']/gi, '');
 
   // Remove #shorts
   cleaned = cleaned.replace(/#shorts\b/gi, '');
 
   // Remove video noise at the end (e.g. - Official Video, | Visualizer)
-  cleaned = cleaned.replace(/\s*[-–—:|]\s*(?:official\s+video|official\s+music\s+video|lyric\s+video|lyrics|audio|hd|official|visualizer|mv|m\/v|lirik)\s*$/gi, '');
-  cleaned = cleaned.replace(/\s+(?:official\s+video|official\s+music\s+video|lyric\s+video|lyrics|audio|hd|official|visualizer|mv|m\/v|lirik)\s*$/gi, '');
+  cleaned = cleaned.replace(/\s*[-–—:|]\s*(?:official\s+video|official\s+music\s+video|lyric\s+video|lyrics|audio|hd|4k|hq|official|visualizer|mv|m\/v|lirik)\s*$/gi, '');
+  cleaned = cleaned.replace(/\s+(?:official\s+video|official\s+music\s+video|lyric\s+video|lyrics|audio|hd|4k|hq|official|visualizer|mv|m\/v|lirik)\s*$/gi, '');
+
+  // Remove empty parentheses/brackets resulting from tag cleaning (e.g. "()", "[]")
+  cleaned = cleaned.replace(/[\(\[]\s*[\)\]]/g, '');
 
   // Remove double spaces and trim
   cleaned = cleaned.replace(/\s+/g, ' ').trim();
@@ -44,8 +47,9 @@ export function cleanTitleTags(text) {
  */
 export function splitArtistTitle(rawTitle) {
   if (!rawTitle) return null;
-  // Match: Artist - Title
-  const match = rawTitle.match(/^(.+?)\s+[-–—:|]\s+(.+)$/);
+  // Match separators: -, – (en-dash), — (em-dash), :, |
+  // Allow optional whitespace before/after separator. For colon, make sure it has spaces or is followed by space
+  const match = rawTitle.match(/^(.+?)\s*[-–—|]\s*(.+)$/) || rawTitle.match(/^(.+?)\s*:\s+(.+)$/);
   if (match) {
     return { artist: match[1].trim(), title: match[2].trim() };
   }
@@ -53,16 +57,19 @@ export function splitArtistTitle(rawTitle) {
 }
 
 /**
- * Normalize a string for matching comparison (lowercase, alphanumeric).
+ * Normalize a string for matching comparison (Unicode-friendly lowercase alphanumeric).
+ * Supports non-Latin alphabets and handles accents using NFKD normalization.
  * @param {string} str
  * @returns {string}
  */
 export function normalizeForMatch(str) {
   return String(str || '')
-    .trim()
+    .normalize('NFKD')
+    .replace(/\p{M}/gu, '')
     .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, '')
-    .replace(/\s+/g, ' ');
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 /**

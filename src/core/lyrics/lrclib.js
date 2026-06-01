@@ -6,7 +6,7 @@
 
 import { config } from '../../config/index.js';
 import { parseLrc } from './lrc-parser.js';
-import { getCachedLyrics, setCachedLyrics, lyricsCacheKey } from './lyrics-cache.js';
+import { getCachedLyrics, setCachedLyrics, lyricsCacheKey, clearLyricsCacheForTrack } from './lyrics-cache.js';
 import { normalizeLyricsMetadata, normalizeForMatch, normalizeTitle } from './track-metadata.js';
 export { normalizeTitle };
 
@@ -58,7 +58,6 @@ async function fetchJson(url) {
 
 /**
  * Score a search result against the query criteria.
- * Higher score = better match.
  * @param {object} result - LRCLIB search result
  * @param {string} queryTitle - normalized title
  * @param {string} queryArtist - artist string
@@ -68,23 +67,30 @@ async function fetchJson(url) {
 function scoreResult(result, queryTitle, queryArtist, queryDuration) {
   let score = 0;
 
-  // Title match
   const resultTitle = normalizeForMatch(result.trackName || result.name || '');
   const normalizedQueryTitle = normalizeForMatch(queryTitle);
+  const resultArtist = normalizeForMatch(result.artistName || '');
+  const normalizedQueryArtist = normalizeForMatch(queryArtist);
+
+  // Title match
   if (resultTitle === normalizedQueryTitle) {
     score += 120;
   } else if (resultTitle.includes(normalizedQueryTitle) || normalizedQueryTitle.includes(resultTitle)) {
     score += 60;
+  } else {
+    // unrelated title penalty: -80
+    score -= 80;
   }
 
   // Artist match
-  if (queryArtist) {
-    const resultArtist = normalizeForMatch(result.artistName || '');
-    const normalizedQueryArtist = normalizeForMatch(queryArtist);
+  if (normalizedQueryArtist && normalizedQueryArtist.length >= 2) {
     if (resultArtist === normalizedQueryArtist) {
       score += 100;
     } else if (resultArtist.includes(normalizedQueryArtist) || normalizedQueryArtist.includes(resultArtist)) {
       score += 50;
+    } else {
+      // artist mismatch penalty only if queryArtist is present and long enough
+      score -= 100;
     }
   }
 
@@ -105,21 +111,6 @@ function scoreResult(result, queryTitle, queryArtist, queryDuration) {
     score += 20;
   }
 
-  // Penalize if title/artist totally unrelated
-  const titleMatch = resultTitle.includes(normalizedQueryTitle) || normalizedQueryTitle.includes(resultTitle);
-  if (!titleMatch) {
-    score -= 100;
-  }
-
-  if (queryArtist) {
-    const resultArtist = normalizeForMatch(result.artistName || '');
-    const normalizedQueryArtist = normalizeForMatch(queryArtist);
-    const artistMatch = resultArtist.includes(normalizedQueryArtist) || normalizedQueryArtist.includes(resultArtist);
-    if (!artistMatch) {
-      score -= 100;
-    }
-  }
-
   // Penalize karaoke/remix/live if original query not remix/live
   const isQueryRemix = normalizedQueryTitle.includes('remix');
   const isQueryLive = normalizedQueryTitle.includes('live');
@@ -134,6 +125,26 @@ function scoreResult(result, queryTitle, queryArtist, queryDuration) {
   if (isResultKaraoke && !isQueryKaraoke) score -= 30;
 
   return score;
+}
+
+/**
+ * Calculates similarity score (0.0 to 1.0) based on title match and word overlap.
+ */
+function titleSimilarity(title1, title2) {
+  const t1 = normalizeForMatch(title1);
+  const t2 = normalizeForMatch(title2);
+  if (!t1 || !t2) return 0;
+  if (t1 === t2) return 1.0;
+  if (t1.includes(t2) || t2.includes(t1)) return 0.8;
+  
+  // Word overlap
+  const words1 = t1.split(/\s+/).filter(w => w.length > 1);
+  const words2 = t2.split(/\s+/).filter(w => w.length > 1);
+  if (words1.length === 0 || words2.length === 0) return 0;
+  
+  const intersection = words1.filter(w => words2.includes(w));
+  const overlap = intersection.length / Math.max(words1.length, words2.length);
+  return overlap;
 }
 
 /**
@@ -153,66 +164,104 @@ async function fetchLyricsInternal(track) {
   for (const candidate of meta.candidates) {
     if (!candidate.title) continue;
 
-    try {
+    // Helper to do exact get with optional duration
+    const tryGet = async (useDuration) => {
       const params = new URLSearchParams();
       params.append('track_name', candidate.title);
       if (candidate.artist) params.append('artist_name', candidate.artist);
       if (meta.album) params.append('album_name', meta.album);
-      if (meta.durationSeconds > 0) params.append('duration', String(meta.durationSeconds));
+      if (useDuration && meta.durationSeconds > 0) {
+        params.append('duration', String(meta.durationSeconds));
+      }
 
       const url = `${LRCLIB_BASE}/api/get?${params.toString()}`;
-      triedUrls.push({ type: 'exact', url, candidate });
+      triedUrls.push({ type: 'exact', url, candidate, useDuration });
+      debugLog('exact lookup trying:', url, `(reason: ${candidate.reason}, duration: ${useDuration})`);
+      return fetchJson(url);
+    };
 
-      debugLog('exact lookup trying:', url, `(reason: ${candidate.reason})`);
-
-      const result = await fetchJson(url);
-      apiCallsSucceeded++;
-
-      if (result) {
-        const parsedLines = result.syncedLyrics ? parseLrc(result.syncedLyrics) : [];
-        if (result.syncedLyrics && parsedLines.length > 0) {
-          debugLog('Exact match found with synced lyrics via /api/get, id:', result.id);
-          const finalResult = {
-            provider: 'lrclib',
-            synced: true,
-            lines: parsedLines,
-            plainLyrics: result.plainLyrics || '',
-            sourceId: String(result.id || ''),
-            fetchedAt: Date.now(),
-            status: 'synced',
-            reason: `exact-match-synced (${candidate.reason})`,
-            debug: { triedUrls, candidate, meta }
-          };
-          setCachedLyrics(track, finalResult);
-          return finalResult;
-        } else if (result.instrumental) {
-          debugLog('Exact match found as instrumental via /api/get, id:', result.id);
-          const finalResult = {
-            provider: 'lrclib',
-            synced: false,
-            lines: [],
-            plainLyrics: '[Instrumental]',
-            sourceId: String(result.id || ''),
-            fetchedAt: Date.now(),
-            status: 'plainOnly',
-            reason: `exact-match-instrumental (${candidate.reason})`,
-            debug: { triedUrls, candidate, meta }
-          };
-          setCachedLyrics(track, finalResult);
-          return finalResult;
-        } else if (result.plainLyrics) {
-          debugLog('Exact match plain-only found via /api/get, saving as fallback, id:', result.id);
-          if (!bestPlainFallback) {
-            bestPlainFallback = {
-              result,
-              candidate,
-              parsedLines
-            };
-          }
-        }
+    let result = null;
+    try {
+      result = await tryGet(true);
+      if (!result && meta.durationSeconds > 0) {
+        // Retry without duration
+        result = await tryGet(false);
       }
     } catch (error) {
-      console.warn(`LRCLIB exact lookup failed for candidate "${candidate.artist} - ${candidate.title}": ${error.message}`);
+      console.warn(`LRCLIB exact lookup error: ${error.message}`);
+    }
+
+    if (result) {
+      apiCallsSucceeded++;
+      const parsedLines = result.syncedLyrics ? parseLrc(result.syncedLyrics) : [];
+      if (result.syncedLyrics && parsedLines.length > 0) {
+        debugLog('Exact match found with synced lyrics via /api/get, id:', result.id);
+        const finalResult = {
+          provider: 'lrclib',
+          synced: true,
+          lines: parsedLines,
+          plainLyrics: result.plainLyrics || '',
+          sourceId: String(result.id || ''),
+          fetchedAt: Date.now(),
+          status: 'synced',
+          reason: `exact-match-synced (${candidate.reason})`,
+          debug: {
+            meta,
+            triedUrls: triedUrls.map(u => ({ type: u.type, url: u.url })),
+            searchQueries: [],
+            topResults: [],
+            chosenResult: {
+              id: result.id,
+              artistName: result.artistName,
+              trackName: result.trackName,
+              duration: result.duration,
+              hasSynced: true
+            },
+            reason: `exact-match-synced (${candidate.reason})`,
+            cacheKey: lyricsCacheKey(track)
+          }
+        };
+        setCachedLyrics(track, finalResult);
+        return finalResult;
+      } else if (result.instrumental) {
+        debugLog('Exact match found as instrumental via /api/get, id:', result.id);
+        const finalResult = {
+          provider: 'lrclib',
+          synced: false,
+          lines: [],
+          plainLyrics: '[Instrumental]',
+          sourceId: String(result.id || ''),
+          fetchedAt: Date.now(),
+          status: 'plainOnly',
+          reason: `exact-match-instrumental (${candidate.reason})`,
+          debug: {
+            meta,
+            triedUrls: triedUrls.map(u => ({ type: u.type, url: u.url })),
+            searchQueries: [],
+            topResults: [],
+            chosenResult: {
+              id: result.id,
+              artistName: result.artistName,
+              trackName: result.trackName,
+              duration: result.duration,
+              hasSynced: false
+            },
+            reason: `exact-match-instrumental (${candidate.reason})`,
+            cacheKey: lyricsCacheKey(track)
+          }
+        };
+        setCachedLyrics(track, finalResult);
+        return finalResult;
+      } else if (result.plainLyrics) {
+        debugLog('Exact match plain-only found via /api/get, saving as fallback, id:', result.id);
+        if (!bestPlainFallback) {
+          bestPlainFallback = {
+            result,
+            candidate,
+            parsedLines
+          };
+        }
+      }
     }
   }
 
@@ -289,22 +338,64 @@ async function fetchLyricsInternal(track) {
   let chosenResult = null;
   let selectionReason = '';
 
-  // Synced results with score >= 250 are considered reasonable synced matches
-  const reasonableSyncedResults = scoredResults.filter(sr => sr.result.syncedLyrics && sr.score >= 250);
+  const syncedResults = scoredResults.filter(sr => sr.result.syncedLyrics);
+  const reasonableSynced = syncedResults.filter(sr => sr.score >= 150);
 
-  if (reasonableSyncedResults.length > 0) {
-    chosenResult = reasonableSyncedResults[0].result;
-    selectionReason = `best-synced-search (score: ${reasonableSyncedResults[0].score})`;
-  } else if (bestPlainFallback) {
+  if (reasonableSynced.length > 0) {
+    chosenResult = reasonableSynced[0].result;
+    selectionReason = `best-synced-search (score: ${reasonableSynced[0].score})`;
+  } else if (syncedResults.length > 0) {
+    const bestSimilaritySynced = syncedResults
+      .map(sr => ({ ...sr, similarity: titleSimilarity(sr.result.trackName, meta.title) }))
+      .filter(sr => sr.similarity >= 0.4)
+      .sort((a, b) => b.similarity - a.similarity || b.score - a.score);
+
+    if (bestSimilaritySynced.length > 0) {
+      chosenResult = bestSimilaritySynced[0].result;
+      selectionReason = `low-confidence-synced (similarity: ${bestSimilaritySynced[0].similarity.toFixed(2)}, score: ${bestSimilaritySynced[0].score})`;
+    }
+  }
+
+  if (!chosenResult && bestPlainFallback) {
     chosenResult = bestPlainFallback.result;
     selectionReason = `exact-plain-fallback`;
-  } else if (scoredResults.length > 0) {
+  }
+
+  if (!chosenResult && scoredResults.length > 0) {
     const bestSearch = scoredResults[0];
-    if (bestSearch.score >= 100) {
+    if (bestSearch.score >= 40) {
       chosenResult = bestSearch.result;
       selectionReason = `best-search-fallback (score: ${bestSearch.score})`;
     }
   }
+
+  // Build compact debug info representation
+  const topResultsDebug = scoredResults.slice(0, 5).map(sr => ({
+    score: sr.score,
+    id: sr.result.id,
+    artistName: sr.result.artistName,
+    trackName: sr.result.trackName,
+    duration: sr.result.duration,
+    hasSynced: !!sr.result.syncedLyrics
+  }));
+
+  const chosenResultDebug = chosenResult ? {
+    id: chosenResult.id,
+    artistName: chosenResult.artistName,
+    trackName: chosenResult.trackName,
+    duration: chosenResult.duration,
+    hasSynced: !!chosenResult.syncedLyrics
+  } : null;
+
+  const debugObject = {
+    meta,
+    triedUrls: triedUrls.map(u => ({ type: u.type, url: u.url })),
+    searchQueries: uniqueQueries,
+    topResults: topResultsDebug,
+    chosenResult: chosenResultDebug,
+    reason: selectionReason,
+    cacheKey: lyricsCacheKey(track)
+  };
 
   if (!chosenResult) {
     debugLog('No lyrics found for:', meta.rawTitle);
@@ -317,7 +408,7 @@ async function fetchLyricsInternal(track) {
       fetchedAt: Date.now(),
       status: 'notFound',
       reason: 'no-matching-results',
-      debug: { triedUrls, meta, scoredResults: scoredResults.slice(0, 5) }
+      debug: debugObject
     };
     setCachedLyrics(track, emptyResult);
     return emptyResult;
@@ -333,7 +424,7 @@ async function fetchLyricsInternal(track) {
       fetchedAt: Date.now(),
       status: 'plainOnly',
       reason: selectionReason + ' (instrumental)',
-      debug: { triedUrls, meta, scoredResults: scoredResults.slice(0, 5) }
+      debug: debugObject
     };
     setCachedLyrics(track, instrumentalResult);
     return instrumentalResult;
@@ -341,6 +432,7 @@ async function fetchLyricsInternal(track) {
 
   const hasSynced = Boolean(chosenResult.syncedLyrics);
   const parsedLines = hasSynced ? parseLrc(chosenResult.syncedLyrics) : [];
+  const isLowConfidence = selectionReason.startsWith('low-confidence-synced');
 
   const finalResult = {
     provider: 'lrclib',
@@ -349,9 +441,9 @@ async function fetchLyricsInternal(track) {
     plainLyrics: chosenResult.plainLyrics || '',
     sourceId: String(chosenResult.id || ''),
     fetchedAt: Date.now(),
-    status: hasSynced && parsedLines.length > 0 ? 'synced' : 'plainOnly',
+    status: isLowConfidence ? 'lowConfidence' : (hasSynced && parsedLines.length > 0 ? 'synced' : 'plainOnly'),
     reason: selectionReason,
-    debug: { triedUrls, meta, scoredResults: scoredResults.slice(0, 5) }
+    debug: debugObject
   };
 
   setCachedLyrics(track, finalResult);
@@ -363,16 +455,30 @@ async function fetchLyricsInternal(track) {
  * Fetches lyrics for a track with in-flight deduplication.
  * First checks cache, then tries LRCLIB API.
  * @param {object} track
+ * @param {object} [options]
  * @returns {Promise<object|null>} The lyric data object
  */
-export async function getLyrics(track) {
+export async function getLyrics(track, options = {}) {
   if (!track) return null;
 
+  const forceRefresh = Boolean(options.forceRefresh);
+  const bypassNotFoundCache = Boolean(options.bypassNotFoundCache);
+
+  if (forceRefresh) {
+    clearLyricsCacheForTrack(track);
+  }
+
   // 1. Check in-memory cache
-  const cached = getCachedLyrics(track);
-  if (cached) {
-    debugLog('cache hit for:', track.title || track.name);
-    return cached;
+  if (!forceRefresh) {
+    const cached = getCachedLyrics(track);
+    if (cached) {
+      if (cached.status === 'notFound' && bypassNotFoundCache) {
+        debugLog('cache hit but bypassing notFound cache for:', track.title || track.name);
+      } else {
+        debugLog('cache hit for:', track.title || track.name);
+        return cached;
+      }
+    }
   }
 
   const key = lyricsCacheKey(track);
@@ -396,6 +502,15 @@ export async function getLyrics(track) {
 
   inFlightRequests.set(key, fetchPromise);
   return fetchPromise;
+}
+
+/**
+ * Forces a refresh of the lyrics for a track by clearing the cache first.
+ * @param {object} track
+ * @returns {Promise<object|null>}
+ */
+export async function refreshLyrics(track) {
+  return getLyrics(track, { forceRefresh: true });
 }
 
 /**
