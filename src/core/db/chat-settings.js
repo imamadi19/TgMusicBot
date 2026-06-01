@@ -51,24 +51,36 @@ export async function getLyricsEnabled(chatId) {
     }
     return config.lyricsEnabledDefault;
   }
-  const chat = await db().collection('chats').findOne({ chatId: Number(chatId) }, { projection: { lyricsEnabled: 1 } });
-  if (chat && chat.lyricsEnabled !== undefined) {
-    return Boolean(chat.lyricsEnabled);
+  try {
+    const chat = await db().collection('chats').findOne({ chatId: Number(chatId) }, { projection: { lyricsEnabled: 1 } });
+    if (chat && chat.lyricsEnabled !== undefined) {
+      inMemoryLyricsEnabled.set(String(chatId), Boolean(chat.lyricsEnabled));
+      return Boolean(chat.lyricsEnabled);
+    }
+  } catch (error) {
+    console.warn(`[db] Error getting lyricsEnabled for chat ${chatId}, falling back to memory:`, error.message);
+  }
+  if (inMemoryLyricsEnabled.has(String(chatId))) {
+    return Boolean(inMemoryLyricsEnabled.get(String(chatId)));
   }
   return config.lyricsEnabledDefault;
 }
 
 export async function setLyricsEnabled(chatId, enabled) {
   const isEnabled = Boolean(enabled);
+  inMemoryLyricsEnabled.set(String(chatId), isEnabled);
   if (!isDatabaseConnected()) {
-    inMemoryLyricsEnabled.set(String(chatId), isEnabled);
     return isEnabled;
   }
-  await db().collection('chats').updateOne(
-    { chatId: Number(chatId) },
-    { $set: { chatId: Number(chatId), lyricsEnabled: isEnabled, updatedAt: new Date() }, $setOnInsert: { createdAt: new Date() } },
-    { upsert: true },
-  );
+  try {
+    await db().collection('chats').updateOne(
+      { chatId: Number(chatId) },
+      { $set: { chatId: Number(chatId), lyricsEnabled: isEnabled, updatedAt: new Date() }, $setOnInsert: { createdAt: new Date() } },
+      { upsert: true },
+    );
+  } catch (error) {
+    console.error(`[db] Failed to save lyricsEnabled in DB for chat ${chatId}:`, error);
+  }
   return isEnabled;
 }
 

@@ -385,12 +385,12 @@ export function startLyricsAuto(chatId, api, track, reason = 'unknown') {
   if (!track) return;
   startLyricsForChatIfEnabled(chatId, api, track, { silent: true, reason })
     .then((result) => {
-      if (config.lyricsDebug) {
+      if (config.lyricsDebug || (!result?.success && result?.message !== 'disabled' && result?.message !== 'notFound')) {
         console.log(`[lyrics] auto-start ${reason} chat=${chatId} success=${result?.success} message=${result?.message || ''}`);
       }
     })
     .catch((error) => {
-      console.warn(`[lyrics] auto-start failed (${reason}) for chat ${chatId}:`, error?.message || error);
+      console.warn(`[lyrics] auto-start failed (${reason}) chat=${chatId}:`, error?.message || error);
     });
 }
 
@@ -462,7 +462,7 @@ voicePlayer.onTrackEnd(async ({ chatId, finished, next }) => {
   }
 
   // Stop old lyrics runner before starting next track
-  stopLyricsForChat(chatId, 'track-ended');
+  stopLyricsForChat(chatId, 'track-end');
 
   try {
     const activeTrack = await startCachedTrack(chatId, next);
@@ -470,8 +470,20 @@ voicePlayer.onTrackEnd(async ({ chatId, finished, next }) => {
     await updatePlaybackPanelsForAdvance(chatId, finished, next, activeTrack);
     if (finished?.trackId !== next?.trackId) cleanupTrackDownload(finished, { chatId });
 
+    const lyricsTrack = activeTrack 
+      ? { 
+          ...next, 
+          ...activeTrack, 
+          title: activeTrack.title || activeTrack.name || next.title || next.name,
+          name: activeTrack.name || activeTrack.title || next.name || next.title,
+          url: activeTrack.url || activeTrack.sourceUrl || next.url || next.sourceUrl,
+          user: next.user, 
+          userId: next.userId 
+        } 
+      : next;
+
     // Auto-start lyrics for next track
-    startLyricsAuto(chatId, null, activeTrack ?? next, 'auto-next');
+    startLyricsAuto(chatId, null, lyricsTrack, 'auto-next');
 
     // Prefetch lyrics for the track after next
     prefetchNextLyrics(chatId);
@@ -822,7 +834,7 @@ async function queueAndMaybePlay(ctx, statusMessage, track, isVideo, language, d
   let activeTrack;
   try {
     activeTrack = await startQueuedTrack(ctx, saveTrack, isVideo);
-    saveTrack.startedAt = activeTrack?.startedAt;
+    saveTrack.startedAt = activeTrack?.startedAt || saveTrack.startedAt;
   } catch (error) {
     chatCache.shift(chatId);
     if (isVoiceChatInactiveError(error)) {
@@ -840,7 +852,18 @@ async function queueAndMaybePlay(ctx, statusMessage, track, isVideo, language, d
   startProgressUpdater(ctx, playbackMessage ?? statusMessage, language);
 
   // Auto-start lyrics for first track and prefetch next
-  startLyricsAuto(chatId, ctx.api, activeTrack ?? saveTrack, 'first-track');
+  const lyricsTrack = activeTrack 
+    ? { 
+        ...saveTrack, 
+        ...activeTrack, 
+        title: activeTrack.title || activeTrack.name || saveTrack.title || saveTrack.name,
+        name: activeTrack.name || activeTrack.title || saveTrack.name || saveTrack.title,
+        url: activeTrack.url || activeTrack.sourceUrl || saveTrack.url || saveTrack.sourceUrl,
+        user: saveTrack.user, 
+        userId: saveTrack.userId 
+      } 
+    : saveTrack;
+  startLyricsAuto(chatId, ctx.api, lyricsTrack, 'first-track');
   prefetchNextLyrics(chatId);
 }
 
@@ -967,7 +990,7 @@ async function processPlayRequest(ctx, status, input, isVideo, language, default
       let activeTrack;
       try {
         activeTrack = await startQueuedTrack(ctx, tracks[0], isVideo);
-        tracks[0].startedAt = activeTrack?.startedAt;
+        tracks[0].startedAt = activeTrack?.startedAt || tracks[0].startedAt;
         if (firstTrackMessage) {
           const playbackCaption = formatTrack(language, tracks[0]);
           const playbackMarkup = controlKeyboard(language, '', tracks[0]);
@@ -977,7 +1000,18 @@ async function processPlayRequest(ctx, status, input, isVideo, language, default
           startProgressUpdater(ctx, playbackMessage ?? firstTrackMessage, language);
         }
         // Auto-start lyrics for playlist first track
-        startLyricsAuto(chatId, ctx.api, activeTrack ?? tracks[0], 'playlist-first-track');
+        const lyricsTrack = activeTrack 
+          ? { 
+              ...tracks[0], 
+              ...activeTrack, 
+              title: activeTrack.title || activeTrack.name || tracks[0].title || tracks[0].name,
+              name: activeTrack.name || activeTrack.title || tracks[0].name || tracks[0].title,
+              url: activeTrack.url || activeTrack.sourceUrl || tracks[0].url || tracks[0].sourceUrl,
+              user: tracks[0].user, 
+              userId: tracks[0].userId 
+            } 
+          : tracks[0];
+        startLyricsAuto(chatId, ctx.api, lyricsTrack, 'playlist-first-track');
         prefetchNextLyrics(chatId);
       } catch (error) {
         chatCache.shift(chatId);
@@ -1079,7 +1113,7 @@ async function processPlayRequest(ctx, status, input, isVideo, language, default
       try {
         await ensureDownloaded(tracks[0], isVideo);
         activeTrack = await startQueuedTrack(ctx, tracks[0], isVideo);
-        tracks[0].startedAt = activeTrack?.startedAt;
+        tracks[0].startedAt = activeTrack?.startedAt || tracks[0].startedAt;
         if (firstTrackMessage) {
           const playbackCaption = formatTrack(language, tracks[0]);
           const playbackMarkup = controlKeyboard(language, '', tracks[0]);
@@ -1089,7 +1123,18 @@ async function processPlayRequest(ctx, status, input, isVideo, language, default
           startProgressUpdater(ctx, playbackMessage ?? firstTrackMessage, language);
         }
         // Auto-start lyrics for URL playlist first track
-        startLyricsAuto(chatId, ctx.api, activeTrack ?? tracks[0], 'url-playlist-first-track');
+        const lyricsTrack = activeTrack 
+          ? { 
+              ...tracks[0], 
+              ...activeTrack, 
+              title: activeTrack.title || activeTrack.name || tracks[0].title || tracks[0].name,
+              name: activeTrack.name || activeTrack.title || tracks[0].name || tracks[0].title,
+              url: activeTrack.url || activeTrack.sourceUrl || tracks[0].url || tracks[0].sourceUrl,
+              user: tracks[0].user, 
+              userId: tracks[0].userId 
+            } 
+          : tracks[0];
+        startLyricsAuto(chatId, ctx.api, lyricsTrack, 'url-playlist-first-track');
         prefetchNextLyrics(chatId);
       } catch (error) {
         chatCache.shift(chatId);
@@ -1216,7 +1261,18 @@ export async function skipHandler(ctx) {
     await ctx.reply(t(language, 'playback.skippedNow', { skipped: skipped.name, next: next.name }));
 
     // Auto-start lyrics for the new track and prefetch next
-    startLyricsAuto(ctx.chat.id, ctx.api, activeTrack ?? next, 'manual-skip');
+    const lyricsTrack = activeTrack 
+      ? { 
+          ...next, 
+          ...activeTrack, 
+          title: activeTrack.title || activeTrack.name || next.title || next.name,
+          name: activeTrack.name || activeTrack.title || next.name || next.title,
+          url: activeTrack.url || activeTrack.sourceUrl || next.url || next.sourceUrl,
+          user: next.user, 
+          userId: next.userId 
+        } 
+      : next;
+    startLyricsAuto(ctx.chat.id, ctx.api, lyricsTrack, 'manual-skip');
     prefetchNextLyrics(ctx.chat.id);
   } catch (error) {
     stopLyricsForChat(ctx.chat.id, 'manual-skip-error');
@@ -1264,7 +1320,18 @@ export async function stopHandler(ctx) {
     await ctx.reply(t(language, 'playback.skippedNow', { skipped: stopped.name, next: next.name }));
 
     // Auto-start lyrics for the new track
-    startLyricsAuto(ctx.chat.id, ctx.api, activeTrack ?? next, 'manual-stop-advance');
+    const lyricsTrack = activeTrack 
+      ? { 
+          ...next, 
+          ...activeTrack, 
+          title: activeTrack.title || activeTrack.name || next.title || next.name,
+          name: activeTrack.name || activeTrack.title || next.name || next.title,
+          url: activeTrack.url || activeTrack.sourceUrl || next.url || next.sourceUrl,
+          user: next.user, 
+          userId: next.userId 
+        } 
+      : next;
+    startLyricsAuto(ctx.chat.id, ctx.api, lyricsTrack, 'manual-stop-advance');
     prefetchNextLyrics(ctx.chat.id);
   } catch (error) {
     stopLyricsForChat(ctx.chat.id, 'manual-stop-error');

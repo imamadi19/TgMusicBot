@@ -348,11 +348,20 @@ export async function lyricsHandler(ctx) {
       }
     }
 
+    const lastResultMsg = runnerStatus.lastResult
+      ? `\n• Last Result: <code>success=${runnerStatus.lastResult.success} message=${runnerStatus.lastResult.message || ''}${runnerStatus.lastResult.error ? ' error=' + runnerStatus.lastResult.error : ''}</code>`
+      : '';
+
     const response = `<b>ℹ️ ${t(language, 'lyrics.status')}</b>\n` +
-      `• Status: <b>${isEnabled ? t(language, 'lyrics.statusEnabled') : t(language, 'lyrics.statusDisabled')}</b>\n` +
-      `• ${t(language, 'lyrics.provider')}: <code>${provider.toUpperCase()}</code>\n` +
-      `• ${t(language, 'lyrics.currentTrack')}: <i>${htmlEscape(currentTrackText)}</i>\n` +
-      `• ${lyricsAvailableText}${runnerDetails}${lastSentLine}`;
+      `• Lyrics Enabled: <b>${isEnabled ? 'true' : 'false'}</b>\n` +
+      `• Lyrics Auto-Start: <b>${config.lyricsAutoStart ? 'true' : 'false'}</b>\n` +
+      `• Strict Track Match: <b>${config.lyricsStrictTrackMatch ? 'true' : 'false'}</b>\n` +
+      `• Bot API Available: <b>${runnerStatus.apiAvailable ? 'true' : 'false'}</b>\n` +
+      `• Runner Active: <b>${runnerStatus.active ? 'true' : 'false'}</b>\n` +
+      `• Active Track: <i>${htmlEscape(currentTrackText)}</i>\n` +
+      `• Track Match Loose: <b>${activeTrack && runnerStatus.track ? (runnerStatus.trackMatchLoose ? 'true' : 'false') : 'N/A'}</b>` +
+      `${lastResultMsg}\n` +
+      `• Cache: ${lyricsAvailableText}${runnerDetails}${lastSentLine}`;
 
     await ctx.reply(response, { parse_mode: 'HTML' });
     return;

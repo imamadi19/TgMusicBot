@@ -80,6 +80,7 @@ export const config = {
   lyricsProvider: process.env.LYRICS_PROVIDER ?? 'lrclib',
   lyricsEnabledDefault: toBool(process.env.LYRICS_ENABLED_DEFAULT, false),
   lyricsAutoStart: toBool(process.env.LYRICS_AUTO_START, true),
+  lyricsStrictTrackMatch: toBool(process.env.LYRICS_STRICT_TRACK_MATCH, false),
   lyricsPrefetchOnlyWhenEnabled: toBool(process.env.LYRICS_PREFETCH_ONLY_WHEN_ENABLED, false),
   lyricsCacheTtlHours: finiteNumber(process.env.LYRICS_CACHE_TTL_HOURS, 24),
   lyricsFetchTimeoutMs: finiteNumber(process.env.LYRICS_FETCH_TIMEOUT_MS, 5000),

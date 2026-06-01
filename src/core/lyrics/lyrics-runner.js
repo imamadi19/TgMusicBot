@@ -12,6 +12,7 @@ import { getLyrics } from './lrclib.js';
 import { getCachedLyrics } from './lyrics-cache.js';
 
 const activeRunners = new Map();
+const lastStartResult = new Map();
 let globalBotApi = null;
 
 function debugLog(...args) {
@@ -31,7 +32,7 @@ export function setGlobalBotApi(api) {
  * @param {string} str
  * @returns {string}
  */
-function htmlEscape(str) {
+export function htmlEscape(str) {
   if (!str) return '';
   return str
     .replace(/&/g, '&amp;')
@@ -39,6 +40,52 @@ function htmlEscape(str) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
+}
+
+/**
+ * Normalizes track title/name text for loose comparison.
+ */
+export function normalizeTrackText(value) {
+  return String(value || '')
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/\p{M}/gu, '')
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * Compares two track objects loosely.
+ */
+export function sameTrackLoose(activeTrack, requestedTrack) {
+  if (!activeTrack || !requestedTrack) return false;
+
+  const activeId = String(activeTrack.trackId || '').trim();
+  const requestId = String(requestedTrack.trackId || '').trim();
+  if (activeId && requestId && activeId === requestId) return true;
+
+  const activeUrl = String(activeTrack.url || activeTrack.sourceUrl || '').trim();
+  const requestUrl = String(requestedTrack.url || requestedTrack.sourceUrl || '').trim();
+  if (activeUrl && requestUrl && activeUrl === requestUrl) return true;
+
+  const activeTitle = normalizeTrackText(activeTrack.title || activeTrack.name);
+  const requestTitle = normalizeTrackText(requestedTrack.title || requestedTrack.name);
+
+  if (activeTitle && requestTitle) {
+    if (activeTitle === requestTitle) return true;
+    if (activeTitle.includes(requestTitle) || requestTitle.includes(activeTitle)) return true;
+  }
+
+  const activeDuration = Number(activeTrack.duration || 0);
+  const requestDuration = Number(requestedTrack.duration || 0);
+  if (activeTitle && requestTitle && activeDuration && requestDuration) {
+    const durationClose = Math.abs(activeDuration - requestDuration) <= 3;
+    const titleTokenOverlap = activeTitle.split(' ').some(w => w.length > 2 && requestTitle.includes(w));
+    if (durationClose && titleTokenOverlap) return true;
+  }
+
+  return false;
 }
 
 /**
@@ -133,15 +180,21 @@ async function runTick(chatId) {
   }
 
   // Ensure it is the same track
-  const isSameTrack = 
-    (activeTrack.trackId && activeTrack.trackId === runner.track.trackId) ||
-    (activeTrack.url && activeTrack.url === runner.track.url) ||
-    (activeTrack.name && activeTrack.name === runner.track.name);
+  const isSameTrack = sameTrackLoose(activeTrack, runner.track);
 
   if (!isSameTrack) {
-    debugLog('track changed, stopping runner for', key);
-    stopLyricsForChat(chatId, 'track-changed');
-    return;
+    if (config.lyricsStrictTrackMatch) {
+      debugLog('track changed (strict mismatch), stopping runner for', key);
+      stopLyricsForChat(chatId, 'track-changed');
+      return;
+    } else {
+      if (config.lyricsDebug) {
+        console.log(`[lyrics-runner] [${key}] loose track mismatch warning (active vs runner), continuing since strict matches are disabled.`, {
+          active: { title: activeTrack.title || activeTrack.name, trackId: activeTrack.trackId },
+          runner: { title: runner.track.title || runner.track.name, trackId: runner.track.trackId }
+        });
+      }
+    }
   }
 
   // 2. Skip if playback is paused
@@ -234,47 +287,60 @@ export async function startLyricsForChat(chatId, ctxOrApi, track, options = {}) 
   const api = ctxOrApi?.api || ctxOrApi || globalBotApi;
   if (!api) {
     console.warn(`[lyrics-runner] Bot API instance is not available for chat ${chatId} (globalBotApi is not set)`);
-    return { success: false, message: 'apiUnavailable' };
+    const result = { success: false, message: 'apiUnavailable' };
+    lastStartResult.set(key, result);
+    return result;
   }
 
   try {
     let lyricsResult;
-    
+    const bypassNotFound = Boolean(options.force || options.bypassNotFoundCache);
+
     if (preferCache) {
-      // Try cache first, fall back to fetch
       lyricsResult = getCachedLyrics(track);
-      if (!lyricsResult) {
-        debugLog('no cache for preferCache, fetching for', track.title || track.name);
-        lyricsResult = await getLyrics(track);
+      if (!lyricsResult || (lyricsResult.status === 'notFound' && bypassNotFound)) {
+        debugLog('no cache or notFound bypass, fetching for', track.title || track.name);
+        lyricsResult = await getLyrics(track, { bypassNotFoundCache: bypassNotFound });
       }
     } else {
-      lyricsResult = await getLyrics(track);
+      lyricsResult = await getLyrics(track, { bypassNotFoundCache: bypassNotFound });
     }
 
     if (!lyricsResult || !lyricsResult.synced || lyricsResult.lines.length === 0) {
+      const isPlainOnly = lyricsResult?.plainLyrics || lyricsResult?.status === 'plainOnly';
+      const msg = isPlainOnly ? 'plainOnly' : 'notFound';
+      const result = { success: false, message: msg };
+      lastStartResult.set(key, result);
       if (silent) {
         debugLog('no synced lyrics (silent mode), skipping for', track.title || track.name);
-        return { success: false, message: 'notFound' };
+        return result;
       }
-      return { 
-        success: false, 
-        message: lyricsResult?.plainLyrics ? 'plainOnly' : 'notFound'
-      };
+      return result;
     }
 
     // Calculate initial position from active track
     const activeTrack = voicePlayer.activeTrack(chatId);
     if (!activeTrack) {
       debugLog('no active track in voicePlayer, aborting start for chat', key);
-      return { success: false, message: 'noActiveTrack' };
+      const result = { success: false, message: 'noActiveTrack' };
+      lastStartResult.set(key, result);
+      return result;
     }
-    const isSameTrack = 
-      (activeTrack.trackId && activeTrack.trackId === track.trackId) ||
-      (activeTrack.url && activeTrack.url === track.url) ||
-      (activeTrack.name && activeTrack.name === track.name);
+    const isSameTrack = sameTrackLoose(activeTrack, track);
     if (!isSameTrack) {
-      debugLog('active track is different from requested track, aborting start for chat', key);
-      return { success: false, message: 'trackMismatch' };
+      if (config.lyricsStrictTrackMatch) {
+        debugLog('active track is different from requested track, aborting start for chat', key);
+        const result = { success: false, message: 'trackMismatch' };
+        lastStartResult.set(key, result);
+        return result;
+      } else {
+        if (config.lyricsDebug) {
+          console.log(`[lyrics-runner] active track mismatch warning (active vs requested) for chat=${key}, continuing since strict matches are disabled.`, {
+            active: { title: activeTrack.title || activeTrack.name, trackId: activeTrack.trackId },
+            requested: { title: track.title || track.name, trackId: track.trackId }
+          });
+        }
+      }
     }
 
     const currentPosition = playbackPositionSeconds(activeTrack);
@@ -287,7 +353,10 @@ export async function startLyricsForChat(chatId, ctxOrApi, track, options = {}) 
     const runner = {
       chatId: key,
       api,
-      track,
+      track: {
+        ...track,
+        startedAt: activeTrack.startedAt || track.startedAt
+      },
       lines: lyricsResult.lines,
       lastSentIndex: initialLastSentIndex,
       lastSentTimeMs: 0,
@@ -309,10 +378,14 @@ export async function startLyricsForChat(chatId, ctxOrApi, track, options = {}) 
       runTick(key).catch(err => console.error(`Error in lyrics tick for chat ${key}:`, err));
     }, tickInterval);
 
-    return { success: true };
+    const result = { success: true };
+    lastStartResult.set(key, result);
+    return result;
   } catch (error) {
     console.error(`Failed to start lyrics runner for chat ${key}:`, error);
-    return { success: false, message: 'error', error: error.message };
+    const result = { success: false, message: 'error', error: error.message };
+    lastStartResult.set(key, result);
+    return result;
   }
 }
 
@@ -326,6 +399,7 @@ export async function startLyricsForChat(chatId, ctxOrApi, track, options = {}) 
  * @returns {Promise<{success: boolean, message?: string, skipped?: boolean}>}
  */
 export async function startLyricsForChatIfEnabled(chatId, ctxOrApi, track, options = {}) {
+  const key = String(chatId);
   try {
     const { getLyricsEnabled } = await import('../db/chat-settings.js');
     const enabled = await getLyricsEnabled(chatId);
@@ -335,7 +409,18 @@ export async function startLyricsForChatIfEnabled(chatId, ctxOrApi, track, optio
     }
 
     if (!enabled) {
-      return { success: false, skipped: true, message: 'disabled' };
+      const result = { success: false, skipped: true, message: 'disabled' };
+      lastStartResult.set(key, result);
+      return result;
+    }
+
+    if (config.lyricsAutoStart === false && options.force !== true) {
+      if (config.lyricsDebug) {
+        console.log(`[lyrics-runner] auto-start skipped because lyricsAutoStart is disabled: chat=${chatId}`);
+      }
+      const result = { success: false, skipped: true, message: 'autoStartDisabled' };
+      lastStartResult.set(key, result);
+      return result;
     }
 
     const api = ctxOrApi?.api || ctxOrApi || globalBotApi;
@@ -346,7 +431,9 @@ export async function startLyricsForChatIfEnabled(chatId, ctxOrApi, track, optio
 
     if (!api) {
       console.warn(`[lyrics-runner] Bot API instance is not available for auto-start in chat ${chatId}`);
-      return { success: false, message: 'apiUnavailable' };
+      const result = { success: false, message: 'apiUnavailable' };
+      lastStartResult.set(key, result);
+      return result;
     }
 
     const result = await startLyricsForChat(chatId, api, track, { silent: true, preferCache: true, ...options });
@@ -358,7 +445,9 @@ export async function startLyricsForChatIfEnabled(chatId, ctxOrApi, track, optio
     return result;
   } catch (error) {
     console.error(`[lyrics-runner] startLyricsForChatIfEnabled error for chat ${chatId}:`, error);
-    return { success: false, message: 'error', error: error?.message };
+    const result = { success: false, message: 'error', error: error?.message };
+    lastStartResult.set(key, result);
+    return result;
   }
 }
 
@@ -414,8 +503,11 @@ export function resyncLyricsForChat(chatId) {
 export function getLyricsStatus(chatId) {
   const key = String(chatId);
   const runner = activeRunners.get(key);
+  const activeTrack = voicePlayer.activeTrack(chatId);
+  const lastResult = lastStartResult.get(key) || null;
+  const apiAvailable = !!(runner?.api || globalBotApi);
+
   if (runner) {
-    const activeTrack = voicePlayer.activeTrack(chatId);
     const currentPosition = activeTrack ? playbackPositionSeconds(activeTrack) : 0;
     return {
       active: true,
@@ -427,7 +519,10 @@ export function getLyricsStatus(chatId) {
       provider: runner.provider,
       sourceId: runner.sourceId,
       startedAt: runner.startedAt,
-      syncOffsetMs: config.lyricsSyncOffsetMs ?? 0
+      syncOffsetMs: config.lyricsSyncOffsetMs ?? 0,
+      apiAvailable,
+      lastResult,
+      trackMatchLoose: activeTrack ? sameTrackLoose(activeTrack, runner.track) : false
     };
   }
   return {
@@ -440,6 +535,9 @@ export function getLyricsStatus(chatId) {
     provider: null,
     sourceId: null,
     startedAt: null,
-    syncOffsetMs: config.lyricsSyncOffsetMs ?? 0
+    syncOffsetMs: config.lyricsSyncOffsetMs ?? 0,
+    apiAvailable,
+    lastResult,
+    trackMatchLoose: false
   };
 }
