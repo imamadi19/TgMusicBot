@@ -52,20 +52,24 @@ export function serviceSettingsKeyboard(currentService, language = 'en') {
     .row()
     .text(`${activeService === SUPPORTED_DEFAULT_SERVICES.soundcloud ? '✅ ' : ''}${SUPPORTED_DEFAULT_SERVICES.soundcloud}`, 'service_soundcloud')
     .row()
-    .text(t(language, 'buttons.back'), 'settings_menu');
+    .text(`⬅️ ${t(language, 'buttons.back')}`, 'settings_home')
+    .text(`❌ ${t(language, 'buttons.close').replace(/^[✖️\s]+/, '')}`, 'settings_close');
 
   return keyboard;
 }
 
 export function languageKeyboard(language = 'en', options = {}) {
+  const prefix = options.prefix || 'lang_';
   const keyboard = new InlineKeyboard();
   languages.forEach((lang, index) => {
-    keyboard.text(`${lang.flag} ${lang.nativeName}`, `lang_${lang.code}`);
+    keyboard.text(`${lang.flag} ${lang.nativeName}`, `${prefix}${lang.code}`);
     if (index % 2 === 1) keyboard.row();
   });
   if (options && options.includeBack) {
-    keyboard.text(t(language, 'buttons.back'), 'start_home')
-            .text(t(language, 'buttons.close'), 'start_close');
+    const backCb = options.backCallback || 'start_home';
+    const closeCb = options.closeCallback || 'start_close';
+    keyboard.text(`⬅️ ${t(language, 'buttons.back')}`, backCb)
+            .text(`❌ ${t(language, 'buttons.close').replace(/^[✖️\s]+/, '')}`, closeCb);
   }
   return keyboard;
 }
@@ -152,8 +156,8 @@ export function privateStartKeyboard(language = 'en') {
     .text(t(language, 'buttons.myPlaylists'), 'start_playlist')
     .text(t(language, 'buttons.premium'), 'start_premium')
     .row()
-    .text(t(language, 'buttons.language'), 'language_menu')
-    .text(t(language, 'buttons.settings'), 'start_settings');
+    .text(`🌐 ${t(language, 'buttons.chooseLanguage')}`, 'language_menu')
+    .text(`⚙️ ${t(language, 'buttons.settings')}`, 'settings_menu');
 
   const supportUrl = config.supportGroup;
   const channelUrl = config.supportChannel;
@@ -167,7 +171,7 @@ export function privateStartKeyboard(language = 'en') {
     }
   }
 
-  keyboard.row().text(t(language, 'buttons.close'), 'start_close');
+  keyboard.row().text(`❌ ${t(language, 'buttons.close').replace(/^[✖️\s]+/, '')}`, 'start_close');
 
   return keyboard;
 }
@@ -180,18 +184,61 @@ export function groupStartKeyboard(language = 'en') {
     .text(t(language, 'buttons.queue'), 'group_queue_hint')
     .text(t(language, 'buttons.skip'), 'group_skip_hint')
     .row()
-    .text(t(language, 'buttons.groupSettings'), 'start_settings')
+    .text(`⚙️ ${t(language, 'buttons.groupSettings')}`, 'settings_menu')
     .text(t(language, 'buttons.djMode'), 'group_djmode_hint')
     .row()
     .text(t(language, 'buttons.help'), 'help_all')
     .text(t(language, 'buttons.premium'), 'start_premium')
     .row()
-    .text(t(language, 'buttons.close'), 'start_close');
+    .text(`❌ ${t(language, 'buttons.close').replace(/^[✖️\s]+/, '')}`, 'start_close');
 }
 
 export function backToStartKeyboard(language = 'en') {
   return new InlineKeyboard()
-    .text(t(language, 'buttons.back'), 'start_home')
-    .text(t(language, 'buttons.close'), 'start_close');
+    .text(`⬅️ ${t(language, 'buttons.back')}`, 'start_home')
+    .text(`❌ ${t(language, 'buttons.close').replace(/^[✖️\s]+/, '')}`, 'start_close');
+}
+
+export function settingsDashboardKeyboard(language = 'en', chatType = 'private') {
+  const isPrivate = chatType === 'private';
+  const keyboard = new InlineKeyboard()
+    .text(`🎧 ${t(language, 'buttons.defaultService')}`, 'settings_service')
+    .row()
+
+  if (!isPrivate) {
+    keyboard
+      .text(`🎚 ${t(language, 'buttons.audioPreset')}`, 'settings_preset')
+      .text(`🎧 ${t(language, 'buttons.djMode')}`, 'settings_djmode')
+      .row();
+  }
+
+  keyboard
+    .text(`🌐 ${t(language, 'buttons.chooseLanguage')}`, 'settings_language')
+
+  if (!isPrivate) {
+    keyboard.text(`⭐ ${t(language, 'buttons.premiumInfo')}`, 'settings_premium');
+  } else {
+    keyboard.text(`📖 ${t(language, 'buttons.help')}`, 'settings_help');
+  }
+
+  keyboard.row()
+    .text(`❌ ${t(language, 'buttons.close').replace(/^[✖️\s]+/, '')}`, 'settings_close');
+
+  return keyboard;
+}
+
+export function settingsBackKeyboard(language = 'en') {
+  return new InlineKeyboard()
+    .text(`⬅️ ${t(language, 'buttons.back')}`, 'settings_home')
+    .text(`❌ ${t(language, 'buttons.close').replace(/^[✖️\s]+/, '')}`, 'settings_close');
+}
+
+export function settingsLanguageKeyboard(language = 'en') {
+  return languageKeyboard(language, {
+    includeBack: true,
+    backCallback: 'settings_home',
+    closeCallback: 'settings_close',
+    prefix: 'settings_lang_',
+  });
 }
 

@@ -3,11 +3,11 @@ import { addAuthHandler, authListHandler, removeAuthHandler } from './auth.js';
 import { broadcastHandler, cancelBroadcastHandler } from './broadcast.js';
 import { vcPlayCallbackHandler } from './callbacks.js';
 import { clearAssistantsHandler, devActiveVcHandler, leaveAllHandler, loggerToggleHandler } from './devs.js';
-import { helpCallback, languageMenuHandler, languageSelectHandler, startHandler, startSetupHandler, startFeaturesHandler, startPlaylistHandler, startPremiumHandler, groupPlayHintHandler, groupVplayHintHandler, groupQueueHintHandler, groupSkipHintHandler, groupDjmodeHintHandler, startHomeHandler, startCloseHandler, startSettingsHintHandler } from './help.js';
+import { helpCallback, languageMenuHandler, languageSelectHandler, startHandler, startSetupHandler, startFeaturesHandler, startPlaylistHandler, startPremiumHandler, groupPlayHintHandler, groupVplayHintHandler, groupQueueHintHandler, groupSkipHintHandler, groupDjmodeHintHandler, startHomeHandler, startCloseHandler } from './help.js';
 import { loopHandler, muteHandler, pauseHandler, playHandler, queueHandler, removeHandler, resumeHandler, searchSelectionCancelHandler, searchSelectionPageHandler, searchSelectionPickHandler, seekHandler, shuffleHandler, skipHandler, speedHandler, stopHandler, unmuteHandler, volumeHandler } from './playback.js';
 import { addToPlaylistHandler, createPlaylistHandler, deletePlaylistHandler, myPlaylistsHandler, playlistInfoHandler, removeFromPlaylistHandler } from './playlists.js';
 import { premiumDjModeHandler, premiumFeaturesHandler, premiumGrantHandler, premiumInfoHandler, premiumProfileHandler, premiumQueueMoveHandler, premiumRevokeHandler, premiumSetPresetHandler } from './premium.js';
-import { noopHandler, pingHandler, privacyHandler, serviceSelectHandler, settingsHandler, shellHandler, statsHandler } from './misc.js';
+import { noopHandler, pingHandler, privacyHandler, serviceSelectHandler, settingsHandler, settingsCloseHandler, settingsServiceHandler, settingsLanguageHandler, settingsLanguageSelectHandler, settingsHelpHandler, settingsPresetHintHandler, settingsDjModeHintHandler, settingsPremiumInfoHandler, shellHandler, statsHandler } from './misc.js';
 
 export function loadHandlers(bot) {
   bot.command('start', startHandler);
@@ -59,15 +59,36 @@ export function loadHandlers(bot) {
   bot.command('seek', seekHandler);
   bot.command(['volume', 'vol'], volumeHandler);
   bot.command('shuffle', shuffleHandler);
+
+  // Language callbacks
   bot.callbackQuery('language_menu', languageMenuHandler);
   bot.callbackQuery(/^lang_/, languageSelectHandler);
+
+  // Settings callbacks (must be registered BEFORE generic /^service_/)
   bot.callbackQuery('settings_menu', settingsHandler);
+  bot.callbackQuery('settings_home', settingsHandler);
+  bot.callbackQuery('settings_close', settingsCloseHandler);
+  bot.callbackQuery('settings_service', settingsServiceHandler);
+  bot.callbackQuery('settings_language', settingsLanguageHandler);
+  bot.callbackQuery(/^settings_lang_/, settingsLanguageSelectHandler);
+  bot.callbackQuery('settings_help', settingsHelpHandler);
+  bot.callbackQuery('settings_preset', settingsPresetHintHandler);
+  bot.callbackQuery('settings_djmode', settingsDjModeHintHandler);
+  bot.callbackQuery('settings_premium', settingsPremiumInfoHandler);
+
+  // Service select callbacks
   bot.callbackQuery(/^service_/, serviceSelectHandler);
+
+  // Help callbacks
   bot.callbackQuery(/^help_/, helpCallback);
+
+  // Search/playback callbacks
   bot.callbackQuery(/^searchpage:/, searchSelectionPageHandler);
   bot.callbackQuery(/^searchpick:/, searchSelectionPickHandler);
   bot.callbackQuery(/^searchcancel:/, searchSelectionCancelHandler);
   bot.callbackQuery(/^(?:vcplay_|play_)/, vcPlayCallbackHandler);
+
+  // Start panel callbacks
   bot.callbackQuery('start_setup', startSetupHandler);
   bot.callbackQuery('start_features', startFeaturesHandler);
   bot.callbackQuery('start_playlist', startPlaylistHandler);
@@ -79,5 +100,4 @@ export function loadHandlers(bot) {
   bot.callbackQuery('group_djmode_hint', groupDjmodeHintHandler);
   bot.callbackQuery('start_home', startHomeHandler);
   bot.callbackQuery('start_close', startCloseHandler);
-  bot.callbackQuery('start_settings', startSettingsHintHandler);
 }

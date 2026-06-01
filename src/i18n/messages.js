@@ -2,7 +2,8 @@ export const translations = {
   en: {
     buttons: {
       support: 'Support', channel: 'Channel', source: 'Source', addToGroup: 'Add me to your group', user: 'User', admin: 'Admin', playlist: 'Playlist', owner: 'Owner', developer: 'Developer', back: 'Back', pause: '⏸ Pause', resume: '▶️ Resume', skip: '⏭ Skip', stop: '⏹ Stop', mute: '🔇 Mute', unmute: '🔊 Unmute', addToPlaylist: '➕ Playlist', close: '✖️ Close', language: '🌐 Language', help: 'Help', settings: 'Settings', chooseLanguage: 'Choose language',
-      setupGuide: 'Setup Guide', musicFeatures: 'Music Features', myPlaylists: 'My Playlists', playMusic: 'Play Music', playVideo: 'Play Video', queue: 'Queue', groupSettings: 'Group Settings', djMode: 'DJ Mode'
+      setupGuide: 'Setup Guide', musicFeatures: 'Music Features', myPlaylists: 'My Playlists', premium: 'Premium', playMusic: 'Play Music', playVideo: 'Play Video', queue: 'Queue', groupSettings: 'Group Settings', djMode: 'DJ Mode',
+      defaultService: 'Default Service', audioPreset: 'Audio Preset', premiumInfo: 'Premium Info'
     },
     general: { user: 'User', openingHelp: 'Opening help menu...', unknownHelp: 'Unknown help category.', chooseHelp: 'Choose a help category:', useBack: 'Use the button below to go back.' },
     language: { choose: 'Please choose your language. Your choice will be saved until you change it again.', saved: 'Language saved: {language}', invalid: 'Unsupported language.', current: 'Current language: {language}' },
@@ -105,13 +106,66 @@ export const translations = {
     broadcast: { usage: 'Please reply to a message to broadcast.\n\nUsage:\n/broadcast -chat : groups only\n/broadcast -user : users only\n/broadcast -both : groups + users (default)\n/broadcast -copy : send as copy\n\nExamples:\n/broadcast\n/broadcast -chat\n/broadcast -user -copy', started: 'Broadcast started.', ended: 'Broadcast ended.\nGroups: {groups}\nUsers: {users}', stopped: 'Broadcast stopped.\nGroups: {groups}\nUsers: {users}', stopRequested: 'Broadcast stopped.', noneInProgress: 'No broadcast in progress.', alreadyInProgress: 'A broadcast is already in progress.', noTargets: 'No targets found.', failed: 'Broadcast failed: {error}' },
     misc: { pinging: 'Pinging...', pong: 'Pong! {ms} ms', stats: 'Uptime: {uptime}s\nMemory: {memory} MB\nCPU: {cpu} core(s)\nNode: {node}', privacy: '<b>Privacy Policy for {botName}</b>\n\n1. <b>Data Storage</b>\nWe do not store personal data on your device or track browsing activity.\n\n2. <b>Collection</b>\nWe only collect Telegram user IDs, chat IDs, chat settings, authorization data, and playlists needed to provide music services. We do not store phone numbers or locations.\n\n3. <b>Usage</b>\nData is used strictly for bot functionality. No marketing or commercial use.\n\n4. <b>Sharing</b>\nWe do not sell, trade, or share user data with third parties except Telegram infrastructure required for bot operation.\n\n5. <b>Security</b>\nWe use reasonable safeguards, but no online service is 100% secure.\n\n6. <b>Cookies</b>\n{botName} does not use tracking cookies. Optional YouTube cookies configured by the bot owner are only used for media extraction.\n\n7. <b>Your Rights</b>\nYou can request data deletion or block the bot to revoke access.\n\n8. <b>Updates</b>\nPolicy changes will be announced in the bot.\n\n9. <b>Contact</b>\nQuestions? Contact our {support}.\n\n──────────────────\nNote: This policy ensures a safe and respectful experience with {botName}.', settings: 'Settings\nDefault service: {service}\nSong duration limit: {limit}s\nMax file size: {size} MB\nLanguage: {language}', logger: 'Logger chat: {logger}', notConfigured: 'not configured', ownerBroadcast: 'Only the owner can broadcast.', broadcastPending: 'Broadcast scheduling is preserved in the JavaScript flow; connect a chat registry before sending.', broadcastUsage: 'Usage: /broadcast [text]', ownerShell: 'Only the owner can use shell commands.', shellDisabled: 'Shell execution is disabled in the JavaScript rewrite for safer default deployments.', noop: 'Command accepted. This administrative flow is available as a JavaScript extension point.' },
     premium: { ownerOnly: 'Only the owner can manage premium.', grantUsage: 'Usage: /premiumgrant [user|chat] [id] [days=30]', revokeUsage: 'Usage: /premiumrevoke [user|chat] [id]', infoUsage: 'Usage: /premiuminfo [user|chat] [id]', granted: '✅ Premium granted for {scope} <code>{id}</code> until {expires}.', revoked: '✅ Premium revoked for {scope} <code>{id}</code>.', notFound: 'No premium data found for {scope} <code>{id}</code>.', notActiveFeature: 'This feature is only available for active premium user/chat.', info: 'Premium {scope} <code>{id}</code>\nStatus: <b>{status}</b>\nExpires: <b>{expires}</b>', features: '<b>Premium Features</b>\n\n1) Priority Quality & Performance\n• Priority queue processing\n• Faster playback command lane\n• Better reconnect stability\n\n2) Better Audio Experience\n• Premium audio presets\n• Crossfade support\n• Volume normalization\n\n3) Advanced Queue & Playlist\n• Higher queue limit\n• More saved playlists\n• Smart continuation\n\n4) Social / Community\n• Better vote-skip rule\n• DJ role mode\n• Anti-spam request\n• Event mode' },
+    settings: {
+      private: { title: 'Settings', description: 'Manage your personal bot preferences.' },
+      group: { title: 'Group Settings', description: 'Manage this group\'s music preferences.' },
+      labels: { user: 'User', group: 'Group', language: 'Language', defaultService: 'Default service', audioPreset: 'Audio preset', djMode: 'DJ Mode', premium: 'Premium', queueLimit: 'Queue limit' },
+      chooseMenu: 'Choose a setting below:',
+      service: { title: 'Default Service', description: 'Choose which platform should be used first when searching music.', current: 'Current', unsupported: 'Unsupported service.', alreadySelected: '{service} is already selected.', selected: '{service} selected.' },
+      help: { title: 'Settings Help', content: '• Default Service determines the primary search platform.\n• Language changes the bot display language.\n• In groups, Audio Preset and DJ Mode are managed with premium/admin commands.' },
+      preset: { title: 'Audio Preset', content: 'Use the following commands to change the audio preset:', current: 'Current preset' },
+      djMode: { title: 'DJ Mode', content: 'When DJ Mode is active, sensitive controls (skip, stop, seek, volume, shuffle, qmove) are restricted to admin/auth/premium users.', current: 'Current status' },
+      premium: { title: 'Premium Info', content: 'Use /premiumfeatures and /premiuminfo to learn more about premium features.' },
+      groupOnly: 'This setting is only available in groups.',
+      closed: 'Closed.'
+    },
     admin: { groupOnly: 'This command can only be used in groups.', reloadWait: 'Please wait {time} before using this command again.', reloadStarted: 'Reloading administrator cache...', reloadSuccess: 'Administrator cache reloaded successfully. Cached {count} admin(s).', reloadFailed: 'Failed to reload administrator cache: {error}' },
   },
 };
 
 const aliases = {
-  id: { buttons: { support: 'Dukungan', channel: 'Kanal', user: 'Pengguna', admin: 'Admin', playlist: 'Playlist', owner: 'Pemilik', developer: 'Developer', back: 'Kembali', pause: '⏸ Jeda', skip: '⏭ Lewati', stop: '⏹ Stop', language: '🌐 Bahasa', help: 'Bantuan', settings: 'Pengaturan', chooseLanguage: 'Pilih bahasa', setupGuide: 'Panduan Setup', musicFeatures: 'Fitur Musik', myPlaylists: 'Playlist Saya', playMusic: 'Play Musik', playVideo: 'Play Video', queue: 'Queue', groupSettings: 'Settings Grup', djMode: 'DJ Mode', close: 'Tutup' }, language: { choose: 'Silakan pilih bahasa. Pilihanmu akan disimpan sampai kamu mengubahnya lagi.', saved: 'Bahasa disimpan: {language}', invalid: 'Bahasa tidak didukung.', current: 'Bahasa saat ini: {language}' }, start: {
-      text: 'Halo {name},\n\nSaya {botName}, pemutar musik Telegram berbasis JavaScript.\n\n<b>Platform yang didukung:</b> YouTube, Spotify, Apple Music, SoundCloud.\n\nGunakan tombol di bawah untuk melihat perintah atau mengubah bahasa.',
+  id: {
+    buttons: {
+      support: 'Dukungan',
+      channel: 'Kanal',
+      source: 'Sumber',
+      addToGroup: 'Tambahkan ke Grup',
+      user: 'Pengguna',
+      admin: 'Admin',
+      playlist: 'Playlist',
+      owner: 'Pemilik',
+      developer: 'Developer',
+      back: 'Kembali',
+      pause: '⏸ Jeda',
+      resume: '▶️ Lanjutkan',
+      skip: '⏭ Lewati',
+      stop: '⏹ Stop',
+      mute: '🔇 Bisukan',
+      unmute: '🔊 Bunyikan',
+      addToPlaylist: '➕ Playlist',
+      close: '✖️ Tutup',
+      language: '🌐 Bahasa',
+      help: 'Bantuan',
+      settings: 'Pengaturan',
+      chooseLanguage: 'Pilih bahasa',
+      setupGuide: 'Panduan Setup',
+      musicFeatures: 'Fitur Musik',
+      myPlaylists: 'Playlist Saya',
+      premium: 'Premium',
+      playMusic: 'Play Musik',
+      playVideo: 'Play Video',
+      queue: 'Queue',
+      groupSettings: 'Settings Grup',
+      djMode: 'DJ Mode'
+    },
+    language: {
+      choose: 'Silakan pilih bahasa. Pilihanmu akan disimpan sampai kamu mengubahnya lagi.',
+      saved: 'Bahasa disimpan: {language}',
+      invalid: 'Bahasa tidak didukung.',
+      current: 'Bahasa saat ini: {language}'
+    },
+    start: {
+      text: "Halo {name},\n\nSaya {botName}, pemutar musik Telegram berbasis JavaScript.\n\n<b>Platform yang didukung:</b> YouTube, Spotify, Apple Music, SoundCloud.\n\nGunakan tombol di bawah untuk melihat perintah atau mengubah bahasa.",
       private: {
         title: 'Selamat datang di TgMusicBot',
         greeting: 'Hai, <b>{name}</b>!',
@@ -184,19 +238,1345 @@ const aliases = {
       closed: 'Ditutup.',
       back: 'Kembali',
       close: 'Tutup'
-    }, general: { chooseHelp: 'Pilih kategori bantuan:', openingHelp: 'Membuka menu bantuan...', unknownHelp: 'Kategori bantuan tidak dikenal.', useBack: 'Gunakan tombol di bawah untuk kembali.', user: 'Pengguna' }, playback: { nowPlaying: 'Sedang diputar', addedToQueue: 'Ditambahkan ke antrean: {count}', queueEmpty: 'Antrean kosong.', nothingPlaying: 'Tidak ada yang sedang diputar.', stopped: 'Pemutaran dihentikan dan antrean dibersihkan.', paused: 'Pemutaran dijeda.', resumed: 'Pemutaran dilanjutkan.', noTracks: 'Tidak ada lagu ditemukan.', playlistNotFound: '❌ Playlist tidak ditemukan.', playlistEmpty: '❌ Playlist kosong.', duplicate: 'Lagu sudah ada di antrean atau sedang diputar.', queueTitle: 'Antrean:', queueEnded: 'Musik telah selesai.', searchingDownload: '🔍 Mencari dan mengunduh...', chooseTrack: 'Pilih hasil YouTube:', downloadingSelected: '⬇️ Mengunduh trek terpilih: {title}', channel: 'Channel', views: 'Dilihat', upload: 'Diunggah', url: 'URL' }, misc: { pinging: 'Menguji...', privacy: 'Privasi: bot ini menyimpan pengaturan chat, data otorisasi, dan playlist yang diperlukan untuk pemutaran. Bot ini tidak menjual data pengguna.', notConfigured: 'belum dikonfigurasi' }, playlist: { notFound: '❌ Playlist tidak ditemukan.', empty: 'Kosong', none: 'Kamu belum memiliki playlist.' }, callbacks: { requesterOnly: 'Hanya pengguna yang request lagu ini yang bisa memakai tombol ini.' } },
-  ru: { buttons: { support: 'Поддержка', channel: 'Канал', user: 'Пользователь', admin: 'Админ', playlist: 'Плейлист', owner: 'Владелец', developer: 'Разработчик', back: 'Назад', pause: '⏸ Пауза', skip: '⏭ Пропустить', stop: '⏹ Стоп', language: '🌐 Язык', help: 'Помощь', settings: 'Настройки', chooseLanguage: 'Выбрать язык' }, language: { choose: 'Выберите язык. Выбор сохранится, пока вы не измените его снова.', saved: 'Язык сохранён: {language}', invalid: 'Язык не поддерживается.', current: 'Текущий язык: {language}' }, start: { text: 'Здравствуйте, {name}!\n\nЯ {botName}, музыкальный Telegram-бот на JavaScript.\n\n<b>Поддерживаемые платформы:</b> YouTube, Spotify, Apple Music, SoundCloud.\n\nИспользуйте кнопки ниже для команд или смены языка.' } },
-  ja: { buttons: { support: 'サポート', channel: 'チャンネル', user: 'ユーザー', admin: '管理者', playlist: 'プレイリスト', owner: '所有者', developer: '開発者', back: '戻る', pause: '⏸ 一時停止', skip: '⏭ スキップ', stop: '⏹ 停止', language: '🌐 言語', help: 'ヘルプ', settings: '設定', chooseLanguage: '言語を選択' }, language: { choose: '言語を選択してください。設定は再度変更するまで保存されます。', saved: '言語を保存しました: {language}', invalid: '対応していない言語です。', current: '現在の言語: {language}' }, start: { text: 'こんにちは {name}、\n\n私は {botName}、JavaScript 製の Telegram 音楽プレイヤーです。\n\n<b>対応プラットフォーム:</b> YouTube, Spotify, Apple Music, SoundCloud.\n\n下のボタンでコマンド確認や言語変更ができます。' } },
-  hi: { buttons: { support: 'सहायता', channel: 'चैनल', user: 'यूज़र', admin: 'एडमिन', playlist: 'प्लेलिस्ट', owner: 'Owner', developer: 'डेवलपर', back: 'वापस', pause: '⏸ रोकें', skip: '⏭ छोड़ें', stop: '⏹ बंद', language: '🌐 भाषा', help: 'मदद', settings: 'सेटिंग्स', chooseLanguage: 'भाषा चुनें' }, language: { choose: 'कृपया अपनी भाषा चुनें। यह सेटिंग तब तक सेव रहेगी जब तक आप इसे फिर से नहीं बदलते।', saved: 'भाषा सेव हुई: {language}', invalid: 'यह भाषा समर्थित नहीं है।', current: 'वर्तमान भाषा: {language}' }, start: { text: 'नमस्ते {name},\n\nमैं {botName} हूँ, JavaScript Telegram music player.\n\n<b>समर्थित प्लेटफ़ॉर्म:</b> YouTube, Spotify, Apple Music, SoundCloud.\n\nकमांड देखने या भाषा बदलने के लिए नीचे दिए बटन इस्तेमाल करें।' } },
-  it: { buttons: { support: 'Supporto', channel: 'Canale', user: 'Utente', admin: 'Admin', playlist: 'Playlist', owner: 'Proprietario', developer: 'Sviluppatore', back: 'Indietro', pause: '⏸ Pausa', skip: '⏭ Salta', stop: '⏹ Stop', language: '🌐 Lingua', help: 'Aiuto', settings: 'Impostazioni', chooseLanguage: 'Scegli lingua' }, language: { choose: 'Scegli la tua lingua. La scelta resterà salvata finché non la cambierai di nuovo.', saved: 'Lingua salvata: {language}', invalid: 'Lingua non supportata.', current: 'Lingua attuale: {language}' }, start: { text: 'Ciao {name},\n\nSono {botName}, un player musicale Telegram in JavaScript.\n\n<b>Piattaforme supportate:</b> YouTube, Spotify, Apple Music, SoundCloud.\n\nUsa i pulsanti qui sotto per esplorare i comandi o cambiare lingua.' } },
-  es: { buttons: { support: 'Soporte', channel: 'Canal', user: 'Usuario', admin: 'Admin', playlist: 'Playlist', owner: 'Dueño', developer: 'Desarrollador', back: 'Atrás', pause: '⏸ Pausa', skip: '⏭ Saltar', stop: '⏹ Detener', language: '🌐 Idioma', help: 'Ayuda', settings: 'Ajustes', chooseLanguage: 'Elegir idioma' }, language: { choose: 'Elige tu idioma. Tu elección se guardará hasta que la cambies de nuevo.', saved: 'Idioma guardado: {language}', invalid: 'Idioma no compatible.', current: 'Idioma actual: {language}' }, start: { text: 'Hola {name},\n\nSoy {botName}, un reproductor de música de Telegram en JavaScript.\n\n<b>Plataformas compatibles:</b> YouTube, Spotify, Apple Music, SoundCloud.\n\nUsa los botones de abajo para ver comandos o cambiar el idioma.' } },
-  fr: { buttons: { support: 'Support', channel: 'Canal', user: 'Utilisateur', admin: 'Admin', playlist: 'Playlist', owner: 'Propriétaire', developer: 'Développeur', back: 'Retour', pause: '⏸ Pause', skip: '⏭ Passer', stop: '⏹ Stop', language: '🌐 Langue', help: 'Aide', settings: 'Paramètres', chooseLanguage: 'Choisir la langue' }, language: { choose: 'Choisissez votre langue. Elle restera enregistrée jusqu’à ce que vous la changiez.', saved: 'Langue enregistrée : {language}', invalid: 'Langue non prise en charge.', current: 'Langue actuelle : {language}' }, start: { text: 'Bonjour {name},\n\nJe suis {botName}, un lecteur de musique Telegram en JavaScript.\n\n<b>Plateformes prises en charge :</b> YouTube, Spotify, Apple Music, SoundCloud.\n\nUtilisez les boutons ci-dessous pour voir les commandes ou changer la langue.' } },
-  de: { buttons: { support: 'Support', channel: 'Kanal', user: 'Nutzer', admin: 'Admin', playlist: 'Playlist', owner: 'Besitzer', developer: 'Entwickler', back: 'Zurück', pause: '⏸ Pause', skip: '⏭ Überspringen', stop: '⏹ Stopp', language: '🌐 Sprache', help: 'Hilfe', settings: 'Einstellungen', chooseLanguage: 'Sprache wählen' }, language: { choose: 'Bitte wähle deine Sprache. Die Auswahl bleibt gespeichert, bis du sie wieder änderst.', saved: 'Sprache gespeichert: {language}', invalid: 'Nicht unterstützte Sprache.', current: 'Aktuelle Sprache: {language}' }, start: { text: 'Hallo {name},\n\nich bin {botName}, ein JavaScript-Telegram-Musikplayer.\n\n<b>Unterstützte Plattformen:</b> YouTube, Spotify, Apple Music, SoundCloud.\n\nNutze die Buttons unten, um Befehle zu sehen oder die Sprache zu ändern.' } },
-  pt: { buttons: { support: 'Suporte', channel: 'Canal', user: 'Usuário', admin: 'Admin', playlist: 'Playlist', owner: 'Dono', developer: 'Desenvolvedor', back: 'Voltar', pause: '⏸ Pausar', skip: '⏭ Pular', stop: '⏹ Parar', language: '🌐 Idioma', help: 'Ajuda', settings: 'Configurações', chooseLanguage: 'Escolher idioma' }, language: { choose: 'Escolha seu idioma. A escolha ficará salva até você alterá-la novamente.', saved: 'Idioma salvo: {language}', invalid: 'Idioma não suportado.', current: 'Idioma atual: {language}' }, start: { text: 'Olá {name},\n\nEu sou {botName}, um player de música do Telegram em JavaScript.\n\n<b>Plataformas suportadas:</b> YouTube, Spotify, Apple Music, SoundCloud.\n\nUse os botões abaixo para ver comandos ou alterar o idioma.' } },
-  ar: { buttons: { support: 'الدعم', channel: 'القناة', user: 'المستخدم', admin: 'المشرف', playlist: 'قائمة التشغيل', owner: 'المالك', developer: 'المطور', back: 'رجوع', pause: '⏸ إيقاف مؤقت', skip: '⏭ تخطي', stop: '⏹ إيقاف', language: '🌐 اللغة', help: 'المساعدة', settings: 'الإعدادات', chooseLanguage: 'اختر اللغة' }, language: { choose: 'اختر لغتك. سيتم حفظ اختيارك حتى تغيّره مرة أخرى.', saved: 'تم حفظ اللغة: {language}', invalid: 'اللغة غير مدعومة.', current: 'اللغة الحالية: {language}' }, start: { text: 'مرحباً {name}،\n\nأنا {botName}، مشغل موسيقى Telegram مبني بـ JavaScript.\n\n<b>المنصات المدعومة:</b> YouTube, Spotify, Apple Music, SoundCloud.\n\nاستخدم الأزرار أدناه لاستعراض الأوامر أو تغيير اللغة.' } },
-  tr: { buttons: { support: 'Destek', channel: 'Kanal', user: 'Kullanıcı', admin: 'Admin', playlist: 'Playlist', owner: 'Sahip', developer: 'Geliştirici', back: 'Geri', pause: '⏸ Duraklat', skip: '⏭ Atla', stop: '⏹ Durdur', language: '🌐 Dil', help: 'Yardım', settings: 'Ayarlar', chooseLanguage: 'Dil seç' }, language: { choose: 'Lütfen dilini seç. Bu seçim tekrar değiştirene kadar saklanır.', saved: 'Dil kaydedildi: {language}', invalid: 'Desteklenmeyen dil.', current: 'Geçerli dil: {language}' }, start: { text: 'Merhaba {name},\n\nBen {botName}, JavaScript Telegram müzik oynatıcısıyım.\n\n<b>Desteklenen platformlar:</b> YouTube, Spotify, Apple Music, SoundCloud.\n\nKomutları görmek veya dili değiştirmek için aşağıdaki düğmeleri kullan.' } },
-  ko: { buttons: { support: '지원', channel: '채널', user: '사용자', admin: '관리자', playlist: '플레이리스트', owner: '소유자', developer: '개발자', back: '뒤로', pause: '⏸ 일시정지', skip: '⏭ 건너뛰기', stop: '⏹ 중지', language: '🌐 언어', help: '도움말', settings: '설정', chooseLanguage: '언어 선택' }, language: { choose: '언어를 선택하세요. 다시 변경할 때까지 저장됩니다.', saved: '언어가 저장되었습니다: {language}', invalid: '지원하지 않는 언어입니다.', current: '현재 언어: {language}' }, start: { text: '안녕하세요 {name},\n\n저는 JavaScript Telegram 음악 플레이어 {botName}입니다.\n\n<b>지원 플랫폼:</b> YouTube, Spotify, Apple Music, SoundCloud.\n\n아래 버튼으로 명령을 보거나 언어를 변경하세요.' } },
-  zh: { buttons: { support: '支持', channel: '频道', user: '用户', admin: '管理员', playlist: '播放列表', owner: '所有者', developer: '开发者', back: '返回', pause: '⏸ 暂停', skip: '⏭ 跳过', stop: '⏹ 停止', language: '🌐 语言', help: '帮助', settings: '设置', chooseLanguage: '选择语言' }, language: { choose: '请选择你的语言。设置会一直保存，直到你再次更改。', saved: '语言已保存：{language}', invalid: '不支持的语言。', current: '当前语言：{language}' }, start: { text: '你好 {name}，\n\n我是 {botName}，一个 JavaScript Telegram 音乐播放器。\n\n<b>支持的平台：</b> YouTube, Spotify, Apple Music, SoundCloud.\n\n使用下方按钮查看命令或更改语言。' } },
+    },
+    general: { chooseHelp: 'Pilih kategori bantuan:', openingHelp: 'Membuka menu bantuan...', unknownHelp: 'Kategori bantuan tidak dikenal.', useBack: 'Gunakan tombol di bawah untuk kembali.', user: 'Pengguna' },
+    playback: { nowPlaying: 'Sedang diputar', addedToQueue: 'Ditambahkan ke antrean: {count}', queueEmpty: 'Antrean kosong.', nothingPlaying: 'Tidak ada yang sedang diputar.', stopped: 'Pemutaran dihentikan dan antrean dibersihkan.', paused: 'Pemutaran dijeda.', resumed: 'Pemutaran dilanjutkan.', noTracks: 'Tidak ada lagu ditemukan.', playlistNotFound: '❌ Playlist tidak ditemukan.', playlistEmpty: '❌ Playlist kosong.', duplicate: 'Lagu sudah ada di antrean atau sedang diputar.', queueTitle: 'Antrean:', queueEnded: 'Musik telah selesai.', searchingDownload: '🔍 Mencari dan mengunduh...', chooseTrack: 'Pilih hasil YouTube:', downloadingSelected: '⬇️ Mengunduh trek terpilih: {title}', channel: 'Channel', views: 'Dilihat', upload: 'Diunggah', url: 'URL' },
+    misc: { pinging: 'Menguji...', privacy: 'Privasi: bot ini menyimpan pengaturan chat, data otorisasi, dan playlist yang diperlukan untuk pemutaran. Bot ini tidak menjual data pengguna.', notConfigured: 'belum dikonfigurasi' },
+    playlist: { notFound: '❌ Playlist tidak ditemukan.', empty: 'Kosong', none: 'Kamu belum memiliki playlist.' },
+    callbacks: { requesterOnly: 'Hanya pengguna yang request lagu ini yang bisa memakai tombol ini.' }
+  },
+  ru: {
+    buttons: {
+      support: 'Поддержка',
+      channel: 'Канал',
+      source: 'Исходный код',
+      addToGroup: 'Добавить в группу',
+      user: 'Пользователь',
+      admin: 'Админ',
+      playlist: 'Плейлист',
+      owner: 'Владелец',
+      developer: 'Разработчик',
+      back: 'Назад',
+      pause: '⏸ Пауза',
+      resume: '▶️ Возобновить',
+      skip: '⏭ Пропустить',
+      stop: '⏹ Стоп',
+      mute: '🔇 Выкл. звук',
+      unmute: '🔊 Вкл. звук',
+      addToPlaylist: '➕ Плейлист',
+      close: '✖️ Закрыть',
+      language: '🌐 Язык',
+      help: 'Помощь',
+      settings: 'Настройки',
+      chooseLanguage: 'Выбрать язык',
+      setupGuide: 'Инструкция',
+      musicFeatures: 'Функции музыки',
+      myPlaylists: 'Мои плейлисты',
+      premium: 'Premium',
+      playMusic: 'Играть музыку',
+      playVideo: 'Играть видео',
+      queue: 'Очередь',
+      groupSettings: 'Настройки группы',
+      djMode: 'Режим DJ'
+    },
+    language: { choose: 'Выберите язык. Выбор сохранится, пока вы не измените его снова.', saved: 'Язык сохранён: {language}', invalid: 'Язык не поддерживается.', current: 'Текущий язык: {language}' },
+    start: {
+      text: "👋 Привет, {name}!\nЭто <b>{botName}</b>!\n\n🎧 Бот для проигрывания музыки с отличными функциями.\n\nℹ️ Нажмите кнопку помощи для подробностей.",
+      private: {
+        title: 'Добро пожаловать в TgMusicBot',
+        greeting: 'Привет, <b>{name}</b>!',
+        description: 'Я могу помочь воспроизводить музыку и видео в голосовых чатах групп Telegram.',
+        stepsTitle: 'Как начать:',
+        stepAddBot: 'Добавьте бота в вашу группу',
+        stepAddAssistant: 'Добавьте ассистента/юзербота в группу',
+        stepStartVoice: 'Запустите голосовой чат',
+        stepPlay: 'Введите <code>/play название песни</code>',
+        featuresTitle: 'Основные функции:',
+        featurePlayback: 'Воспроизведение аудио и видео',
+        featurePlatforms: 'YouTube / Spotify / Apple Music / SoundCloud',
+        featurePlaylist: 'Личные плейлисты',
+        featureQueue: 'Управление очередью',
+        featurePremiumPreset: 'Премиум аудио пресеты',
+        featureDjMode: 'Режим DJ для групп',
+        chooseMenu: 'Выберите меню ниже:'
+      },
+      group: {
+        title: 'TgMusicBot активен в этой группе!',
+        description: 'Готов воспроизводить музыку в голосовом чате.',
+        statusTitle: 'Статус группы:',
+        queueLimit: 'Лимит очереди: <b>{limit}</b>',
+        djMode: 'Режим DJ: <b>{djMode}</b>',
+        preset: 'Пресет: <b>{preset}</b>',
+        premium: 'Премиум: <b>{premium}</b>',
+        quickHelp: 'Используйте кнопки ниже для быстрой помощи.',
+        voiceTip: 'Совет: Запустите голосовой чат перед воспроизведением.'
+      },
+      setup: {
+        title: 'Руководство по настройке TgMusicBot',
+        content: '1. <b>Добавьте бота в группу</b>\nСделайте бота администратором, если в группе ограничены сообщения/команды.\n\n2. <b>Добавьте ассистента</b>\nАссистент/юзербот должен быть в группе, чтобы войти в голосовой чат.\n\n3. <b>Запустите голосовой чат</b>\nЗапустите голосовой или видеочат в группе.\n\n4. <b>Включите песню</b>\nИспользуйте <code>/play название песни</code>.'
+      },
+      features: {
+        title: 'Функции музыки',
+        content: '• Воспроизведение аудио и видео\n• YouTube / Spotify / Apple Music / SoundCloud\n• Управление очередью\n• Личные плейлисты\n• Премиум аудио пресеты\n• Режим DJ для групп'
+      },
+      playlist: {
+        title: 'Личные плейлисты',
+        content: 'Используйте:\n<code>/cplist название</code>\n<code>/addtoplaylist id/url</code>\n<code>/myplaylists</code>\n<code>/deleteplaylist id</code>'
+      },
+      premium: {
+        title: 'Premium',
+        content: '• Увеличенные лимиты очереди\n• /qmove для перемещения элементов\n• /setpreset normal/bass/nightcore/vaporwave\n• /djmode on/off\n• /premiuminfo для проверки статуса'
+      },
+      groupPlay: {
+        title: 'Играть музыку',
+        content: 'Используйте:\n<code>/play название песни</code>\n\nПример:\n<code>/play faded alan walker</code>\n\nСовет:\nЗапустите голосовой чат перед началом воспроизведения.'
+      },
+      groupVideo: {
+        title: 'Играть видео',
+        content: 'Используйте:\n<code>/vplay название видео</code>\n\nПример:\n<code>/vplay faded alan walker official video</code>\n\nСовет:\nЗапустите голосовой/видеочат перед воспроизведением.'
+      },
+      groupQueue: {
+        title: 'Очередь',
+        content: 'Используйте:\n<code>/queue</code>\n\nЭта команда показывает список песен в очереди группы.'
+      },
+      groupSkip: {
+        title: 'Пропустить',
+        content: 'Используйте:\n<code>/skip</code>\n\nПропускает текущую песню.\nЕсли режим DJ активен, управлять могут только админы/авторизованные/премиум пользователи.'
+      },
+      groupDjMode: {
+        title: 'Режим DJ',
+        content: 'Используйте:\n<code>/djmode on</code>\n<code>/djmode off</code>\n\nПри активации управление (skip, stop, seek, volume, shuffle, qmove) доступно только админам/авторизованным/премиум пользователям.'
+      },
+      settings: {
+        title: 'Настройки',
+        content: 'Используйте <code>/settings</code> для открытия меню настроек бота.'
+      },
+      closed: 'Закрыто.',
+      back: 'Назад',
+      close: 'Закрыть'
+    }
+  },
+  ja: {
+    buttons: {
+      support: 'サポート',
+      channel: 'チャンネル',
+      source: 'ソースコード',
+      addToGroup: 'グループに追加',
+      user: 'ユーザー',
+      admin: '管理者',
+      playlist: 'プレイリスト',
+      owner: '所有者',
+      developer: '開発者',
+      back: '戻る',
+      pause: '⏸ 一時停止',
+      resume: '▶️ 再開',
+      skip: '⏭ スキップ',
+      stop: '⏹ 停止',
+      mute: '🔇 ミュート',
+      unmute: '🔊 ミュート解除',
+      addToPlaylist: '➕ プレイリスト',
+      close: '✖️ 閉じる',
+      language: '🌐 言語',
+      help: 'ヘルプ',
+      settings: '設定',
+      chooseLanguage: '言語を選択',
+      setupGuide: 'セットアップガイド',
+      musicFeatures: '音楽機能',
+      myPlaylists: 'マイプレイリスト',
+      premium: 'Premium',
+      playMusic: '音楽を再生',
+      playVideo: '動画を再生',
+      queue: 'キュー',
+      groupSettings: 'グループ設定',
+      djMode: 'DJモード'
+    },
+    language: { choose: '言語を選択してください。設定は再度変更するまで保存されます。', saved: '言語を保存しました: {language}', invalid: '対応していない言語です。', current: '現在の言語: {language}' },
+    start: {
+      text: "👋 こんにちは、{name}さん！\n私は <b>{botName}</b> です！\n\n🎧 多くの素晴らしい機能を持った、音楽プレイヤーボットです。\n\nℹ️ 詳細についてはヘルプボタンをクリックしてください。",
+      private: {
+        title: 'TgMusicBot へようこそ',
+        greeting: 'こんにちは、<b>{name}</b>さん！',
+        description: 'Telegramグループの音声チャットで音楽や動画を再生できます。',
+        stepsTitle: '開始手順:',
+        stepAddBot: 'ボットをグループに追加する',
+        stepAddAssistant: 'アシスタント/ユーザーボットをグループに追加する',
+        stepStartVoice: '音声チャットを開始する',
+        stepPlay: '<code>/play 曲名</code> と入力する',
+        featuresTitle: '主な機能:',
+        featurePlayback: 'オーディオ＆ビデオ再生',
+        featurePlatforms: 'YouTube / Spotify / Apple Music / SoundCloud',
+        featurePlaylist: '個人プレイリスト',
+        featureQueue: 'キューコントロール',
+        featurePremiumPreset: 'プレミアムオーディオプリセット',
+        featureDjMode: 'グループ用DJモード',
+        chooseMenu: '以下のメニューを選択してください:'
+      },
+      group: {
+        title: 'TgMusicBot はこのグループで有効です！',
+        description: '音声チャットでの再生準備が完了しました。',
+        statusTitle: 'グループステータス:',
+        queueLimit: 'キュー制限: <b>{limit}</b>',
+        djMode: 'DJモード: <b>{djMode}</b>',
+        preset: 'プリセット: <b>{preset}</b>',
+        premium: 'プレミアム: <b>{premium}</b>',
+        quickHelp: 'クイックヘルプには以下のボタンを使用してください。',
+        voiceTip: 'ヒント: 再生する前に音声チャットを開始してください。'
+      },
+      setup: {
+        title: 'TgMusicBot セットアップガイド',
+        content: '1. <b>ボットをグループに追加する</b>\nグループがメッセージやコマンドを制限している場合は、ボットを管理者に昇格させてください。\n\n2. <b>アシスタントを追加する</b>\n音声チャットに参加するにはアシスタント/ユーザーボットがグループにいる必要があります。\n\n3. <b>音声チャットを開始する</b>\nグループで音声チャット/ビデオチャットを開始します。\n\n4. <b>曲を再生する</b>\n<code>/play 曲名</code> を使用します。'
+      },
+      features: {
+        title: '音楽機能',
+        content: '• オーディオ＆ビデオ再生\n• YouTube / Spotify / Apple Music / SoundCloud\n• キューコントロール\n• 個人プレイリスト\n• プレミアムオーディオプリセット\n• グループ用DJモード'
+      },
+      playlist: {
+        title: '個人プレイリスト',
+        content: '使い方:\n<code>/cplist プレイリスト名</code>\n<code>/addtoplaylist id/url</code>\n<code>/myplaylists</code>\n<code>/deleteplaylist id</code>'
+      },
+      premium: {
+        title: 'Premium',
+        content: '• キュー上限の拡張\n• キュー項目を移動する /qmove\n• /setpreset normal/bass/nightcore/vaporwave\n• /djmode on/off\n• /premiuminfo でステータスを確認'
+      },
+      groupPlay: {
+        title: '音楽を再生',
+        content: '使い方:\n<code>/play 曲名</code>\n\n例:\n<code>/play faded alan walker</code>\n\nヒント:\n再生する前に音声チャットを開始してください。'
+      },
+      groupVideo: {
+        title: '動画を再生',
+        content: '使い方:\n<code>/vplay 動画名</code>\n\n例:\n<code>/vplay faded alan walker official video</code>\n\nヒント:\n再生する前に音声/ビデオチャットを開始してください。'
+      },
+      groupQueue: {
+        title: 'キュー',
+        content: '使い方:\n<code>/queue</code>\n\nグループキューに現在ある曲の一覧を表示します。'
+      },
+      groupSkip: {
+        title: 'スキップ',
+        content: '使い方:\n<code>/skip</code>\n\n現在再生中の曲をスキップします。\nDJモードが有効な場合、管理者/認証ユーザー/プレミアムユーザーのみこの操作を行えます。'
+      },
+      groupDjMode: {
+        title: 'DJモード',
+        content: '使い方:\n<code>/djmode on</code>\n<code>/djmode off</code>\n\n有効な場合、スキップ、停止、シーク、音量、シャッフル、qmoveなどの操作は、管理者/認証ユーザー/プレミアムユーザーのみに制限されます。'
+      },
+      settings: {
+        title: '設定',
+        content: '<code>/settings</code> コマンドを使用して、ボットの設定メニューを開きます。'
+      },
+      closed: '閉じました。',
+      back: '戻る',
+      close: '閉じる'
+    }
+  },
+  hi: {
+    buttons: {
+      support: 'सहायता',
+      channel: 'चैनल',
+      source: 'सोर्स कोड',
+      addToGroup: 'ग्रुप में जोड़ें',
+      user: 'यूज़र',
+      admin: 'एडमिन',
+      playlist: 'प्लेलिस्ट',
+      owner: 'मालिक',
+      developer: 'डेवलपर',
+      back: 'वापस',
+      pause: '⏸ रोकें',
+      resume: '▶️ फिर शुरू',
+      skip: '⏭ छोड़ें',
+      stop: '⏹ बंद',
+      mute: '🔇 म्यूट',
+      unmute: '🔊 अनम्यूट',
+      addToPlaylist: '➕ प्लेलिस्ट',
+      close: '✖️ बंद करें',
+      language: '🌐 भाषा',
+      help: 'मदद',
+      settings: 'सेटिंग्स',
+      chooseLanguage: 'भाषा चुनें',
+      setupGuide: 'सेटअप गाइड',
+      musicFeatures: 'संगीत विशेषताएं',
+      myPlaylists: 'मेरी प्लेलिस्ट',
+      premium: 'Premium',
+      playMusic: 'संगीत चलाएं',
+      playVideo: '영상 चलाएं',
+      queue: 'क्यू',
+      groupSettings: 'ग्रुप सेटिंग्स',
+      djMode: 'DJ मोड'
+    },
+    language: { choose: 'कृपया अपनी भाषा चुनें। यह सेटिंग तब तक सेव रहेगी जब तक आप इसे फिर से नहीं बदलते।', saved: 'भाषा सेव हुई: {language}', invalid: 'यह भाषा समर्थित नहीं है।', current: 'वर्तमान भाषा: {language}' },
+    start: {
+      text: "👋 नमस्ते {name},\nमैं <b>{botName}</b> हूँ!\n\n🎧 बेहतरीन और उपयोगी सुविधाओं वाला एक संगीत प्लेयर बॉट।\n\nℹ️ अधिक जानकारी के लिए मदद बटन पर क्लिक करें।",
+      private: {
+        title: 'TgMusicBot में आपका स्वागत है',
+        greeting: 'नमस्ते, <b>{name}</b>!',
+        description: 'मैं टेलीग्राम ग्रुप वॉइस चैट में संगीत और वीडियो चलाने में मदद कर सकता हूँ।',
+        stepsTitle: 'शुरू कैसे करें:',
+        stepAddBot: 'बॉट को अपने ग्रुप में जोड़ें',
+        stepAddAssistant: 'सहायक/यूज़रबॉट को ग्रुप में जोड़ें',
+        stepStartVoice: 'वॉइस चैट शुरू करें',
+        stepPlay: '<code>/play गाने का नाम</code> टाइप करें',
+        featuresTitle: 'मुख्य विशेषताएं:',
+        featurePlayback: 'ऑडियो और वीडियो प्लेबैक',
+        featurePlatforms: 'YouTube / Spotify / Apple Music / SoundCloud',
+        featurePlaylist: 'व्यक्तिगत प्लेलिस्ट',
+        featureQueue: 'क्यू नियंत्रण',
+        featurePremiumPreset: 'प्रीमियम ऑडियो प्रीसेट',
+        featureDjMode: 'ग्रुप्स के लिए DJ मोड',
+        chooseMenu: 'नीचे दिए गए मेनू में से चुनें:'
+      },
+      group: {
+        title: 'TgMusicBot इस ग्रुप में सक्रिय है!',
+        description: 'वॉइस चैट में संगीत चलाने के लिए तैयार।',
+        statusTitle: 'ग्रुप की स्थिति:',
+        queueLimit: 'क्यू सीमा: <b>{limit}</b>',
+        djMode: 'DJ मोड: <b>{djMode}</b>',
+        preset: 'प्रीसेट: <b>{preset}</b>',
+        premium: 'प्रीमियम: <b>{premium}</b>',
+        quickHelp: 'त्वरित मदद के लिए नीचे दिए गए बटनों का उपयोग करें।',
+        voiceTip: 'सलाह: संगीत चलाने से पहले वॉइस चैट शुरू करें।'
+      },
+      setup: {
+        title: 'TgMusicBot सेटअप गाइड',
+        content: '1. <b>बॉट को अपने ग्रुप में जोड़ें</b>\nयदि ग्रुप संदेशों/कमांडों को प्रतिबंधित करता है तो बॉट को एडमिन बनाएं।\n\n2. <b>सहायक जोड़ें</b>\nवॉइस चैट में शामिल होने के लिए सहायक/यूज़रबॉट ग्रुप में होना चाहिए।\n\n3. <b>वॉइस चैट शुरू करें</b>\nग्रुप में वॉइस चैट/वीडियो चैट शुरू करें।\n\n4. <b>गाना चलाएं</b>\n<code>/play गाने का शीर्षक</code> उपयोग करें।'
+      },
+      features: {
+        title: 'संगीत विशेषताएं',
+        content: '• ऑडियो और वीडियो प्लेबैक\n• YouTube / Spotify / Apple Music / SoundCloud\n• क्यू नियंत्रण\n• व्यक्तिगत प्लेलिस्ट\n• प्रीमियम ऑडियो प्रीसेट\n• ग्रुप्स के लिए DJ मोड'
+      },
+      playlist: {
+        title: 'व्यक्तिगत प्लेलिस्ट',
+        content: 'उपयोग करें:\n<code>/cplist नाम</code>\n<code>/addtoplaylist id/url</code>\n<code>/myplaylists</code>\n<code>/deleteplaylist id</code>'
+      },
+      premium: {
+        title: 'Premium',
+        content: '• बड़ी क्यू सीमाएं\n• क्यू आइटम ले जाने के लिए /qmove\n• /setpreset normal/bass/nightcore/vaporwave\n• /djmode on/off\n• स्थिति की जांच के लिए /premiuminfo'
+      },
+      groupPlay: {
+        title: 'संगीत चलाएं',
+        content: 'उपयोग करें:\n<code>/play गाने का शीर्षक</code>\n\nउदाहरण:\n<code>/play faded alan walker</code>\n\nसलाह:\nसंगीत चलाने से पहले वॉइस चैट शुरू करें।'
+      },
+      groupVideo: {
+        title: 'वीडियो चलाएं',
+        content: 'उपयोग करें:\n<code>/vplay वीडियो का शीर्षक</code>\n\nउदाहरण:\n<code>/vplay faded alan walker official video</code>\n\nसलाह:\nवीडियो चलाने से पहले वॉइस चैट/वीडियो चैट शुरू करें।'
+      },
+      groupQueue: {
+        title: 'क्यू',
+        content: 'उपयोग करें:\n<code>/queue</code>\n\nयह कमांड वर्तमान में ग्रुप क्यू में मौजूद गानों की सूची प्रदर्शित करता है।'
+      },
+      groupSkip: {
+        title: 'छोड़ें (Skip)',
+        content: 'उपयोग करें:\n<code>/skip</code>\n\nयह कमांड वर्तमान में चल रहे गाने को छोड़ देता है।\nयदि DJ मोड सक्रिय है, तो केवल एडमिन/सत्यापित/प्रीमियम यूज़र ही इसका उपयोग कर सकते हैं।'
+      },
+      groupDjMode: {
+        title: 'DJ मोड',
+        content: 'उपयोग करें:\n<code>/djmode on</code>\n<code>/djmode off</code>\n\nसक्रिय होने पर, स्किप, स्टॉप, सीक, वॉल्यूम, शफ़ल और qmove जैसे नियंत्रण केवल एडमिन/सत्यापित/प्रीमियम यूज़र द्वारा ही उपयोग किए जा सकते हैं।'
+      },
+      settings: {
+        title: 'सेटिंग्स',
+        content: 'बॉट सेटिंग्स मेनू खोलने के लिए <code>/settings</code> कमांड का उपयोग करें।'
+      },
+      closed: 'बंद।',
+      back: 'वापस',
+      close: 'बंद करें'
+    }
+  },
+  it: {
+    buttons: {
+      support: 'Supporto',
+      channel: 'Canale',
+      source: 'Codice sorgente',
+      addToGroup: 'Aggiungimi al gruppo',
+      user: 'Utente',
+      admin: 'Admin',
+      playlist: 'Playlist',
+      owner: 'Proprietario',
+      developer: 'Sviluppatore',
+      back: 'Indietro',
+      pause: '⏸ Pausa',
+      resume: '▶️ Riprendi',
+      skip: '⏭ Salta',
+      stop: '⏹ Stop',
+      mute: '🔇 Muta',
+      unmute: '🔊 Riattiva',
+      addToPlaylist: '➕ Playlist',
+      close: '✖️ Chiudi',
+      language: '🌐 Lingua',
+      help: 'Aiuto',
+      settings: 'Impostazioni',
+      chooseLanguage: 'Scegli lingua',
+      setupGuide: 'Guida configurazione',
+      musicFeatures: 'Funzioni musicali',
+      myPlaylists: 'Mie playlist',
+      premium: 'Premium',
+      playMusic: 'Riproduci musica',
+      playVideo: 'Riproduci video',
+      queue: 'Coda',
+      groupSettings: 'Impostazioni gruppo',
+      djMode: 'Modalità DJ'
+    },
+    language: { choose: 'Scegli la tua lingua. La scelta resterà salvata finché non la cambierai di nuovo.', saved: 'Lingua salvata: {language}', invalid: 'Lingua non supportata.', current: 'Lingua attuale: {language}' },
+    start: {
+      text: "👋 Ehi {name},\nQuesto è <b>{botName}</b>!\n\n🎧 Un bot per la riproduzione musicale con alcune fantastiche funzioni.\n\nℹ️ Clicca sul pulsante aiuto per maggiori informazioni.",
+      private: {
+        title: 'Benvenuto in TgMusicBot',
+        greeting: 'Ciao, <b>{name}</b>!',
+        description: 'Posso aiutarti a riprodurre musica e video nelle chat vocali dei gruppi Telegram.',
+        stepsTitle: 'Come iniziare:',
+        stepAddBot: 'Aggiungi il bot al tuo gruppo',
+        stepAddAssistant: "Aggiungi l'assistente/userbot al gruppo",
+        stepStartVoice: 'Avvia la chat vocale',
+        stepPlay: 'Scrivi <code>/play nome della canzone</code>',
+        featuresTitle: 'Funzionalità principali:',
+        featurePlayback: 'Riproduzione audio e video',
+        featurePlatforms: 'YouTube / Spotify / Apple Music / SoundCloud',
+        featurePlaylist: 'Playlist personali',
+        featureQueue: 'Controllo della coda',
+        featurePremiumPreset: 'Preset audio premium',
+        featureDjMode: 'Modalità DJ per gruppi',
+        chooseMenu: 'Scegli un menu qui sotto:'
+      },
+      group: {
+        title: 'TgMusicBot è attivo in questo gruppo!',
+        description: 'Pronto a riprodurre musica in chat vocale.',
+        statusTitle: 'Stato del gruppo:',
+        queueLimit: 'Limite coda: <b>{limit}</b>',
+        djMode: 'Modalità DJ: <b>{djMode}</b>',
+        preset: 'Preset: <b>{preset}</b>',
+        premium: 'Premium: <b>{premium}</b>',
+        quickHelp: 'Usa i pulsanti qui sotto per un aiuto rapido.',
+        voiceTip: 'Suggerimento: Avvia la chat vocale prima di riprodurre musica.'
+      },
+      setup: {
+        title: 'Guida alla configurazione di TgMusicBot',
+        content: "1. <b>Aggiungi il bot al tuo gruppo</b>\nPromuovi il bot ad amministratore se il gruppo limita messaggi/comandi.\n\n2. <b>Aggiungi l'assistente</b>\nL'assistente/userbot deve essere nel gruppo per accedere alla chat vocale.\n\n3. <b>Avvia la chat vocale</b>\nAvvia la chat vocale o video nel gruppo.\n\n4. <b>Riproduci un brano</b>\nUsa <code>/play titolo canzone</code>."
+      },
+      features: {
+        title: 'Funzioni musicali',
+        content: '• Riproduzione audio e video\n• YouTube / Spotify / Apple Music / SoundCloud\n• Controllo della coda\n• Playlist personali\n• Preset audio premium\n• Modalità DJ per gruppi'
+      },
+      playlist: {
+        title: 'Playlist personali',
+        content: 'Uso:\n<code>/cplist nome</code>\n<code>/addtoplaylist id/url</code>\n<code>/myplaylists</code>\n<code>/deleteplaylist id</code>'
+      },
+      premium: {
+        title: 'Premium',
+        content: '• Limiti di coda più alti\n• /qmove per spostare gli elementi della coda\n• /setpreset normal/bass/nightcore/vaporwave\n• /djmode on/off\n• /premiuminfo per controllare lo stato'
+      },
+      groupPlay: {
+        title: 'Riproduci musica',
+        content: 'Uso:\n<code>/play titolo canzone</code>\n\nEsempio:\n<code>/play faded alan walker</code>\n\nSuggerimento:\nAvvia la chat vocale prima di riproduzione musica.'
+      },
+      groupVideo: {
+        title: 'Riproduci video',
+        content: 'Uso:\n<code>/vplay titolo video</code>\n\nEsempio:\n<code>/vplay faded alan walker official video</code>\n\nSuggerimento:\nAvvia la chat vocale/video prima di riprodurre video.'
+      },
+      groupQueue: {
+        title: 'Coda',
+        content: 'Uso:\n<code>/queue</code>\n\nQuesto comando mostra la lista dei brani attualmente in coda nel gruppo.'
+      },
+      groupSkip: {
+        title: 'Salta',
+        content: 'Uso:\n<code>/skip</code>\n\nQuesto comando salta la canzone attualmente in riproduzione.\nSe la modalità DJ è attiva, solo gli admin/utenti autorizzati/premium possono usare questo comando.'
+      },
+      groupDjMode: {
+        title: 'Modalità DJ',
+        content: 'Uso:\n<code>/djmode on</code>\n<code>/djmode off</code>\n\nQuando attiva, controlli come skip, stop, seek, volume, shuffle e qmove possono essere usati solo da admin/utenti autorizzati/premium.'
+      },
+      settings: {
+        title: 'Impostazioni',
+        content: 'Usa il comando <code>/settings</code> per aprire il menu delle impostazioni del bot.'
+      },
+      closed: 'Chiuso.',
+      back: 'Indietro',
+      close: 'Chiudi'
+    }
+  },
+  es: {
+    buttons: {
+      support: 'Soporte',
+      channel: 'Canal',
+      source: 'Código fuente',
+      addToGroup: 'Añadir al grupo',
+      user: 'Usuario',
+      admin: 'Admin',
+      playlist: 'Playlist',
+      owner: 'Dueño',
+      developer: 'Desarrollador',
+      back: 'Atrás',
+      pause: '⏸ Pausa',
+      resume: '▶️ Reanudar',
+      skip: '⏭ Saltar',
+      stop: '⏹ Detener',
+      mute: '🔇 Silenciar',
+      unmute: '🔊 Activar sonido',
+      addToPlaylist: '➕ Playlist',
+      close: '✖️ Cerrar',
+      language: '🌐 Idioma',
+      help: 'Ayuda',
+      settings: 'Ajustes',
+      chooseLanguage: 'Elegir idioma',
+      setupGuide: 'Guía de instalación',
+      musicFeatures: 'Funciones de música',
+      myPlaylists: 'Mis playlists',
+      premium: 'Premium',
+      playMusic: 'Reproducir música',
+      playVideo: 'Reproducir video',
+      queue: 'Cola',
+      groupSettings: 'Ajustes de grupo',
+      djMode: 'Modo DJ'
+    },
+    language: { choose: 'Elige tu idioma. Tu elección se guardará hasta que la cambies de nuevo.', saved: 'Idioma guardado: {language}', invalid: 'Idioma no compatible.', current: 'Idioma actual: {language}' },
+    start: {
+      text: "👋 ¡Hola {name}!\nSoy <b>{botName}</b>.\n\n🎧 Un bot de música con funciones excelentes y útiles.\n\nℹ️ Presiona el botón de ayuda para más información.",
+      private: {
+        title: 'Bienvenido a TgMusicBot',
+        greeting: '¡Hola, <b>{name}</b>!',
+        description: 'Puedo ayudarte a reproducir música y videos en los chats de voz de grupos de Telegram.',
+        stepsTitle: 'Cómo empezar:',
+        stepAddBot: 'Añade el bot a tu grupo',
+        stepAddAssistant: 'Añade el asistente/userbot al grupo',
+        stepStartVoice: 'Inicia el chat de voz',
+        stepPlay: 'Escribe <code>/play nombre de la canción</code>',
+        featuresTitle: 'Características principales:',
+        featurePlayback: 'Reproducción de audio y video',
+        featurePlatforms: 'YouTube / Spotify / Apple Music / SoundCloud',
+        featurePlaylist: 'Playlists personales',
+        featureQueue: 'Control de cola',
+        featurePremiumPreset: 'Ajustes preestablecidos de audio premium',
+        featureDjMode: 'Modo DJ para grupos',
+        chooseMenu: 'Elige un menú de abajo:'
+      },
+      group: {
+        title: '¡TgMusicBot está activo en este grupo!',
+        description: 'Listo para reproducir música en el chat de voz.',
+        statusTitle: 'Estado del grupo:',
+        queueLimit: 'Límite de cola: <b>{limit}</b>',
+        djMode: 'Modo DJ: <b>{djMode}</b>',
+        preset: 'Preset: <b>{preset}</b>',
+        premium: 'Premium: <b>{premium}</b>',
+        quickHelp: 'Usa los botones de abajo para ayuda rápida.',
+        voiceTip: 'Consejo: Inicia el chat de voz antes de reproducir música.'
+      },
+      setup: {
+        title: 'Guía de instalación de TgMusicBot',
+        content: '1. <b>Añade el bot a tu grupo</b>\nPromueve el bot a administrador si el grupo restringe mensajes/comandos.\n\n2. <b>Añade el asistente</b>\nEl asistente/userbot debe estar en el grupo para unirse al chat de voz.\n\n3. <b>Inicia el chat de voz</b>\nInicia el chat de voz/video en el grupo.\n\n4. <b>Reproduce una canción</b>\nUsa <code>/play título canción</code>.'
+      },
+      features: {
+        title: 'Funciones de música',
+        content: '• Reproducción de audio y video\n• YouTube / Spotify / Apple Music / SoundCloud\n• Control de cola\n• Playlists personales\n• Ajustes preestablecidos de audio premium\n• Modo DJ para grupos'
+      },
+      playlist: {
+        title: 'Playlists personales',
+        content: 'Uso:\n<code>/cplist nombre</code>\n<code>/addtoplaylist id/url</code>\n<code>/myplaylists</code>\n<code>/deleteplaylist id</code>'
+      },
+      premium: {
+        title: 'Premium',
+        content: '• Límites de cola más grandes\n• /qmove para mover elementos de la cola\n• /setpreset normal/bass/nightcore/vaporwave\n• /djmode on/off\n• /premiuminfo para comprobar estado'
+      },
+      groupPlay: {
+        title: 'Reproducir música',
+        content: 'Uso:\n<code>/play título canción</code>\n\nEjemplo:\n<code>/play faded alan walker</code>\n\nConsejo:\nInicia el chat de voz antes de reproducir música.'
+      },
+      groupVideo: {
+        title: 'Reproducir video',
+        content: 'Uso:\n<code>/vplay título video</code>\n\nEjemplo:\n<code>/vplay faded alan walker video oficial</code>\n\nConsejo:\nInicia el chat de voz/video antes de reproducir video.'
+      },
+      groupQueue: {
+        title: 'Cola',
+        content: 'Uso:\n<code>/queue</code>\n\nEste comando muestra la lista de canciones en la cola del grupo.'
+      },
+      groupSkip: {
+        title: 'Saltar',
+        content: 'Uso:\n<code>/skip</code>\n\nEste comando salta la canción en reproducción.\nSi el Modo DJ está activo, solo administradores/usuarios autorizados/premium pueden usar este control.'
+      },
+      groupDjMode: {
+        title: 'Modo DJ',
+        content: 'Uso:\n<code>/djmode on</code>\n<code>/djmode off</code>\n\nCuando está activo, los controles como skip, stop, seek, volume, shuffle y qmove solo pueden ser usados por administradores/usuarios autorizados/premium.'
+      },
+      settings: {
+        title: 'Ajustes',
+        content: 'Usa el comando <code>/settings</code> para abrir el menú de ajustes del bot.'
+      },
+      closed: 'Cerrado.',
+      back: 'Atrás',
+      close: 'Cerrar'
+    }
+  },
+  fr: {
+    buttons: {
+      support: 'Support',
+      channel: 'Canal',
+      source: 'Code source',
+      addToGroup: 'Ajouter au groupe',
+      user: 'Utilisateur',
+      admin: 'Admin',
+      playlist: 'Playlist',
+      owner: 'Propriétaire',
+      developer: 'Développeur',
+      back: 'Retour',
+      pause: '⏸ Pause',
+      resume: '▶️ Reprendre',
+      skip: '⏭ Passer',
+      stop: '⏹ Stop',
+      mute: '🔇 Muet',
+      unmute: '🔊 Réactiver le son',
+      addToPlaylist: '➕ Playlist',
+      close: '✖️ Fermer',
+      language: '🌐 Langue',
+      help: 'Aide',
+      settings: 'Paramètres',
+      chooseLanguage: 'Choisir la langue',
+      setupGuide: "Guide d'installation",
+      musicFeatures: 'Fonctions de musique',
+      myPlaylists: 'Mes playlists',
+      premium: 'Premium',
+      playMusic: 'Lancer la musique',
+      playVideo: 'Lancer la vidéo',
+      queue: "File d'attente",
+      groupSettings: 'Paramètres du groupe',
+      djMode: 'Mode DJ'
+    },
+    language: { choose: 'Choisissez votre langue. Elle restera enregistrée jusqu’à ce que vous la changiez.', saved: 'Langue enregistrée : {language}', invalid: 'Langue non prise en charge.', current: 'Langue actuelle : {language}' },
+    start: {
+      text: "👋 Salut {name},\nIci <b>{botName}</b> !\n\n🎧 Un bot de lecture de musique avec des fonctionnalités super et utiles.\n\nℹ️ Cliquez sur le bouton d'aide pour en savoir plus.",
+      private: {
+        title: 'Bienvenue sur TgMusicBot',
+        greeting: 'Salut, <b>{name}</b> !',
+        description: 'Je peux vous aider à lire de la musique et des vidéos dans les chats vocaux de groupe Telegram.',
+        stepsTitle: 'Comment commencer :',
+        stepAddBot: 'Ajoutez le bot à votre groupe',
+        stepAddAssistant: "Ajoutez l'assistant/userbot au groupe",
+        stepStartVoice: 'Démarrez le chat vocal',
+        stepPlay: 'Tapez <code>/play nom de la chanson</code>',
+        featuresTitle: 'Fonctionnalités principales :',
+        featurePlayback: 'Lecture audio et vidéo',
+        featurePlatforms: 'YouTube / Spotify / Apple Music / SoundCloud',
+        featurePlaylist: 'Playlists personnelles',
+        featureQueue: "Contrôle de la file d'attente",
+        featurePremiumPreset: 'Préréglages audio premium',
+        featureDjMode: 'Mode DJ pour les groupes',
+        chooseMenu: 'Choisissez un menu ci-dessous :'
+      },
+      group: {
+        title: 'TgMusicBot est actif dans ce groupe !',
+        description: 'Prêt à lire de la musique dans le chat vocal.',
+        statusTitle: 'Statut du groupe :',
+        queueLimit: 'Limite de file : <b>{limit}</b>',
+        djMode: 'Mode DJ : <b>{djMode}</b>',
+        preset: 'Preset : <b>{preset}</b>',
+        premium: 'Premium : <b>{premium}</b>',
+        quickHelp: 'Utilisez les boutons ci-dessous pour une aide rapide.',
+        voiceTip: 'Conseil : Démarrez le chat vocal avant de lancer la musique.'
+      },
+      setup: {
+        title: "Guide d'installation de TgMusicBot",
+        content: "1. <b>Ajoutez le bot à votre groupe</b>\nPromouvez le bot comme admin si le groupe restreint les messages/commandes.\n\n2. <b>Ajoutez l'assistant</b>\nL'assistant/userbot doit être dans le groupe pour rejoindre le chat vocal.\n\n3. <b>Démarrez le chat vocal</b>\nDémarrez le chat vocal/vidéo dans le groupe.\n\n4. <b>Jouez une chanson</b>\nUtilisez <code>/play titre de la chanson</code>."
+      },
+      features: {
+        title: 'Fonctions de musique',
+        content: "• Lecture audio et vidéo\n• YouTube / Spotify / Apple Music / SoundCloud\n• Contrôle de la file d'attente\n• Playlists personnelles\n• Préréglages audio premium\n• Mode DJ pour les groupes"
+      },
+      playlist: {
+        title: 'Playlists personnelles',
+        content: 'Utilisation :\n<code>/cplist nom</code>\n<code>/addtoplaylist id/url</code>\n<code>/myplaylists</code>\n<code>/deleteplaylist id</code>'
+      },
+      premium: {
+        title: 'Premium',
+        content: "• Limites de file d'attente plus grandes\n• /qmove pour déplacer les éléments de la file\n• /setpreset normal/bass/nightcore/vaporwave\n• /djmode on/off\n• /premiuminfo pour vérifier le statut"
+      },
+      groupPlay: {
+        title: 'Lancer la musique',
+        content: 'Utilisation :\n<code>/play titre de la chanson</code>\n\nExemple :\n<code>/play faded alan walker</code>\n\nConseil :\nDémarrez le chat vocal avant de lancer la musique.'
+      },
+      groupVideo: {
+        title: 'Lancer la vidéo',
+        content: 'Utilisation :\n<code>/vplay titre de la vidéo</code>\n\nExemple :\n<code>/vplay faded alan walker official video</code>\n\nConseil :\nDémarrez le chat vocal/vidéo avant de lancer la vidéo.'
+      },
+      groupQueue: {
+        title: "File d'attente",
+        content: "Utilisation :\n<code>/queue</code>\n\nCette commande affiche la liste des chansons actuellement dans la file d'attente du groupe."
+      },
+      groupSkip: {
+        title: 'Passer',
+        content: 'Utilisation :\n<code>/skip</code>\n\nCette commande passe la chanson en cours.\nSi le mode DJ est actif, seuls les admins/utilisateurs autorisés/premium peuvent utiliser ce contrôle.'
+      },
+      groupDjMode: {
+        title: 'Mode DJ',
+        content: "Utilisation :\n<code>/djmode on</code>\n<code>/djmode off</code>\n\nLorsqu'il est actif, les commandes comme skip, stop, seek, volume, shuffle, et qmove sont réservées aux admins/utilisateurs autorisés/premium."
+      },
+      settings: {
+        title: 'Paramètres',
+        content: 'Utilisez la commande <code>/settings</code> pour ouvrir le menu des paramètres du bot.'
+      },
+      closed: 'Fermé.',
+      back: 'Retour',
+      close: 'Fermer'
+    }
+  },
+  de: {
+    buttons: {
+      support: 'Support',
+      channel: 'Kanal',
+      source: 'Quellcode',
+      addToGroup: 'In Gruppe hinzufügen',
+      user: 'Nutzer',
+      admin: 'Admin',
+      playlist: 'Playlist',
+      owner: 'Besitzer',
+      developer: 'Entwickler',
+      back: 'Zurück',
+      pause: '⏸ Pause',
+      resume: '▶️ Fortsetzen',
+      skip: '⏭ Überspringen',
+      stop: '⏹ Stopp',
+      mute: '🔇 Stumm',
+      unmute: '🔊 Ton an',
+      addToPlaylist: '➕ Playlist',
+      close: '✖️ Schließen',
+      language: '🌐 Sprache',
+      help: 'Hilfe',
+      settings: 'Einstellungen',
+      chooseLanguage: 'Sprache wählen',
+      setupGuide: 'Setup-Anleitung',
+      musicFeatures: 'Musik-Funktionen',
+      myPlaylists: 'Meine Playlists',
+      premium: 'Premium',
+      playMusic: 'Musik abspielen',
+      playVideo: 'Video abspielen',
+      queue: 'Warteschlange',
+      groupSettings: 'Gruppen-Einstellungen',
+      djMode: 'DJ-Modus'
+    },
+    language: { choose: 'Bitte wähle deine Sprache. Die Auswahl bleibt gespeichert, bis du sie wieder änderst.', saved: 'Sprache gespeichert: {language}', invalid: 'Nicht unterstützte Sprache.', current: 'Aktuelle Sprache: {language}' },
+    start: {
+      text: "Hallo {name},\nich bin {botName}, ein JavaScript-Telegram-Musikplayer.\n\n<b>Unterstützte Plattformen:</b> YouTube, Spotify, Apple Music, SoundCloud.\n\nNutze die Buttons unten, um Befehle zu sehen oder die Sprache zu ändern.",
+      private: {
+        title: 'Willkommen bei TgMusicBot',
+        greeting: 'Hallo, <b>{name}</b>!',
+        description: 'Ich kann helfen, Musik und Videos in Telegram-Gruppen-Sprachchats abzuspielen.',
+        stepsTitle: 'Erste Schritte:',
+        stepAddBot: 'Füge den Bot zu deiner Gruppe hinzu',
+        stepAddAssistant: 'Füge den Assistenten/Userbot zur Gruppe hinzu',
+        stepStartVoice: 'Starte den Sprachchat',
+        stepPlay: 'Schreibe <code>/play Songname</code>',
+        featuresTitle: 'Hauptfunktionen:',
+        featurePlayback: 'Audio- & Videowiedergabe',
+        featurePlatforms: 'YouTube / Spotify / Apple Music / SoundCloud',
+        featurePlaylist: 'Persönliche Playlists',
+        featureQueue: 'Steuerung der Warteschlange',
+        featurePremiumPreset: 'Premium-Audio-Presets',
+        featureDjMode: 'DJ-Modus für Gruppen',
+        chooseMenu: 'Wähle unten ein Menü aus:'
+      },
+      group: {
+        title: 'TgMusicBot ist in dieser Gruppe aktiv!',
+        description: 'Bereit, Musik im Sprachchat abzuspielen.',
+        statusTitle: 'Gruppenstatus:',
+        queueLimit: 'Warteschlangenlimit: <b>{limit}</b>',
+        djMode: 'DJ-Modus: <b>{djMode}</b>',
+        preset: 'Preset: <b>{preset}</b>',
+        premium: 'Premium: <b>{premium}</b>',
+        quickHelp: 'Nutze die Buttons unten für schnelle Hilfe.',
+        voiceTip: 'Tipp: Starte den Sprachchat, bevor du Musik abspielst.'
+      },
+      setup: {
+        title: 'TgMusicBot Setup-Anleitung',
+        content: '1. <b>Füge den Bot zur Gruppe hinzu</b>\nBefördere den Bot zum Admin, wenn die Gruppe Nachrichten/Befehle einschränkt.\n\n2. <b>Füge den Assistenten hinzu</b>\nDer Assistent/Userbot muss in der Gruppe sein, um dem Sprachchat beizutreten.\n\n3. <b>Starte den Sprachchat</b>\nStarte den Sprach-/Videochat in der Gruppe.\n\n4. <b>Spiele einen Song ab</b>\nNutze <code>/play Songtitel</code>.'
+      },
+      features: {
+        title: 'Musik-Funktionen',
+        content: '• Audio- & Videowiedergabe\n• YouTube / Spotify / Apple Music / SoundCloud\n• Steuerung der Warteschlange\n• Persönliche Playlists\n• Premium-Audio-Presets\n• DJ-Modus für Gruppen'
+      },
+      playlist: {
+        title: 'Persönliche Playlists',
+        content: 'Nutzung:\n<code>/cplist Name</code>\n<code>/addtoplaylist id/url</code>\n<code>/myplaylists</code>\n<code>/deleteplaylist id</code>'
+      },
+      premium: {
+        title: 'Premium',
+        content: '• Größere Warteschlangenlimits\n• /qmove, um Warteschlangenelemente zu verschieben\n• /setpreset normal/bass/nightcore/vaporwave\n• /djmode on/off\n• /premiuminfo zur Überprüfung des Status'
+      },
+      groupPlay: {
+        title: 'Musik abspielen',
+        content: 'Nutzung:\n<code>/play Songtitel</code>\n\nBeispiel:\n<code>/play faded alan walker</code>\n\nTipp:\nStarte den Sprachchat vor dem Abspielen von Musik.'
+      },
+      groupVideo: {
+        title: 'Video abspielen',
+        content: 'Nutzung:\n<code>/vplay Videotitel</code>\n\nBeispiel:\n<code>/vplay faded alan walker official video</code>\n\nTipp:\nStarte den Sprach-/Videochat vor dem Abspielen von Videos.'
+      },
+      groupQueue: {
+        title: 'Warteschlange',
+        content: 'Nutzung:\n<code>/queue</code>\n\nDieser Befehl zeigt die aktuelle Warteschlange der Gruppe an.'
+      },
+      groupSkip: {
+        title: 'Überspringen',
+        content: 'Nutzung:\n<code>/skip</code>\n\nÜberspringt den aktuellen Song.\nWenn der DJ-Modus aktiv ist, können nur Admins/autorisierte/Premium-Nutzer diesen Befehl nutzen.'
+      },
+      groupDjMode: {
+        title: 'DJ-Modus',
+        content: 'Nutzung:\n<code>/djmode on</code>\n<code>/djmode off</code>\n\nWenn aktiv, können Steuerungen wie skip, stop, seek, volume, shuffle und qmove nur von Admins/autorisierten/Premium-Nutzern verwendet werden.'
+      },
+      settings: {
+        title: 'Einstellungen',
+        content: 'Nutze den Befehl <code>/settings</code>, um das Einstellungsmenü zu öffnen.'
+      },
+      closed: 'Geschlossen.',
+      back: 'Zurück',
+      close: 'Schließen'
+    }
+  },
+  pt: {
+    buttons: {
+      support: 'Suporte',
+      channel: 'Canal',
+      source: 'Código fonte',
+      addToGroup: 'Adicionar ao grupo',
+      user: 'Usuário',
+      admin: 'Admin',
+      playlist: 'Playlist',
+      owner: 'Dono',
+      developer: 'Desenvolvedor',
+      back: 'Voltar',
+      pause: '⏸ Pausar',
+      resume: '▶️ Retomar',
+      skip: '⏭ Pular',
+      stop: '⏹ Parar',
+      mute: '🔇 Silenciar',
+      unmute: '🔊 Ativar som',
+      addToPlaylist: '➕ Playlist',
+      close: '✖️ Fechar',
+      language: '🌐 Idioma',
+      help: 'Ajuda',
+      settings: 'Configurações',
+      chooseLanguage: 'Escolher idioma',
+      setupGuide: 'Guia de instalação',
+      musicFeatures: 'Recursos de música',
+      myPlaylists: 'Minhas playlists',
+      premium: 'Premium',
+      playMusic: 'Tocar música',
+      playVideo: 'Tocar vídeo',
+      queue: 'Fila',
+      groupSettings: 'Configurações do grupo',
+      djMode: 'Modo DJ'
+    },
+    language: { choose: 'Escolha seu idioma. A escolha ficará salva até você alterá-la novamente.', saved: 'Idioma salvo: {language}', invalid: 'Idioma não suportado.', current: 'Idioma atual: {language}' },
+    start: {
+      text: "👋 Olá {name},\nEu sou o <b>{botName}</b>!\n\n🎧 Um bot player de música com ótimos recursos e utilidades.\n\nℹ️ Clique no botão de ajuda para mais informações.",
+      private: {
+        title: 'Bem-vindo ao TgMusicBot',
+        greeting: 'Olá, <b>{name}</b>!',
+        description: 'Posso ajudar a reproduzir músicas e vídeos nos chats de voz de grupos do Telegram.',
+        stepsTitle: 'Como começar:',
+        stepAddBot: 'Adicione o bot ao seu grupo',
+        stepAddAssistant: 'Adicione o assistente/userbot ao grupo',
+        stepStartVoice: 'Inicie o chat de voz',
+        stepPlay: 'Digite <code>/play nome da música</code>',
+        featuresTitle: 'Principais recursos:',
+        featurePlayback: 'Reprodução de áudio e vídeo',
+        featurePlatforms: 'YouTube / Spotify / Apple Music / SoundCloud',
+        featurePlaylist: 'Playlists pessoais',
+        featureQueue: 'Controle de fila',
+        featurePremiumPreset: 'Predefinições de áudio premium',
+        featureDjMode: 'Modo DJ para grupos',
+        chooseMenu: 'Escolha um menu abaixo:'
+      },
+      group: {
+        title: 'TgMusicBot está ativo neste grupo!',
+        description: 'Pronto para tocar música no chat de voz.',
+        statusTitle: 'Status do grupo:',
+        queueLimit: 'Limite da fila: <b>{limit}</b>',
+        djMode: 'Modo DJ: <b>{djMode}</b>',
+        preset: 'Preset: <b>{preset}</b>',
+        premium: 'Premium: <b>{premium}</b>',
+        quickHelp: 'Use os botões abaixo para ajuda rápida.',
+        voiceTip: 'Dica: Inicie o chat de voz antes de tocar música.'
+      },
+      setup: {
+        title: 'Guia de instalação do TgMusicBot',
+        content: '1. <b>Adicione o bot ao seu grupo</b>\nPromova o bot a admin se o grupo restringir mensagens/comandos.\n\n2. <b>Adicione o assistente</b>\nO assistente/userbot deve estar no grupo para entrar no chat de voz.\n\n3. <b>Inicie o chat de voz</b>\nInicie o chat de voz/vídeo no grupo.\n\n4. <b>Toque uma música</b>\nUse <code>/play título da música</code>.'
+      },
+      features: {
+        title: 'Recursos de música',
+        content: '• Reprodução de áudio e video\n• YouTube / Spotify / Apple Music / SoundCloud\n• Controle de fila\n• Playlists pessoais\n• Predefinições de áudio premium\n• Modo DJ para grupos'
+      },
+      playlist: {
+        title: 'Playlists pessoais',
+        content: 'Uso:\n<code>/cplist nome</code>\n<code>/addtoplaylist id/url</code>\n<code>/myplaylists</code>\n<code>/deleteplaylist id</code>'
+      },
+      premium: {
+        title: 'Premium',
+        content: '• Limites de fila maiores\n• /qmove para mover itens da fila\n• /setpreset normal/bass/nightcore/vaporwave\n• /djmode on/off\n• /premiuminfo para verificar o status'
+      },
+      groupPlay: {
+        title: 'Tocar música',
+        content: 'Uso:\n<code>/play título da música</code>\n\nExemplo:\n<code>/play faded alan walker</code>\n\nDica:\nInicie o chat de voz antes de tocar música.'
+      },
+      groupVideo: {
+        title: 'Tocar vídeo',
+        content: 'Uso:\n<code>/vplay título do vídeo</code>\n\nExemplo:\n<code>/vplay faded alan walker vídeo oficial</code>\n\nDica:\nInicie o chat de voz/vídeo antes de tocar vídeo.'
+      },
+      groupQueue: {
+        title: 'Fila',
+        content: 'Uso:\n<code>/queue</code>\n\nEste comando exibe a lista de músicas na fila do grupo.'
+      },
+      groupSkip: {
+        title: 'Pular',
+        content: 'Uso:\n<code>/skip</code>\n\nEste comando pula a música atual.\nSe o Modo DJ estiver ativo, apenas admins/usuários autorizados/premium podem usar.'
+      },
+      groupDjMode: {
+        title: 'Modo DJ',
+        content: 'Uso:\n<code>/djmode on</code>\n<code>/djmode off</code>\n\nQuando ativo, controles como skip, stop, seek, volume, shuffle e qmove só podem ser usados por admins/usuários autorizados/premium.'
+      },
+      settings: {
+        title: 'Configurações',
+        content: 'Use o comando <code>/settings</code> para abrir o menu de configurações do bot.'
+      },
+      closed: 'Fechado.',
+      back: 'Voltar',
+      close: 'Fechar'
+    }
+  },
+  ar: {
+    buttons: {
+      support: 'الدعم',
+      channel: 'القناة',
+      source: 'المصدر',
+      addToGroup: 'إضافة للمجموعة',
+      user: 'مستخدم',
+      admin: 'مشرف',
+      playlist: 'قائمة التشغيل',
+      owner: 'المالك',
+      developer: 'المطور',
+      back: 'رجوع',
+      pause: '⏸ مؤقت',
+      resume: '▶️ استئناف',
+      skip: '⏭ تخطي',
+      stop: '⏹ إيقاف',
+      mute: '🔇 كتم',
+      unmute: '🔊 إلغاء الكتم',
+      addToPlaylist: '➕ قائمة',
+      close: '✖️ إغلاق',
+      language: '🌐 اللغة',
+      help: 'مساعدة',
+      settings: 'إعدادات',
+      chooseLanguage: 'اختر اللغة',
+      setupGuide: 'دليل الإعداد',
+      musicFeatures: 'ميزات الموسيقى',
+      myPlaylists: 'قوائمي',
+      premium: 'Premium',
+      playMusic: 'تشغيل الموسيقى',
+      playVideo: 'تشغيل الفيديو',
+      queue: 'الانتظار',
+      groupSettings: 'إعدادات المجموعة',
+      djMode: 'وضع الـ DJ'
+    },
+    language: { choose: 'اختر لغتك. سيتم حفظ اختيارك حتى تغيّره مرة أخرى.', saved: 'تم حفظ اللغة: {language}', invalid: 'اللغة غير مدعومة.', current: 'اللغة الحالية: {language}' },
+    start: {
+      text: "👋 مرحبًا {name}،\nأنا <b>{botName}</b>!\n\n🎧 بوت لتشغيل الموسيقى مع ميزات رائعة ومفيدة للغاية.\n\nℹ️ اضغط على زر المساعدة لمزيد من المعلومات.",
+      private: {
+        title: 'مرحبًا بك في TgMusicBot',
+        greeting: 'مرحبًا، <b>{name}</b>!',
+        description: 'يمكنني المساعدة in تشغيل الموسيقى ومقاطع الفيديو في دردشات Telegram الجماعية الصوتية.',
+        stepsTitle: 'كيف تبدأ:',
+        stepAddBot: 'أضف البوت إلى مجموعتك',
+        stepAddAssistant: 'أضف المساعد/حساب المساعد إلى المجموعة',
+        stepStartVoice: 'ابدأ المحادثة الصوتية',
+        stepPlay: 'اكتب <code>/play اسم الأغنية</code>',
+        featuresTitle: 'الميزات الرئيسية:',
+        featurePlayback: 'تشغيل الصوت والفيديو',
+        featurePlatforms: 'YouTube / Spotify / Apple Music / SoundCloud',
+        featurePlaylist: 'قوائم التشغيل الشخصية',
+        featureQueue: 'التحكم في قائمة الانتظار',
+        featurePremiumPreset: 'تأثيرات صوتية مميزة (Premium)',
+        featureDjMode: 'وضع DJ للمجموعات',
+        chooseMenu: 'اختر قائمة من الأسفل:'
+      },
+      group: {
+        title: 'TgMusicBot نشط في هذه المجموعة!',
+        description: 'جاهز لتشغيل الموسيقى في المحادثة الصوتية.',
+        statusTitle: 'حالة المجموعة:',
+        queueLimit: 'حد قائمة الانتظار: <b>{limit}</b>',
+        djMode: 'وضع DJ: <b>{djMode}</b>',
+        preset: 'التأثير: <b>{preset}</b>',
+        premium: 'بريميوم: <b>{premium}</b>',
+        quickHelp: 'استخدم الأزرار أدناه للحصول على مساعدة سريعة.',
+        voiceTip: 'نصيحة: ابدأ المحادثة الصوتية قبل تشغيل الموسيقى.'
+      },
+      setup: {
+        title: 'دليل إعداد TgMusicBot',
+        content: '1. <b>أضف البوت إلى مجموعتك</b>\nقم بترقية البوت إلى مشرف إذا كانت المجموعة تقيد الرسائل/الأوامر.\n\n2. <b>أضف المساعد</b>\nيجب أن يكون المساعد/حساب المساعد في المجموعة للانضمام إلى المحادثة الصوتية.\n\n3. <b>ابدأ المحادثة الصوتية</b>\nابدأ محادثة صوتية/فيديو في المجموعة.\n\n4. <b>قم بتشغيل أغنية</b>\nاستخدم <code>/play اسم الأغنية</code>.'
+      },
+      features: {
+        title: 'ميزات الموسيقى',
+        content: '• تشغيل الصوت والفيديو\n• YouTube / Spotify / Apple Music / SoundCloud\n• التحكم في قائمة الانتظار\n• قوائم تشغيل شخصية\n• تأثيرات صوتية مميزة\n• وضع DJ للمجموعات'
+      },
+      playlist: {
+        title: 'قوائم التشغيل الشخصية',
+        content: 'الاستخدام:\n<code>/cplist الاسم</code>\n<code>/addtoplaylist المعرف/الرابط</code>\n<code>/myplaylists</code>\n<code>/deleteplaylist المعرف</code>'
+      },
+      premium: {
+        title: 'Premium',
+        content: '• حدود أكبر لقائمة الانتظار\n• /qmove لنقل عناصر الانتظار\n• /setpreset normal/bass/nightcore/vaporwave\n• /djmode on/off\n• /premiuminfo للتحقق من الحالة'
+      },
+      groupPlay: {
+        title: 'تشغيل الموسيقى',
+        content: 'الاستخدام:\n<code>/play اسم الأغنية</code>\n\nمثال:\n<code>/play faded alan walker</code>\n\nنصيحة:\nابدأ المحادثة الصوتية قبل تشغيل الموسيقى.'
+      },
+      groupVideo: {
+        title: 'تشغيل الفيديو',
+        content: 'الاستخدام:\n<code>/vplay اسم الفيديو</code>\n\nمثال:\n<code>/vplay faded alan walker official video</code>\n\nنصيحة:\nابدأ المحادثة الصوتية/الفيديو قبل تشغيل الفيديو.'
+      },
+      groupQueue: {
+        title: 'قائمة الانتظار',
+        content: 'الاستخدام:\n<code>/queue</code>\n\nيعرض هذا الأمر قائمة الأغاني الموجودة حاليًا في قائمة انتظار المجموعة.'
+      },
+      groupSkip: {
+        title: 'تخطي',
+        content: 'الاستخدام:\n<code>/skip</code>\n\nيتخطى هذا الأمر الأغنية قيد التشغيل حاليًا.\nإذا كان وضع DJ نشطًا، يمكن للمشرفين/المصرح لهم/الأعضاء المميزين فقط استخدام هذا التحكم.'
+      },
+      groupDjMode: {
+        title: 'وضع DJ',
+        content: 'الاستخدام:\n<code>/djmode on</code>\n<code>/djmode off</code>\n\nعند تفعيله، تقتصر عناصر التحكم مثل التخطي، الإيقاف، البحث، الصوت، الخلط، و qmove على المشرفين/المصرح لهم/الأعضاء المميزين فقط.'
+      },
+      settings: {
+        title: 'الإعدادات',
+        content: 'استخدم الأمر <code>/settings</code> لفتح قائمة إعدادات البوت.'
+      },
+      closed: 'مغلق.',
+      back: 'رجوع',
+      close: 'إغلاق'
+    }
+  },
+  tr: {
+    buttons: {
+      support: 'Destek',
+      channel: 'Kanal',
+      source: 'Kaynak Kodu',
+      addToGroup: 'Beni gruba ekle',
+      user: 'Kullanıcı',
+      admin: 'Admin',
+      playlist: 'Çalma Listesi',
+      owner: 'Sahip',
+      developer: 'Geliştirici',
+      back: 'Geri',
+      pause: '⏸ Duraklat',
+      resume: '▶️ Sürdür',
+      skip: '⏭ Atla',
+      stop: '⏹ Durdur',
+      mute: '🔇 Sustur',
+      unmute: '🔊 Sesi Aç',
+      addToPlaylist: '➕ Çalma Listesi',
+      close: '✖️ Kapat',
+      language: '🌐 Dil',
+      help: 'Yardım',
+      settings: 'Ayarlar',
+      chooseLanguage: 'Dil seç',
+      setupGuide: 'Kurulum Kılavuzu',
+      musicFeatures: 'Müzik Özellikleri',
+      myPlaylists: 'Çalma Listelerim',
+      premium: 'Premium',
+      playMusic: 'Müzik Çal',
+      playVideo: 'Video Oynat',
+      queue: 'Sıra',
+      groupSettings: 'Grup Ayarları',
+      djMode: 'DJ Modu'
+    },
+    language: { choose: 'Lütfen dilini seç. Bu seçim tekrar değiştirene kadar saklanır.', saved: 'Dil kaydedildi: {language}', invalid: 'Desteklenmeyen dil.', current: 'Geçerli dil: {language}' },
+    start: {
+      text: "Merhaba {name},\n\nBen {botName}, JavaScript Telegram müzik oynatıcısıyım.\n\n<b>Desteklenen platformlar:</b> YouTube, Spotify, Apple Music, SoundCloud.\n\nKomutları görmek veya dili değiştirmek için aşağıdaki düğmeleri kullan.",
+      private: {
+        title: "TgMusicBot'a Hoş Geldiniz",
+        greeting: 'Merhaba, <b>{name}</b>!',
+        description: 'Telegram grup sesli sohbetlerinde müzik ve video oynatmanıza yardımcı olabilirim.',
+        stepsTitle: 'Nasıl başlanır:',
+        stepAddBot: 'Botu grubunuza ekleyin',
+        stepAddAssistant: 'Asistanı/userbotu gruba ekleyin',
+        stepStartVoice: 'Sesli sohbeti başlatın',
+        stepPlay: '<code>/play şarkı adı</code> yazın',
+        featuresTitle: 'Ana özellikler:',
+        featurePlayback: 'Ses ve video oynatma',
+        featurePlatforms: 'YouTube / Spotify / Apple Music / SoundCloud',
+        featurePlaylist: 'Kişisel çalma listeleri',
+        featureQueue: 'Sıra kontrolü',
+        featurePremiumPreset: 'Premium ses efektleri',
+        featureDjMode: 'Gruplar için DJ modu',
+        chooseMenu: 'Aşağıdan bir menü seçin:'
+      },
+      group: {
+        title: 'TgMusicBot bu grupta aktif!',
+        description: 'Sesli sohbette müzik oynatmaya hazır.',
+        statusTitle: 'Grup durumu:',
+        queueLimit: 'Sıra sınırı: <b>{limit}</b>',
+        djMode: 'DJ Modu: <b>{djMode}</b>',
+        preset: 'Hazır ayar: <b>{preset}</b>',
+        premium: 'Premium: <b>{premium}</b>',
+        quickHelp: 'Hızlı yardım için aşağıdaki düğmeleri kullanın.',
+        voiceTip: 'İpucu: Müzik çalmadan önce sesli sohbeti başlatın.'
+      },
+      setup: {
+        title: 'TgMusicBot Kurulum Kılavuzu',
+        content: '1. <b>Botu grubunuza ekleyin</b>\nGrup mesajları/komutları kısıtlıyorsa botu yönetici yapın.\n\n2. <b>Asistanı ekleyin</b>\nSesli sohbete katılmak için asistan/userbot grupta olmalıdır.\n\n3. <b>Sesli sohbeti başlatın</b>\nGrupta sesli veya görüntülü sohbet başlatın.\n\n4. <b>Şarkı çalın</b>\n<code>/play şarkı adı</code> kullanın.'
+      },
+      features: {
+        title: 'Müzik Özellikleri',
+        content: '• Ses ve video oynatma\n• YouTube / Spotify / Apple Music / SoundCloud\n• Sıra kontrolü\n• Kişisel çalma listeleri\n• Premium ses efektleri\n• Gruplar için DJ modu'
+      },
+      playlist: {
+        title: 'Kişisel Çalma Listeleri',
+        content: 'Kullanım:\n<code>/cplist isim</code>\n<code>/addtoplaylist id/url</code>\n<code>/myplaylists</code>\n<code>/deleteplaylist id</code>'
+      },
+      premium: {
+        title: 'Premium',
+        content: '• Daha büyük sıra sınırları\n• Sıra ögelerini taşımak için /qmove\n• /setpreset normal/bass/nightcore/vaporwave\n• /djmode on/off\n• Durumu kontrol etmek için /premiuminfo'
+      },
+      groupPlay: {
+        title: 'Müzik Çal',
+        content: 'Kullanım:\n<code>/play şarkı adı</code>\n\nÖrnek:\n<code>/play faded alan walker</code>\n\nİpucu:\nMüzik çalmadan önce sesli sohbeti başlatın.'
+      },
+      groupVideo: {
+        title: 'Video Oynat',
+        content: 'Kullanım:\n<code>/vplay video adı</code>\n\nÖrnek:\n<code>/vplay faded alan walker official video</code>\n\nİpucu:\nVideo oynatmadan önce sesli/görüntülü sohbet başlatın.'
+      },
+      groupQueue: {
+        title: 'Sıra',
+        content: 'Kullanım:\n<code>/queue</code>\n\nBu komut şu anda gruptaki şarkı sırasını gösterir.'
+      },
+      groupSkip: {
+        title: 'Atla',
+        content: 'Kullanım:\n<code>/skip</code>\n\nÇalan şarkıyı atlar.\nDJ Modu aktifse sadece admin/yetkili/premium üyeler bu komutu kullanabilir.'
+      },
+      groupDjMode: {
+        title: 'DJ Modu',
+        content: 'Kullanım:\n<code>/djmode on</code>\n<code>/djmode off</code>\n\nAktifken skip, stop, seek, volume, shuffle ve qmove gibi kontroller sadece admin/yetkili/premium üyelerce kullanılabilir.'
+      },
+      settings: {
+        title: 'Ayarlar',
+        content: 'Bot ayarlar menüsünü açmak için <code>/settings</code> komutunu kullanın.'
+      },
+      closed: 'Kapatıldı.',
+      back: 'Geri',
+      close: 'Kapat'
+    }
+  },
+  ko: {
+    buttons: {
+      support: '지원',
+      channel: '채널',
+      source: '소스 코드',
+      addToGroup: '그룹에 추가',
+      user: '사용자',
+      admin: '관리자',
+      playlist: '플레이리스트',
+      owner: '소유자',
+      developer: '개발자',
+      back: '뒤로',
+      pause: '⏸ 일시정지',
+      resume: '▶️ 재개',
+      skip: '⏭ 건너뛰기',
+      stop: '⏹ 중지',
+      mute: '🔇 음소거',
+      unmute: '🔊 음소거 해제',
+      addToPlaylist: '➕ 플레이리스트',
+      close: '✖️ 닫기',
+      language: '🌐 언어',
+      help: '도움말',
+      settings: '설정',
+      chooseLanguage: '언어 선택',
+      setupGuide: '설치 가이드',
+      musicFeatures: '음악 기능',
+      myPlaylists: '내 플레이리스트',
+      premium: 'Premium',
+      playMusic: '음악 재생',
+      playVideo: '비디오 재생',
+      queue: '대기열',
+      groupSettings: '그룹 설정',
+      djMode: 'DJ 모드'
+    },
+    language: { choose: '언어를 선택하세요. 다시 변경할 때까지 저장됩니다.', saved: '언어가 저장되었습니다: {language}', invalid: '지원하지 않는 언어입니다.', current: '현재 언어: {language}' },
+    start: {
+      text: "👋 안녕하세요 {name}님,\n저는 <b>{botName}</b>입니다!\n\n🎧 몇 가지 훌륭하고 유용한 기능을 갖춘 음악 플레이어 봇입니다.\n\nℹ️ 자세한 내용은 도움말 버튼을 누르세요.",
+      private: {
+        title: 'TgMusicBot에 오신 것을 환영합니다',
+        greeting: '안녕하세요, <b>{name}</b>님!',
+        description: '텔레그램 그룹 음성 채팅에서 음악과 비디오를 재생할 수 있도록 도와드립니다.',
+        stepsTitle: '시작하는 방법:',
+        stepAddBot: '그룹에 봇 추가',
+        stepAddAssistant: '그룹에 어시스턴트/유저봇 추가',
+        stepStartVoice: '음성 채팅 시작',
+        stepPlay: '<code>/play 노래 제목</code> 입력',
+        featuresTitle: '주요 기능:',
+        featurePlayback: '오디오 및 비디오 재생',
+        featurePlatforms: 'YouTube / Spotify / Apple Music / SoundCloud',
+        featurePlaylist: '개인 플레이리스트',
+        featureQueue: '대기열 제어',
+        featurePremiumPreset: '프리미엄 오디오 프리셋',
+        featureDjMode: '그룹 DJ 모드',
+        chooseMenu: '아래에서 메뉴를 선택하세요:'
+      },
+      group: {
+        title: '이 그룹에서 TgMusicBot이 활성화되었습니다!',
+        description: '음성 채팅에서 음악을 재생할 준비가 되었습니다.',
+        statusTitle: '그룹 상태:',
+        queueLimit: '대기열 제한: <b>{limit}</b>',
+        djMode: 'DJ 모드: <b>{djMode}</b>',
+        preset: '프리셋: <b>{preset}</b>',
+        premium: '프리미엄: <b>{premium}</b>',
+        quickHelp: '빠른 도움말을 보려면 아래 버튼을 사용하세요.',
+        voiceTip: '팁: 음악을 재생하기 전에 음성 채팅을 시작하세요.'
+      },
+      setup: {
+        title: 'TgMusicBot 설치 가이드',
+        content: '1. <b>그룹에 봇 추가</b>\n그룹에 메시지/명령어 제한이 있는 경우 봇을 관리자로 승격하세요.\n\n2. <b>어시스턴트 추가</b>\n음성 채팅에 참여하려면 어시스턴트/유저봇이 그룹에 있어야 합니다.\n\n3. <b>음성 채팅 시작</b>\n그룹에서 음성 채팅/영상 채팅을 시작합니다.\n\n4. <b>노래 재생</b>\n<code>/play 노래 제목</code>을 사용합니다.'
+      },
+      features: {
+        title: '음악 기능',
+        content: '• 오디오 및 비디오 재생\n• YouTube / Spotify / Apple Music / SoundCloud\n• 대기열 제어\n• 개인 플레이리스트\n• 프리미엄 오디오 프리셋\n• 그룹 DJ 모드'
+      },
+      playlist: {
+        title: '개인 플레이리스트',
+        content: '사용법:\n<code>/cplist 이름</code>\n<code>/addtoplaylist id/url</code>\n<code>/myplaylists</code>\n<code>/deleteplaylist id</code>'
+      },
+      premium: {
+        title: 'Premium',
+        content: '• 더 큰 대기열 제한\n• 대기열 항목 이동을 위한 /qmove\n• /setpreset normal/bass/nightcore/vaporwave\n• /djmode on/off\n• 상태 확인을 위한 /premiuminfo'
+      },
+      groupPlay: {
+        title: '음악 재생',
+        content: '사용법:\n<code>/play 노래 제목</code>\n\n예시:\n<code>/play faded alan walker</code>\n\n팁:\n음악을 재생하기 전에 음성 채팅을 시작하세요.'
+      },
+      groupVideo: {
+        title: '비디오 재생',
+        content: '사용법:\n<code>/vplay 비디오 제목</code>\n\n예시:\n<code>/vplay faded alan walker official video</code>\n\n팁:\n비디오를 재생하기 전에 음성/영상 채팅을 시작하세요.'
+      },
+      groupQueue: {
+        title: '대기열',
+        content: '사용법:\n<code>/queue</code>\n\n이 명령어는 현재 그룹 대기열에 있는 곡 목록을 보여줍니다.'
+      },
+      groupSkip: {
+        title: '건너뛰기',
+        content: '사용법:\n<code>/skip</code>\n\n현재 재생 중인 곡을 건너뜁니다.\nDJ 모드가 활성화된 경우 관리자/인증/프리미엄 사용자만 이 컨트롤을 사용할 수 있습니다.'
+      },
+      groupDjMode: {
+        title: 'DJ 모드',
+        content: '사용법:\n<code>/djmode on</code>\n<code>/djmode off</code>\n\n활성화 시 skip, stop, seek, volume, shuffle, qmove 등의 제어는 관리자/인증/프리미엄 사용자만 사용할 수 있습니다.'
+      },
+      settings: {
+        title: '설정',
+        content: '봇 설정 메뉴를 열려면 <code>/settings</code> 명령어를 사용하세요.'
+      },
+      closed: '닫힘.',
+      back: '뒤로',
+      close: '닫기'
+    }
+  },
+  zh: {
+    buttons: {
+      support: '支持',
+      channel: '频道',
+      source: '源码',
+      addToGroup: '添加到群组',
+      user: '用户',
+      admin: '管理员',
+      playlist: '播放列表',
+      owner: '所有者',
+      developer: '开发者',
+      back: '返回',
+      pause: '⏸ 暂停',
+      resume: '▶️ 继续',
+      skip: '⏭ 跳过',
+      stop: '⏹ 停止',
+      mute: '🔇 静音',
+      unmute: '🔊 取消静音',
+      addToPlaylist: '➕ 播放列表',
+      close: '✖️ 关闭',
+      language: '🌐 语言',
+      help: '帮助',
+      settings: '设置',
+      chooseLanguage: '选择语言',
+      setupGuide: '设置指南',
+      musicFeatures: '音乐功能',
+      myPlaylists: '我的播放列表',
+      premium: 'Premium',
+      playMusic: '播放音乐',
+      playVideo: '播放视频',
+      queue: '队列',
+      groupSettings: '群组设置',
+      djMode: 'DJ 模式'
+    },
+    language: { choose: '请选择你的语言。设置会一直保存，直到你再次更改。', saved: '语言已保存：{language}', invalid: '不支持的语言。', current: '当前语言：{language}' },
+    start: {
+      text: "👋 你好 {name}，\n我是 <b>{botName}</b>！\n\n🎧 一个具有超棒且实用功能的音乐播放器机器人。\n\nℹ️ 点击帮助按钮查看更多信息。",
+      private: {
+        title: '欢迎使用 TgMusicBot',
+        greeting: '你好，<b>{name}</b>！',
+        description: '我可以帮助在 Telegram 群组语音通话中播放音乐和视频。',
+        stepsTitle: '如何开始：',
+        stepAddBot: '将机器人添加到你的群组',
+        stepAddAssistant: '将助手/副号（userbot）添加到群组',
+        stepStartVoice: '开启语音通话',
+        stepPlay: '输入 <code>/play 歌曲名称</code>',
+        featuresTitle: '主要功能：',
+        featurePlayback: '音频和视频播放',
+        featurePlatforms: 'YouTube / Spotify / Apple Music / SoundCloud',
+        featurePlaylist: '个人播放列表',
+        featureQueue: '队列控制',
+        featurePremiumPreset: '高级音频预设',
+        featureDjMode: '群组 DJ 模式',
+        chooseMenu: '在下方选择一个菜单：'
+      },
+      group: {
+        title: 'TgMusicBot 已在此群组中激活！',
+        description: '已准备好在语音通话中播放音乐。',
+        statusTitle: '群组状态：',
+        queueLimit: '队列限制：<b>{limit}</b>',
+        djMode: 'DJ 模式：<b>{djMode}</b>',
+        preset: '预设：<b>{preset}</b>',
+        premium: '会员（Premium）：<b>{premium}</b>',
+        quickHelp: '使用下方按钮获取快速帮助。',
+        voiceTip: '提示：在播放音乐之前，请先开启语音通话。'
+      },
+      setup: {
+        title: 'TgMusicBot 设置指南',
+        content: '1. <b>将机器人添加到你的群组</b>\n如果群组限制了消息/命令，请将机器人设为管理员。\n\n2. <b>添加助手</b>\n助手/副号（userbot）必须在群组中才能加入语音通话。\n\n3. <b>开启语音通话</b>\n在群组中开启语音或视频通话。\n\n4. <b>播放歌曲</b>\n使用 <code>/play 歌曲标题</code>。'
+      },
+      features: {
+        title: '音乐功能',
+        content: '• 音频和视频播放\n• YouTube / Spotify / Apple Music / SoundCloud\n• 队列控制\n• 个人播放列表\n• 高级音频预设\n• 群组 DJ 模式'
+      },
+      playlist: {
+        title: '个人播放列表',
+        content: '使用方法：\n<code>/cplist 名称</code>\n<code>/addtoplaylist id/url</code>\n<code>/myplaylists</code>\n<code>/deleteplaylist id</code>'
+      },
+      premium: {
+        title: 'Premium',
+        content: '• 更大的队列限制\n• 使用 /qmove 移动队列项目\n• /setpreset normal/bass/nightcore/vaporwave\n• /djmode on/off\n• 使用 /premiuminfo 检查状态'
+      },
+      groupPlay: {
+        title: '播放音乐',
+        content: '使用方法：\n<code>/play 歌曲标题</code>\n\n示例：\n<code>/play faded alan walker</code>\n\n提示：\n在播放音乐之前开启语音通话。'
+      },
+      groupVideo: {
+        title: '播放视频',
+        content: '使用方法：\n<code>/vplay 视频标题</code>\n\n示例：\n<code>/vplay faded alan walker official video</code>\n\n提示：\n在播放视频之前开启语音/视频通话。'
+      },
+      groupQueue: {
+        title: '队列',
+        content: '使用方法：\n<code>/queue</code>\n\n此命令将显示群组队列中当前排队的歌曲列表。'
+      },
+      groupSkip: {
+        title: '跳过',
+        content: '使用方法：\n<code>/skip</code>\n\n此命令跳过当前播放的歌曲。\n如果 DJ 模式处于激活状态，则只有管理员/已授权/Premium 会员可以使用此控制。'
+      },
+      groupDjMode: {
+        title: 'DJ 模式',
+        content: '使用方法：\n<code>/djmode on</code>\n<code>/djmode off</code>\n\n激活时，跳过、停止、定位、音量、随机播放和 qmove 等控制仅限管理员/已授权/Premium 会员使用。'
+      },
+      settings: {
+        title: '设置',
+        content: '使用 <code>/settings</code> 命令打开机器人设置菜单。'
+      },
+      closed: '已关闭。',
+      back: '返回',
+      close: '关闭'
+    }
+  }
 };
 
 function mergeDeep(base, override = {}) {
@@ -426,5 +1806,220 @@ const spotifyTranslations = {
   zh: { playback: { spotifyDiscovery: 'Spotify Discovery', spotifyOpen: '在 Spotify 中打开', spotifySelectHint: '选择这首歌即可在语音聊天中播放。', spotifyNowPlaying: '正在通过 Spotify 播放', spotifyPlaybackVia: '音频来源', spotifyResolving: '🟢 正在准备 Spotify 歌曲...', spotifyMatchFailed: '已找到 Spotify 歌曲，但暂时没有可播放的音频来源。', spotifyTrackLinkRequired: '请发送 Spotify 单曲链接，而不是专辑/歌单/艺人链接。', spotifyFetchFailed: '无法从 Spotify 获取歌曲信息。' } },
 };
 for (const [code, override] of Object.entries(spotifyTranslations)) {
+  translations[code] = mergeDeep(translations[code], override);
+}
+
+const settingsTranslations = {
+  id: {
+    buttons: { defaultService: 'Layanan Default', audioPreset: 'Preset Audio', premiumInfo: 'Info Premium' },
+    settings: {
+      private: { title: 'Pengaturan', description: 'Kelola preferensi bot pribadimu.' },
+      group: { title: 'Pengaturan Grup', description: 'Kelola preferensi musik grup ini.' },
+      labels: { user: 'Pengguna', group: 'Grup', language: 'Bahasa', defaultService: 'Layanan default', audioPreset: 'Preset audio', djMode: 'DJ Mode', premium: 'Premium', queueLimit: 'Batas antrean' },
+      chooseMenu: 'Pilih pengaturan di bawah:',
+      service: { title: 'Layanan Default', description: 'Pilih platform yang digunakan pertama saat mencari musik.', current: 'Saat ini', unsupported: 'Layanan tidak didukung.', alreadySelected: '{service} sudah dipilih.', selected: '{service} dipilih.' },
+      help: { title: 'Bantuan Pengaturan', content: '• Layanan Default menentukan platform pencarian utama.\n• Bahasa mengubah bahasa tampilan bot.\n• Di grup, Preset Audio dan DJ Mode dikelola dengan command premium/admin.' },
+      preset: { title: 'Preset Audio', content: 'Gunakan command berikut untuk mengubah preset audio:', current: 'Preset saat ini' },
+      djMode: { title: 'DJ Mode', content: 'Saat DJ Mode aktif, kontrol sensitif (skip, stop, seek, volume, shuffle, qmove) hanya bisa dipakai admin/auth/premium user.', current: 'Status saat ini' },
+      premium: { title: 'Info Premium', content: 'Gunakan /premiumfeatures dan /premiuminfo untuk mempelajari fitur premium.' },
+      groupOnly: 'Pengaturan ini hanya tersedia di grup.',
+      closed: 'Ditutup.'
+    }
+  },
+  ru: {
+    buttons: { defaultService: 'Сервис по умолч.', audioPreset: 'Аудио пресет', premiumInfo: 'Инфо Premium' },
+    settings: {
+      private: { title: 'Настройки', description: 'Управление персональными настройками бота.' },
+      group: { title: 'Настройки группы', description: 'Управление музыкальными настройками группы.' },
+      labels: { user: 'Пользователь', group: 'Группа', language: 'Язык', defaultService: 'Сервис по умолчанию', audioPreset: 'Аудио пресет', djMode: 'Режим DJ', premium: 'Премиум', queueLimit: 'Лимит очереди' },
+      chooseMenu: 'Выберите настройку:',
+      service: { title: 'Сервис по умолчанию', description: 'Выберите платформу для поиска музыки.', current: 'Текущий', unsupported: 'Сервис не поддерживается.', alreadySelected: '{service} уже выбран.', selected: '{service} выбран.' },
+      help: { title: 'Помощь по настройкам', content: '• Сервис по умолчанию определяет основную поисковую платформу.\n• Язык меняет язык отображения бота.\n• В группах Аудио пресет и Режим DJ управляются командами премиум/админа.' },
+      preset: { title: 'Аудио пресет', content: 'Используйте следующие команды для изменения аудио пресета:', current: 'Текущий пресет' },
+      djMode: { title: 'Режим DJ', content: 'Когда режим DJ активен, чувствительные элементы управления (skip, stop, seek, volume, shuffle, qmove) доступны только админам/авторизованным/премиум пользователям.', current: 'Текущий статус' },
+      premium: { title: 'Инфо Premium', content: 'Используйте /premiumfeatures и /premiuminfo для получения информации о премиум-функциях.' },
+      groupOnly: 'Эта настройка доступна только в группах.',
+      closed: 'Закрыто.'
+    }
+  },
+  ja: {
+    buttons: { defaultService: 'デフォルトサービス', audioPreset: 'オーディオプリセット', premiumInfo: 'プレミアム情報' },
+    settings: {
+      private: { title: '設定', description: '個人のボット設定を管理します。' },
+      group: { title: 'グループ設定', description: 'このグループの音楽設定を管理します。' },
+      labels: { user: 'ユーザー', group: 'グループ', language: '言語', defaultService: 'デフォルトサービス', audioPreset: 'オーディオプリセット', djMode: 'DJ モード', premium: 'プレミアム', queueLimit: 'キュー上限' },
+      chooseMenu: '設定を選択してください:',
+      service: { title: 'デフォルトサービス', description: '音楽検索時に最初に使用するプラットフォームを選択します。', current: '現在', unsupported: 'サポートされていないサービスです。', alreadySelected: '{service} は既に選択されています。', selected: '{service} を選択しました。' },
+      help: { title: '設定ヘルプ', content: '• デフォルトサービスは主要な検索プラットフォームを決定します。\n• 言語はボットの表示言語を変更します。\n• グループでは、オーディオプリセットとDJモードはプレミアム/管理者コマンドで管理されます。' },
+      preset: { title: 'オーディオプリセット', content: '次のコマンドでオーディオプリセットを変更できます:', current: '現在のプリセット' },
+      djMode: { title: 'DJ モード', content: 'DJ モードが有効な場合、操作（skip, stop, seek, volume, shuffle, qmove）は管理者/認証済み/プレミアムユーザーのみ使用できます。', current: '現在の状態' },
+      premium: { title: 'プレミアム情報', content: '/premiumfeatures と /premiuminfo でプレミアム機能の詳細をご確認ください。' },
+      groupOnly: 'この設定はグループでのみ利用可能です。',
+      closed: '閉じました。'
+    }
+  },
+  hi: {
+    buttons: { defaultService: 'डिफ़ॉल्ट सेवा', audioPreset: 'ऑडियो प्रीसेट', premiumInfo: 'प्रीमियम जानकारी' },
+    settings: {
+      private: { title: 'सेटिंग्स', description: 'अपनी व्यक्तिगत बॉट प्राथमिकताएँ प्रबंधित करें।' },
+      group: { title: 'ग्रुप सेटिंग्स', description: 'इस ग्रुप की संगीत प्राथमिकताएँ प्रबंधित करें।' },
+      labels: { user: 'यूज़र', group: 'ग्रुप', language: 'भाषा', defaultService: 'डिफ़ॉल्ट सेवा', audioPreset: 'ऑडियो प्रीसेट', djMode: 'DJ मोड', premium: 'प्रीमियम', queueLimit: 'क्यू सीमा' },
+      chooseMenu: 'नीचे सेटिंग चुनें:',
+      service: { title: 'डिफ़ॉल्ट सेवा', description: 'संगीत खोजते समय पहले कौन सा प्लेटफ़ॉर्म इस्तेमाल हो, चुनें।', current: 'वर्तमान', unsupported: 'असमर्थित सेवा।', alreadySelected: '{service} पहले से चुना हुआ है।', selected: '{service} चुना गया।' },
+      help: { title: 'सेटिंग्स सहायता', content: '• डिफ़ॉल्ट सेवा प्राथमिक खोज प्लेटफ़ॉर्म निर्धारित करती है।\n• भाषा बॉट की प्रदर्शन भाषा बदलती है।\n• ग्रुप में, ऑडियो प्रीसेट और DJ मोड premium/admin commands से प्रबंधित होते हैं।' },
+      preset: { title: 'ऑडियो प्रीसेट', content: 'ऑडियो प्रीसेट बदलने के लिए ये commands इस्तेमाल करें:', current: 'वर्तमान प्रीसेट' },
+      djMode: { title: 'DJ मोड', content: 'जब DJ मोड सक्रिय हो, संवेदनशील नियंत्रण (skip, stop, seek, volume, shuffle, qmove) केवल admin/auth/premium users के लिए हैं।', current: 'वर्तमान स्थिति' },
+      premium: { title: 'प्रीमियम जानकारी', content: 'प्रीमियम सुविधाओं के बारे में जानने के लिए /premiumfeatures और /premiuminfo इस्तेमाल करें।' },
+      groupOnly: 'यह सेटिंग केवल ग्रुप में उपलब्ध है।',
+      closed: 'बंद।'
+    }
+  },
+  it: {
+    buttons: { defaultService: 'Servizio predefinito', audioPreset: 'Preset audio', premiumInfo: 'Info Premium' },
+    settings: {
+      private: { title: 'Impostazioni', description: 'Gestisci le tue preferenze personali del bot.' },
+      group: { title: 'Impostazioni gruppo', description: 'Gestisci le preferenze musicali del gruppo.' },
+      labels: { user: 'Utente', group: 'Gruppo', language: 'Lingua', defaultService: 'Servizio predefinito', audioPreset: 'Preset audio', djMode: 'Modalità DJ', premium: 'Premium', queueLimit: 'Limite coda' },
+      chooseMenu: 'Scegli un\'impostazione:',
+      service: { title: 'Servizio predefinito', description: 'Scegli quale piattaforma usare per la ricerca musicale.', current: 'Attuale', unsupported: 'Servizio non supportato.', alreadySelected: '{service} è già selezionato.', selected: '{service} selezionato.' },
+      help: { title: 'Aiuto impostazioni', content: '• Il servizio predefinito determina la piattaforma di ricerca principale.\n• La lingua cambia la lingua del bot.\n• Nei gruppi, Preset audio e Modalità DJ sono gestiti con comandi premium/admin.' },
+      preset: { title: 'Preset audio', content: 'Usa i seguenti comandi per cambiare il preset audio:', current: 'Preset attuale' },
+      djMode: { title: 'Modalità DJ', content: 'Quando la Modalità DJ è attiva, i controlli sensibili (skip, stop, seek, volume, shuffle, qmove) sono riservati a admin/autorizzati/premium.', current: 'Stato attuale' },
+      premium: { title: 'Info Premium', content: 'Usa /premiumfeatures e /premiuminfo per saperne di più sulle funzionalità premium.' },
+      groupOnly: 'Questa impostazione è disponibile solo nei gruppi.',
+      closed: 'Chiuso.'
+    }
+  },
+  es: {
+    buttons: { defaultService: 'Servicio predeterminado', audioPreset: 'Preset de audio', premiumInfo: 'Info Premium' },
+    settings: {
+      private: { title: 'Configuración', description: 'Gestiona tus preferencias personales del bot.' },
+      group: { title: 'Configuración del grupo', description: 'Gestiona las preferencias musicales de este grupo.' },
+      labels: { user: 'Usuario', group: 'Grupo', language: 'Idioma', defaultService: 'Servicio predeterminado', audioPreset: 'Preset de audio', djMode: 'Modo DJ', premium: 'Premium', queueLimit: 'Límite de cola' },
+      chooseMenu: 'Elige una opción:',
+      service: { title: 'Servicio predeterminado', description: 'Elige qué plataforma usar primero al buscar música.', current: 'Actual', unsupported: 'Servicio no soportado.', alreadySelected: '{service} ya está seleccionado.', selected: '{service} seleccionado.' },
+      help: { title: 'Ayuda de configuración', content: '• El servicio predeterminado determina la plataforma de búsqueda principal.\n• El idioma cambia el idioma del bot.\n• En grupos, Preset de audio y Modo DJ se gestionan con comandos premium/admin.' },
+      preset: { title: 'Preset de audio', content: 'Usa los siguientes comandos para cambiar el preset de audio:', current: 'Preset actual' },
+      djMode: { title: 'Modo DJ', content: 'Cuando el Modo DJ está activo, los controles sensibles (skip, stop, seek, volume, shuffle, qmove) solo están disponibles para admin/autorizados/premium.', current: 'Estado actual' },
+      premium: { title: 'Info Premium', content: 'Usa /premiumfeatures y /premiuminfo para saber más sobre las funciones premium.' },
+      groupOnly: 'Esta configuración solo está disponible en grupos.',
+      closed: 'Cerrado.'
+    }
+  },
+  fr: {
+    buttons: { defaultService: 'Service par défaut', audioPreset: 'Preset audio', premiumInfo: 'Info Premium' },
+    settings: {
+      private: { title: 'Paramètres', description: 'Gérez vos préférences personnelles du bot.' },
+      group: { title: 'Paramètres du groupe', description: 'Gérez les préférences musicales de ce groupe.' },
+      labels: { user: 'Utilisateur', group: 'Groupe', language: 'Langue', defaultService: 'Service par défaut', audioPreset: 'Preset audio', djMode: 'Mode DJ', premium: 'Premium', queueLimit: 'Limite de file' },
+      chooseMenu: 'Choisissez un paramètre :',
+      service: { title: 'Service par défaut', description: 'Choisissez la plateforme utilisée en premier pour la recherche musicale.', current: 'Actuel', unsupported: 'Service non supporté.', alreadySelected: '{service} est déjà sélectionné.', selected: '{service} sélectionné.' },
+      help: { title: 'Aide des paramètres', content: '• Le service par défaut détermine la plateforme de recherche principale.\n• La langue change la langue d\'affichage du bot.\n• Dans les groupes, Preset audio et Mode DJ sont gérés par les commandes premium/admin.' },
+      preset: { title: 'Preset audio', content: 'Utilisez les commandes suivantes pour changer le preset audio :', current: 'Preset actuel' },
+      djMode: { title: 'Mode DJ', content: 'Quand le Mode DJ est actif, les contrôles sensibles (skip, stop, seek, volume, shuffle, qmove) sont réservés aux admin/autorisés/premium.', current: 'État actuel' },
+      premium: { title: 'Info Premium', content: 'Utilisez /premiumfeatures et /premiuminfo pour en savoir plus sur les fonctionnalités premium.' },
+      groupOnly: 'Ce paramètre est uniquement disponible dans les groupes.',
+      closed: 'Fermé.'
+    }
+  },
+  de: {
+    buttons: { defaultService: 'Standarddienst', audioPreset: 'Audio-Preset', premiumInfo: 'Premium-Info' },
+    settings: {
+      private: { title: 'Einstellungen', description: 'Verwalte deine persönlichen Bot-Einstellungen.' },
+      group: { title: 'Gruppeneinstellungen', description: 'Verwalte die Musikeinstellungen dieser Gruppe.' },
+      labels: { user: 'Benutzer', group: 'Gruppe', language: 'Sprache', defaultService: 'Standarddienst', audioPreset: 'Audio-Preset', djMode: 'DJ-Modus', premium: 'Premium', queueLimit: 'Warteschlangenlimit' },
+      chooseMenu: 'Wähle eine Einstellung:',
+      service: { title: 'Standarddienst', description: 'Wähle die Plattform, die zuerst für die Musiksuche verwendet wird.', current: 'Aktuell', unsupported: 'Nicht unterstützter Dienst.', alreadySelected: '{service} ist bereits ausgewählt.', selected: '{service} ausgewählt.' },
+      help: { title: 'Einstellungshilfe', content: '• Der Standarddienst bestimmt die primäre Suchplattform.\n• Die Sprache ändert die Anzeigesprache des Bots.\n• In Gruppen werden Audio-Preset und DJ-Modus mit Premium/Admin-Befehlen verwaltet.' },
+      preset: { title: 'Audio-Preset', content: 'Verwende folgende Befehle, um das Audio-Preset zu ändern:', current: 'Aktuelles Preset' },
+      djMode: { title: 'DJ-Modus', content: 'Wenn der DJ-Modus aktiv ist, sind sensible Steuerungen (skip, stop, seek, volume, shuffle, qmove) nur für Admin/Autorisierte/Premium-Benutzer verfügbar.', current: 'Aktueller Status' },
+      premium: { title: 'Premium-Info', content: 'Verwende /premiumfeatures und /premiuminfo, um mehr über Premium-Funktionen zu erfahren.' },
+      groupOnly: 'Diese Einstellung ist nur in Gruppen verfügbar.',
+      closed: 'Geschlossen.'
+    }
+  },
+  pt: {
+    buttons: { defaultService: 'Serviço padrão', audioPreset: 'Preset de áudio', premiumInfo: 'Info Premium' },
+    settings: {
+      private: { title: 'Configurações', description: 'Gerencie suas preferências pessoais do bot.' },
+      group: { title: 'Configurações do grupo', description: 'Gerencie as preferências musicais deste grupo.' },
+      labels: { user: 'Usuário', group: 'Grupo', language: 'Idioma', defaultService: 'Serviço padrão', audioPreset: 'Preset de áudio', djMode: 'Modo DJ', premium: 'Premium', queueLimit: 'Limite da fila' },
+      chooseMenu: 'Escolha uma configuração:',
+      service: { title: 'Serviço padrão', description: 'Escolha qual plataforma usar primeiro ao pesquisar música.', current: 'Atual', unsupported: 'Serviço não suportado.', alreadySelected: '{service} já está selecionado.', selected: '{service} selecionado.' },
+      help: { title: 'Ajuda das configurações', content: '• O serviço padrão determina a plataforma de pesquisa principal.\n• O idioma altera o idioma de exibição do bot.\n• Em grupos, Preset de áudio e Modo DJ são gerenciados com comandos premium/admin.' },
+      preset: { title: 'Preset de áudio', content: 'Use os seguintes comandos para alterar o preset de áudio:', current: 'Preset atual' },
+      djMode: { title: 'Modo DJ', content: 'Quando o Modo DJ está ativo, controles sensíveis (skip, stop, seek, volume, shuffle, qmove) são restritos a admin/autorizados/premium.', current: 'Status atual' },
+      premium: { title: 'Info Premium', content: 'Use /premiumfeatures e /premiuminfo para saber mais sobre os recursos premium.' },
+      groupOnly: 'Esta configuração está disponível apenas em grupos.',
+      closed: 'Fechado.'
+    }
+  },
+  ar: {
+    buttons: { defaultService: 'الخدمة الافتراضية', audioPreset: 'إعداد الصوت', premiumInfo: 'معلومات Premium' },
+    settings: {
+      private: { title: 'الإعدادات', description: 'إدارة تفضيلاتك الشخصية للبوت.' },
+      group: { title: 'إعدادات المجموعة', description: 'إدارة تفضيلات الموسيقى لهذه المجموعة.' },
+      labels: { user: 'المستخدم', group: 'المجموعة', language: 'اللغة', defaultService: 'الخدمة الافتراضية', audioPreset: 'إعداد الصوت', djMode: 'وضع DJ', premium: 'بريميوم', queueLimit: 'حد قائمة الانتظار' },
+      chooseMenu: 'اختر إعدادًا:',
+      service: { title: 'الخدمة الافتراضية', description: 'اختر المنصة المستخدمة أولاً عند البحث عن الموسيقى.', current: 'الحالي', unsupported: 'خدمة غير مدعومة.', alreadySelected: '{service} محدد بالفعل.', selected: 'تم تحديد {service}.' },
+      help: { title: 'مساعدة الإعدادات', content: '• تحدد الخدمة الافتراضية منصة البحث الرئيسية.\n• تغير اللغة لغة عرض البوت.\n• في المجموعات، يتم إدارة إعداد الصوت ووضع DJ بأوامر premium/admin.' },
+      preset: { title: 'إعداد الصوت', content: 'استخدم الأوامر التالية لتغيير إعداد الصوت:', current: 'الإعداد الحالي' },
+      djMode: { title: 'وضع DJ', content: 'عندما يكون وضع DJ مفعلاً، تقتصر أدوات التحكم الحساسة (skip, stop, seek, volume, shuffle, qmove) على admin/المصرح لهم/premium.', current: 'الحالة الحالية' },
+      premium: { title: 'معلومات Premium', content: 'استخدم /premiumfeatures و /premiuminfo لمعرفة المزيد عن ميزات Premium.' },
+      groupOnly: 'هذا الإعداد متاح فقط في المجموعات.',
+      closed: 'تم الإغلاق.'
+    }
+  },
+  tr: {
+    buttons: { defaultService: 'Varsayılan Servis', audioPreset: 'Ses Ön Ayarı', premiumInfo: 'Premium Bilgi' },
+    settings: {
+      private: { title: 'Ayarlar', description: 'Kişisel bot tercihlerini yönet.' },
+      group: { title: 'Grup Ayarları', description: 'Bu grubun müzik tercihlerini yönet.' },
+      labels: { user: 'Kullanıcı', group: 'Grup', language: 'Dil', defaultService: 'Varsayılan servis', audioPreset: 'Ses ön ayarı', djMode: 'DJ Modu', premium: 'Premium', queueLimit: 'Kuyruk limiti' },
+      chooseMenu: 'Bir ayar seç:',
+      service: { title: 'Varsayılan Servis', description: 'Müzik ararken ilk kullanılacak platformu seç.', current: 'Mevcut', unsupported: 'Desteklenmeyen servis.', alreadySelected: '{service} zaten seçili.', selected: '{service} seçildi.' },
+      help: { title: 'Ayar Yardımı', content: '• Varsayılan Servis birincil arama platformunu belirler.\n• Dil, botun görüntüleme dilini değiştirir.\n• Gruplarda, Ses Ön Ayarı ve DJ Modu premium/admin komutlarıyla yönetilir.' },
+      preset: { title: 'Ses Ön Ayarı', content: 'Ses ön ayarını değiştirmek için şu komutları kullan:', current: 'Mevcut ön ayar' },
+      djMode: { title: 'DJ Modu', content: 'DJ Modu aktifken, hassas kontroller (skip, stop, seek, volume, shuffle, qmove) yalnızca admin/yetkili/premium kullanıcılara açıktır.', current: 'Mevcut durum' },
+      premium: { title: 'Premium Bilgi', content: 'Premium özellikler hakkında bilgi almak için /premiumfeatures ve /premiuminfo kullan.' },
+      groupOnly: 'Bu ayar yalnızca gruplarda kullanılabilir.',
+      closed: 'Kapatıldı.'
+    }
+  },
+  ko: {
+    buttons: { defaultService: '기본 서비스', audioPreset: '오디오 프리셋', premiumInfo: '프리미엄 정보' },
+    settings: {
+      private: { title: '설정', description: '개인 봇 환경설정을 관리합니다.' },
+      group: { title: '그룹 설정', description: '이 그룹의 음악 환경설정을 관리합니다.' },
+      labels: { user: '사용자', group: '그룹', language: '언어', defaultService: '기본 서비스', audioPreset: '오디오 프리셋', djMode: 'DJ 모드', premium: '프리미엄', queueLimit: '대기열 제한' },
+      chooseMenu: '설정을 선택하세요:',
+      service: { title: '기본 서비스', description: '음악 검색 시 먼저 사용할 플랫폼을 선택하세요.', current: '현재', unsupported: '지원되지 않는 서비스입니다.', alreadySelected: '{service}은(는) 이미 선택되었습니다.', selected: '{service} 선택됨.' },
+      help: { title: '설정 도움말', content: '• 기본 서비스는 주 검색 플랫폼을 결정합니다.\n• 언어는 봇 표시 언어를 변경합니다.\n• 그룹에서는 오디오 프리셋과 DJ 모드가 프리미엄/관리자 명령으로 관리됩니다.' },
+      preset: { title: '오디오 프리셋', content: '다음 명령으로 오디오 프리셋을 변경할 수 있습니다:', current: '현재 프리셋' },
+      djMode: { title: 'DJ 모드', content: 'DJ 모드가 활성화되면 민감한 제어(skip, stop, seek, volume, shuffle, qmove)는 관리자/인증/프리미엄 사용자만 사용할 수 있습니다.', current: '현재 상태' },
+      premium: { title: '프리미엄 정보', content: '프리미엄 기능에 대해 자세히 알아보려면 /premiumfeatures 및 /premiuminfo를 사용하세요.' },
+      groupOnly: '이 설정은 그룹에서만 사용할 수 있습니다.',
+      closed: '닫힘.'
+    }
+  },
+  zh: {
+    buttons: { defaultService: '默认服务', audioPreset: '音频预设', premiumInfo: '高级版信息' },
+    settings: {
+      private: { title: '设置', description: '管理你的个人机器人偏好设置。' },
+      group: { title: '群组设置', description: '管理此群组的音乐偏好设置。' },
+      labels: { user: '用户', group: '群组', language: '语言', defaultService: '默认服务', audioPreset: '音频预设', djMode: 'DJ 模式', premium: '高级版', queueLimit: '队列上限' },
+      chooseMenu: '请选择设置项：',
+      service: { title: '默认服务', description: '选择搜索音乐时优先使用的平台。', current: '当前', unsupported: '不支持的服务。', alreadySelected: '{service} 已被选中。', selected: '已选择 {service}。' },
+      help: { title: '设置帮助', content: '• 默认服务决定主要搜索平台。\n• 语言更改机器人显示语言。\n• 在群组中，音频预设和 DJ 模式通过高级版/管理员命令管理。' },
+      preset: { title: '音频预设', content: '使用以下命令更改音频预设：', current: '当前预设' },
+      djMode: { title: 'DJ 模式', content: 'DJ 模式启用时，敏感控制（skip、stop、seek、volume、shuffle、qmove）仅限管理员/授权/高级版用户使用。', current: '当前状态' },
+      premium: { title: '高级版信息', content: '使用 /premiumfeatures 和 /premiuminfo 了解更多高级版功能。' },
+      groupOnly: '此设置仅在群组中可用。',
+      closed: '已关闭。'
+    }
+  },
+};
+
+for (const [code, override] of Object.entries(settingsTranslations)) {
   translations[code] = mergeDeep(translations[code], override);
 }
