@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { InputFile } from 'grammy';
 import { isSupportedLanguage, languageName, t } from '../i18n/index.js';
-import { backKeyboard, helpKeyboard, languageKeyboard, mainKeyboard, privateStartKeyboard, groupStartKeyboard, backToStartKeyboard } from './keyboards.js';
+import { backKeyboard, helpKeyboard, languageKeyboard, privateStartKeyboard, groupStartKeyboard, backToStartKeyboard } from './keyboards.js';
 import { config } from '../config/index.js';
 import { firstName } from '../utils/extras.js';
 import { htmlEscape } from '../utils/telegram.js';
@@ -35,19 +35,35 @@ export async function editStartPanel(ctx, text, options = {}) {
     ...options,
   };
 
+  const stringText = String(text);
+
   try {
     if (message?.caption !== undefined) {
-      // Panel berupa photo/banner
-      const caption = String(text).slice(0, 1024);
-      await ctx.editMessageCaption({
-        caption,
-        ...finalOptions,
-      });
-      return true;
+      if (stringText.length <= 1024) {
+        await ctx.editMessageCaption({
+          caption: stringText,
+          ...finalOptions,
+        });
+        return true;
+      } else {
+        try {
+          await ctx.deleteMessage();
+          await ctx.reply(stringText, finalOptions);
+          return true;
+        } catch (deleteError) {
+          const shortSummary = "⚠️ Content too long for caption. Opening as text message...\n\n" + stringText.slice(0, 900) + "...";
+          await ctx.editMessageCaption({
+            caption: shortSummary,
+            ...finalOptions,
+          });
+          await ctx.reply(stringText, finalOptions);
+          return false;
+        }
+      }
     }
 
     if (message?.text !== undefined) {
-      await ctx.editMessageText(text, finalOptions);
+      await ctx.editMessageText(stringText, finalOptions);
       return true;
     }
   } catch (error) {
@@ -57,7 +73,7 @@ export async function editStartPanel(ctx, text, options = {}) {
 
   // fallback terakhir saja
   try {
-    await ctx.reply(text, finalOptions);
+    await ctx.reply(stringText, finalOptions);
     return false;
   } catch {
     return false;
@@ -404,10 +420,18 @@ export async function languageSelectHandler(ctx) {
       });
     }
   } else {
-    // Fallback/standard behavior
-    await editOrReplyCallbackMessage(ctx, `${t(selected, 'language.saved', { language: languageName(selected) })}\n\n${t(selected, 'start.text', { name: ctx.from?.first_name ?? t(selected, 'general.user'), botName: ctx.me.first_name })}`, {
+    // Fallback/standard behavior - return to modern start keyboard instead of legacy mainKeyboard
+    const isPrivate = ctx.chat?.type === 'private';
+    const text = isPrivate
+      ? await buildPrivateStartText(ctx, selected)
+      : await buildGroupStartText(ctx, selected);
+    const replyMarkup = isPrivate
+      ? privateStartKeyboard(selected)
+      : groupStartKeyboard(selected);
+
+    await editOrReplyCallbackMessage(ctx, text, {
       parse_mode: 'HTML',
-      reply_markup: mainKeyboard(selected),
+      reply_markup: replyMarkup,
     });
   }
 }

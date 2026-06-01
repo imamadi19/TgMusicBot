@@ -10,6 +10,7 @@ export function supportKeyboard(language = 'en') {
   return keyboard;
 }
 
+// Legacy keyboard; do not use for active /start flow.
 export function mainKeyboard(language = 'en') {
   const botUsername = String(config.botUsername || 'TgMusikGlobalBot').replace(/^@+/, '');
   const addToGroupUrl = `https://t.me/${botUsername}?startgroup=true`;
@@ -34,7 +35,7 @@ export function helpKeyboard(language = 'en') {
     .text(t(language, 'buttons.language'), 'language_menu')
     .row()
     .text(t(language, 'buttons.back'), 'start_home')
-    .text(t(language, 'buttons.close'), 'start_close');
+    .text(`❌ ${t(language, 'buttons.close')}`, 'start_close');
 }
 
 export function backKeyboard(language = 'en') {
@@ -53,7 +54,7 @@ export function serviceSettingsKeyboard(currentService, language = 'en') {
     .text(`${activeService === SUPPORTED_DEFAULT_SERVICES.soundcloud ? '✅ ' : ''}${SUPPORTED_DEFAULT_SERVICES.soundcloud}`, 'service_soundcloud')
     .row()
     .text(`⬅️ ${t(language, 'buttons.back')}`, 'settings_home')
-    .text(`❌ ${t(language, 'buttons.close').replace(/^[✖️\s]+/, '')}`, 'settings_close');
+    .text(`❌ ${t(language, 'buttons.close')}`, 'settings_close');
 
   return keyboard;
 }
@@ -69,7 +70,7 @@ export function languageKeyboard(language = 'en', options = {}) {
     const backCb = options.backCallback || 'start_home';
     const closeCb = options.closeCallback || 'start_close';
     keyboard.text(`⬅️ ${t(language, 'buttons.back')}`, backCb)
-            .text(`❌ ${t(language, 'buttons.close').replace(/^[✖️\s]+/, '')}`, closeCb);
+            .text(`❌ ${t(language, 'buttons.close')}`, closeCb);
   }
   return keyboard;
 }
@@ -103,24 +104,47 @@ export function progressLabel(track = {}) {
   return `${clock(safeElapsed)} | ${progressBar(safeElapsed, duration)} | -${clock(remaining)}`;
 }
 
-export function progressKeyboard(track = {}) {
-  return new InlineKeyboard().text(progressLabel(track), 'play_progress');
+export function progressKeyboard(track = {}, style = 'primary') {
+  return {
+    inline_keyboard: [
+      [
+        {
+          text: progressLabel(track),
+          callback_data: 'play_progress',
+          style,
+        },
+      ],
+    ],
+  };
 }
 
 export function completedProgressKeyboard(track = {}) {
   const duration = Math.max(0, Math.floor(Number(track.duration) || 0));
   const completedAt = new Date(Date.now() - duration * 1000);
-  return progressKeyboard({ ...track, remainingMs: 0, timerEndsAt: null, startedAt: completedAt });
+  return progressKeyboard({ ...track, remainingMs: 0, timerEndsAt: null, startedAt: completedAt }, 'danger');
 }
 
 export function controlKeyboard(language = 'en', state = '', track = {}) {
-  return progressKeyboard(track).row()
-    .text('▷', 'play_resume')
-    .text('Ⅱ', 'play_pause')
-    .text('↻', 'play_replay')
-    .text('▸▸', 'play_skip')
-    .text('▢', 'play_stop');
+  return {
+    inline_keyboard: [
+      [
+        {
+          text: progressLabel(track),
+          callback_data: 'play_progress',
+          style: 'primary',
+        },
+      ],
+      [
+        { text: '▷', callback_data: 'play_resume' },
+        { text: 'Ⅱ', callback_data: 'play_pause' },
+        { text: '↻', callback_data: 'play_replay' },
+        { text: '▸▸', callback_data: 'play_skip' },
+        { text: '▢', callback_data: 'play_stop' },
+      ],
+    ],
+  };
 }
+
 
 export function searchSelectionKeyboard(messageId, tracks, index = 0) {
   const keyboard = new InlineKeyboard();
@@ -171,7 +195,7 @@ export function privateStartKeyboard(language = 'en') {
     }
   }
 
-  keyboard.row().text(`❌ ${t(language, 'buttons.close').replace(/^[✖️\s]+/, '')}`, 'start_close');
+  keyboard.row().text(`❌ ${t(language, 'buttons.close')}`, 'start_close');
 
   return keyboard;
 }
@@ -190,20 +214,20 @@ export function groupStartKeyboard(language = 'en') {
     .text(t(language, 'buttons.help'), 'help_all')
     .text(t(language, 'buttons.premium'), 'start_premium')
     .row()
-    .text(`❌ ${t(language, 'buttons.close').replace(/^[✖️\s]+/, '')}`, 'start_close');
+    .text(`❌ ${t(language, 'buttons.close')}`, 'start_close');
 }
 
 export function backToStartKeyboard(language = 'en') {
   return new InlineKeyboard()
     .text(`⬅️ ${t(language, 'buttons.back')}`, 'start_home')
-    .text(`❌ ${t(language, 'buttons.close').replace(/^[✖️\s]+/, '')}`, 'start_close');
+    .text(`❌ ${t(language, 'buttons.close')}`, 'start_close');
 }
 
 export function settingsDashboardKeyboard(language = 'en', chatType = 'private') {
   const isPrivate = chatType === 'private';
   const keyboard = new InlineKeyboard()
     .text(`🎧 ${t(language, 'buttons.defaultService')}`, 'settings_service')
-    .row()
+    .row();
 
   if (!isPrivate) {
     keyboard
@@ -213,16 +237,17 @@ export function settingsDashboardKeyboard(language = 'en', chatType = 'private')
   }
 
   keyboard
-    .text(`🌐 ${t(language, 'buttons.chooseLanguage')}`, 'settings_language')
+    .text(`🌐 ${t(language, 'buttons.chooseLanguage')}`, 'settings_language');
 
   if (!isPrivate) {
     keyboard.text(`⭐ ${t(language, 'buttons.premiumInfo')}`, 'settings_premium');
   } else {
     keyboard.text(`📖 ${t(language, 'buttons.help')}`, 'settings_help');
+    keyboard.row().text(`⭐ ${t(language, 'buttons.premiumInfo')}`, 'settings_premium');
   }
 
   keyboard.row()
-    .text(`❌ ${t(language, 'buttons.close').replace(/^[✖️\s]+/, '')}`, 'settings_close');
+    .text(`❌ ${t(language, 'buttons.close')}`, 'settings_close');
 
   return keyboard;
 }
@@ -230,7 +255,7 @@ export function settingsDashboardKeyboard(language = 'en', chatType = 'private')
 export function settingsBackKeyboard(language = 'en') {
   return new InlineKeyboard()
     .text(`⬅️ ${t(language, 'buttons.back')}`, 'settings_home')
-    .text(`❌ ${t(language, 'buttons.close').replace(/^[✖️\s]+/, '')}`, 'settings_close');
+    .text(`❌ ${t(language, 'buttons.close')}`, 'settings_close');
 }
 
 export function settingsLanguageKeyboard(language = 'en') {

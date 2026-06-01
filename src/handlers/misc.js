@@ -78,17 +78,35 @@ async function editSettingsPanel(ctx, text, options = {}) {
     ...options,
   };
 
+  const stringText = String(text);
+
   try {
     if (message?.caption !== undefined) {
-      await ctx.editMessageCaption({
-        caption: String(text).slice(0, 1024),
-        ...finalOptions,
-      });
-      return true;
+      if (stringText.length <= 1024) {
+        await ctx.editMessageCaption({
+          caption: stringText,
+          ...finalOptions,
+        });
+        return true;
+      } else {
+        try {
+          await ctx.deleteMessage();
+          await ctx.reply(stringText, finalOptions);
+          return true;
+        } catch (deleteError) {
+          const shortSummary = "⚠️ Content too long for caption. Opening as text message...\n\n" + stringText.slice(0, 900) + "...";
+          await ctx.editMessageCaption({
+            caption: shortSummary,
+            ...finalOptions,
+          });
+          await ctx.reply(stringText, finalOptions);
+          return false;
+        }
+      }
     }
 
     if (message?.text !== undefined) {
-      await ctx.editMessageText(text, finalOptions);
+      await ctx.editMessageText(stringText, finalOptions);
       return true;
     }
   } catch (error) {
@@ -97,7 +115,7 @@ async function editSettingsPanel(ctx, text, options = {}) {
   }
 
   try {
-    await ctx.reply(text, finalOptions);
+    await ctx.reply(stringText, finalOptions);
     return false;
   } catch {
     return false;
@@ -175,7 +193,7 @@ async function buildGroupSettingsText(ctx, language) {
     '',
     `👥 <b>${t(language, 'settings.labels.group')}:</b> ${chatTitle}`,
     `🌐 <b>${t(language, 'settings.labels.language')}:</b> ${langDisplay}`,
-    `🎧 <b>${t(language, 'settings.labels.defaultService')}:</b> ${currentService}`,
+    `🎧 <b>${t(language, 'settings.labels.userDefaultService')}:</b> ${currentService}`,
     `🎚 <b>${t(language, 'settings.labels.audioPreset')}:</b> ${audioPreset}`,
     `🎧 <b>${t(language, 'settings.labels.djMode')}:</b> ${djMode}`,
     `⭐ <b>${t(language, 'settings.labels.premium')}:</b> ${premiumStatus}`,
@@ -460,8 +478,8 @@ export async function settingsPremiumInfoHandler(ctx) {
   const text = [
     `⭐ <b>${t(language, 'settings.premium.title')}</b>`,
     '',
-    `Premium: <b>${premiumStatus}</b>`,
-    `${t(language, 'settings.labels.queueLimit')}: <b>${queueLimit}</b>`,
+    t(language, 'settings.premium.status', { premium: premiumStatus }),
+    t(language, 'settings.premium.queueLimit', { queueLimit }),
     '',
     t(language, 'settings.premium.content'),
   ].join('\n');

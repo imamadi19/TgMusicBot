@@ -81,16 +81,19 @@ test('control keyboard exposes moving progress and transport controls', async ()
   const rows = controlKeyboard('en', '', { duration: 65 }).inline_keyboard;
   assert.equal(rows[0][0].callback_data, 'play_progress');
   assert.equal(rows[0][0].text, '00:00 | ◉━━━━━━━━━━━ | -01:05');
+  assert.equal(rows[0][0].style, 'primary');
   assert.deepEqual(rows[1].map((button) => button.callback_data), ['play_resume', 'play_pause', 'play_replay', 'play_skip', 'play_stop']);
   assert.deepEqual(rows[1].map((button) => button.text), ['▷', 'Ⅱ', '↻', '▸▸', '▢']);
 
   const progressRows = progressKeyboard({ duration: 65 }).inline_keyboard;
   assert.equal(progressRows.length, 1);
   assert.equal(progressRows[0][0].callback_data, 'play_progress');
+  assert.equal(progressRows[0][0].style, 'primary');
 
   const completedRows = completedProgressKeyboard({ duration: 65 }).inline_keyboard;
   assert.equal(completedRows.length, 1);
   assert.equal(completedRows[0][0].text, '01:05 | ━━━━━━━━━━━◉ | -00:00');
+  assert.equal(completedRows[0][0].style, 'danger');
 });
 
 

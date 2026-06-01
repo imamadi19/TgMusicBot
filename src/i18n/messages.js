@@ -1,7 +1,7 @@
 export const translations = {
   en: {
     buttons: {
-      support: 'Support', channel: 'Channel', source: 'Source', addToGroup: 'Add me to your group', user: 'User', admin: 'Admin', playlist: 'Playlist', owner: 'Owner', developer: 'Developer', back: 'Back', pause: '⏸ Pause', resume: '▶️ Resume', skip: '⏭ Skip', stop: '⏹ Stop', mute: '🔇 Mute', unmute: '🔊 Unmute', addToPlaylist: '➕ Playlist', close: '✖️ Close', language: '🌐 Language', help: 'Help', settings: 'Settings', chooseLanguage: 'Choose language',
+      support: 'Support', channel: 'Channel', source: 'Source', addToGroup: 'Add me to your group', user: 'User', admin: 'Admin', playlist: 'Playlist', owner: 'Owner', developer: 'Developer', back: 'Back', pause: '⏸ Pause', resume: '▶️ Resume', skip: '⏭ Skip', stop: '⏹ Stop', mute: '🔇 Mute', unmute: '🔊 Unmute', addToPlaylist: '➕ Playlist', close: 'Close', language: '🌐 Language', help: 'Help', settings: 'Settings', chooseLanguage: 'Choose language',
       setupGuide: 'Setup Guide', musicFeatures: 'Music Features', myPlaylists: 'My Playlists', premium: 'Premium', playMusic: 'Play Music', playVideo: 'Play Video', queue: 'Queue', groupSettings: 'Group Settings', djMode: 'DJ Mode',
       defaultService: 'Default Service', audioPreset: 'Audio Preset', premiumInfo: 'Premium Info'
     },
@@ -109,13 +109,18 @@ export const translations = {
     settings: {
       private: { title: 'Settings', description: 'Manage your personal bot preferences.' },
       group: { title: 'Group Settings', description: 'Manage this group\'s music preferences.' },
-      labels: { user: 'User', group: 'Group', language: 'Language', defaultService: 'Default service', audioPreset: 'Audio preset', djMode: 'DJ Mode', premium: 'Premium', queueLimit: 'Queue limit' },
+      labels: { user: 'User', group: 'Group', language: 'Language', defaultService: 'Default service', userDefaultService: 'Your default service', audioPreset: 'Audio preset', djMode: 'DJ Mode', premium: 'Premium', queueLimit: 'Queue limit' },
       chooseMenu: 'Choose a setting below:',
       service: { title: 'Default Service', description: 'Choose which platform should be used first when searching music.', current: 'Current', unsupported: 'Unsupported service.', alreadySelected: '{service} is already selected.', selected: '{service} selected.' },
       help: { title: 'Settings Help', content: '• Default Service determines the primary search platform.\n• Language changes the bot display language.\n• In groups, Audio Preset and DJ Mode are managed with premium/admin commands.' },
       preset: { title: 'Audio Preset', content: 'Use the following commands to change the audio preset:', current: 'Current preset' },
       djMode: { title: 'DJ Mode', content: 'When DJ Mode is active, sensitive controls (skip, stop, seek, volume, shuffle, qmove) are restricted to admin/auth/premium users.', current: 'Current status' },
-      premium: { title: 'Premium Info', content: 'Use /premiumfeatures and /premiuminfo to learn more about premium features.' },
+      premium: {
+        title: 'Premium Info',
+        content: 'Use /premiumfeatures and /premiuminfo to learn more about premium features.',
+        status: 'Status: <b>{premium}</b>',
+        queueLimit: 'Queue limit: <b>{queueLimit}</b>'
+      },
       groupOnly: 'This setting is only available in groups.',
       closed: 'Closed.'
     },
@@ -143,7 +148,7 @@ const aliases = {
       mute: '🔇 Bisukan',
       unmute: '🔊 Bunyikan',
       addToPlaylist: '➕ Playlist',
-      close: '✖️ Tutup',
+      close: 'Tutup',
       language: '🌐 Bahasa',
       help: 'Bantuan',
       settings: 'Pengaturan',
@@ -264,7 +269,7 @@ const aliases = {
       mute: '🔇 Выкл. звук',
       unmute: '🔊 Вкл. звук',
       addToPlaylist: '➕ Плейлист',
-      close: '✖️ Закрыть',
+      close: 'Закрыть',
       language: '🌐 Язык',
       help: 'Помощь',
       settings: 'Настройки',
@@ -375,7 +380,7 @@ const aliases = {
       mute: '🔇 ミュート',
       unmute: '🔊 ミュート解除',
       addToPlaylist: '➕ プレイリスト',
-      close: '✖️ 閉じる',
+      close: '閉じる',
       language: '🌐 言語',
       help: 'ヘルプ',
       settings: '設定',
@@ -486,7 +491,7 @@ const aliases = {
       mute: '🔇 म्यूट',
       unmute: '🔊 अनम्यूट',
       addToPlaylist: '➕ प्लेलिस्ट',
-      close: '✖️ बंद करें',
+      close: 'बंद करें',
       language: '🌐 भाषा',
       help: 'मदद',
       settings: 'सेटिंग्स',
@@ -597,7 +602,7 @@ const aliases = {
       mute: '🔇 Muta',
       unmute: '🔊 Riattiva',
       addToPlaylist: '➕ Playlist',
-      close: '✖️ Chiudi',
+      close: 'Chiudi',
       language: '🌐 Lingua',
       help: 'Aiuto',
       settings: 'Impostazioni',
@@ -708,7 +713,7 @@ const aliases = {
       mute: '🔇 Silenciar',
       unmute: '🔊 Activar sonido',
       addToPlaylist: '➕ Playlist',
-      close: '✖️ Cerrar',
+      close: 'Cerrar',
       language: '🌐 Idioma',
       help: 'Ayuda',
       settings: 'Ajustes',
@@ -819,7 +824,7 @@ const aliases = {
       mute: '🔇 Muet',
       unmute: '🔊 Réactiver le son',
       addToPlaylist: '➕ Playlist',
-      close: '✖️ Fermer',
+      close: 'Fermer',
       language: '🌐 Langue',
       help: 'Aide',
       settings: 'Paramètres',
@@ -930,7 +935,7 @@ const aliases = {
       mute: '🔇 Stumm',
       unmute: '🔊 Ton an',
       addToPlaylist: '➕ Playlist',
-      close: '✖️ Schließen',
+      close: 'Schließen',
       language: '🌐 Sprache',
       help: 'Hilfe',
       settings: 'Einstellungen',
@@ -1041,7 +1046,7 @@ const aliases = {
       mute: '🔇 Silenciar',
       unmute: '🔊 Ativar som',
       addToPlaylist: '➕ Playlist',
-      close: '✖️ Fechar',
+      close: 'Fechar',
       language: '🌐 Idioma',
       help: 'Ajuda',
       settings: 'Configurações',
@@ -1152,7 +1157,7 @@ const aliases = {
       mute: '🔇 كتم',
       unmute: '🔊 إلغاء الكتم',
       addToPlaylist: '➕ قائمة',
-      close: '✖️ إغلاق',
+      close: 'إغلاق',
       language: '🌐 اللغة',
       help: 'مساعدة',
       settings: 'إعدادات',
@@ -1263,7 +1268,7 @@ const aliases = {
       mute: '🔇 Sustur',
       unmute: '🔊 Sesi Aç',
       addToPlaylist: '➕ Çalma Listesi',
-      close: '✖️ Kapat',
+      close: 'Kapat',
       language: '🌐 Dil',
       help: 'Yardım',
       settings: 'Ayarlar',
@@ -1374,7 +1379,7 @@ const aliases = {
       mute: '🔇 음소거',
       unmute: '🔊 음소거 해제',
       addToPlaylist: '➕ 플레이리스트',
-      close: '✖️ 닫기',
+      close: '닫기',
       language: '🌐 언어',
       help: '도움말',
       settings: '설정',
@@ -1485,7 +1490,7 @@ const aliases = {
       mute: '🔇 静音',
       unmute: '🔊 取消静音',
       addToPlaylist: '➕ 播放列表',
-      close: '✖️ 关闭',
+      close: '关闭',
       language: '🌐 语言',
       help: '帮助',
       settings: '设置',
@@ -1645,80 +1650,80 @@ for (const [code, override] of Object.entries(playbackSelectionTranslations)) {
 
 const featureTranslations = {
   id: {
-    buttons: { resume: '▶️ Lanjutkan', mute: '🔇 Bisukan', unmute: '🔊 Bunyikan', addToPlaylist: '➕ Playlist', close: '✖️ Tutup' },
+    buttons: { resume: '▶️ Lanjutkan', mute: '🔇 Bisukan', unmute: '🔊 Bunyikan', addToPlaylist: '➕ Playlist', close: 'Tutup' },
     callbacks: { track: 'Lagu', nowPlaying: 'Sedang Diputar', paused: 'Dijeda', muted: 'Dibisukan', noActivePlayback: 'Tidak ada pemutaran aktif.', settingsIgnored: 'Callback pengaturan ditangani terpisah.', closingPanel: 'Menutup panel.', trackSkipped: 'Lagu dilewati.', playbackStopped: 'Pemutaran dihentikan.', playbackPaused: 'Pemutaran dijeda.', playbackResumed: 'Pemutaran dilanjutkan.', playbackMuted: 'Pemutaran dibisukan.', playbackUnmuted: 'Pemutaran dibunyikan.', actionFailed: 'Tidak dapat memproses aksi pemutaran.', requestedBy: 'Diminta oleh: {user}', pausedBy: 'Dijeda oleh {user}', resumedBy: 'Dilanjutkan oleh {user}', mutedBy: 'Dibisukan oleh {user}', unmutedBy: 'Dibunyikan oleh {user}', defaultPlaylistName: 'Playlist Saya (TgMusic)', addedToPlaylist: 'Lagu "{song}" ditambahkan ke playlist "{playlist}".' },
     auth: { listTitle: 'Pengguna Terotorisasi', none: 'Tidak ada pengguna terotorisasi.', groupOnly: 'Perintah ini hanya bisa digunakan di grup.', adminOnly: 'Kamu harus menjadi administrator untuk memakai perintah ini.', adminVerifyFailed: 'Tidak dapat memverifikasi status administrator.', targetRequired: 'Balas pengguna atau berikan ID pengguna numerik.', already: 'Pengguna ini sudah diotorisasi.', notAuthorized: 'Pengguna ini belum diotorisasi.', added: 'Pengguna {userId} telah diotorisasi.', removed: 'Pengguna {userId} dihapus dari daftar otorisasi.', addFailed: 'Gagal mengotorisasi pengguna.', removeFailed: 'Gagal menghapus pengguna terotorisasi.' },
     devs: { devOnly: 'Hanya developer yang dapat menggunakan perintah ini.', noActiveChats: 'Tidak ada chat aktif ditemukan.', clearAssistantsDone: 'Menghapus assistant dari {count} chat.', clearAssistantsFailed: 'Gagal membersihkan assistant: {error}', leaveAllStarted: 'Assistant sedang keluar dari semua chat...', leaveAllDone: 'Assistant keluar dari {count} chat.', leaveAllFailed: 'Gagal keluar dari semua chat: {error}', loggerMissing: 'Harap atur LOGGER_ID di .env terlebih dahulu.', loggerUsage: 'Penggunaan: /logger [enable|disable|on|off]\nStatus saat ini: {status}', loggerEnabled: 'Logger diaktifkan', loggerDisabled: 'Logger dinonaktifkan', loggerInvalid: "Argumen tidak valid. Gunakan 'enable', 'disable', 'on', atau 'off'." },
     broadcast: { usage: 'Balas pesan untuk broadcast.\n\nPenggunaan:\n/broadcast -chat : hanya grup\n/broadcast -user : hanya pengguna\n/broadcast -both : grup + pengguna (default)\n/broadcast -copy : kirim sebagai salinan\n\nContoh:\n/broadcast\n/broadcast -chat\n/broadcast -user -copy', started: 'Broadcast dimulai.', ended: 'Broadcast selesai.\nGrup: {groups}\nPengguna: {users}', stopped: 'Broadcast dihentikan.\nGrup: {groups}\nPengguna: {users}', stopRequested: 'Broadcast dihentikan.', noneInProgress: 'Tidak ada broadcast berjalan.', alreadyInProgress: 'Broadcast sedang berjalan.', noTargets: 'Tidak ada target ditemukan.', failed: 'Broadcast gagal: {error}' },
   },
   ru: {
-    buttons: { resume: '▶️ Продолжить', mute: '🔇 Выкл. звук', unmute: '🔊 Вкл. звук', addToPlaylist: '➕ Плейлист', close: '✖️ Закрыть' },
+    buttons: { resume: '▶️ Продолжить', mute: '🔇 Выкл. звук', unmute: '🔊 Вкл. звук', addToPlaylist: '➕ Плейлист', close: 'Закрыть' },
     callbacks: { track: 'Трек', nowPlaying: 'Сейчас играет', paused: 'На паузе', muted: 'Без звука', noActivePlayback: 'Активного воспроизведения нет.', settingsIgnored: 'Кнопки настроек обрабатываются отдельно.', closingPanel: 'Закрываю панель.', trackSkipped: 'Трек пропущен.', playbackStopped: 'Воспроизведение остановлено.', playbackPaused: 'Воспроизведение на паузе.', playbackResumed: 'Воспроизведение продолжено.', playbackMuted: 'Звук выключен.', playbackUnmuted: 'Звук включен.', actionFailed: 'Не удалось выполнить действие.', requestedBy: 'Запросил: {user}', pausedBy: 'Поставил на паузу: {user}', resumedBy: 'Продолжил: {user}', mutedBy: 'Выключил звук: {user}', unmutedBy: 'Включил звук: {user}', defaultPlaylistName: 'Мой плейлист (TgMusic)', addedToPlaylist: 'Трек "{song}" добавлен в плейлист "{playlist}".' },
     auth: { listTitle: 'Авторизованные пользователи', none: 'Авторизованных пользователей нет.', groupOnly: 'Эту команду можно использовать только в группах.', adminOnly: 'Для этой команды нужны права администратора.', adminVerifyFailed: 'Не удалось проверить статус администратора.', targetRequired: 'Ответьте пользователю или укажите числовой ID.', already: 'Этот пользователь уже авторизован.', notAuthorized: 'Этот пользователь не авторизован.', added: 'Пользователь {userId} авторизован.', removed: 'Пользователь {userId} удалён из списка авторизации.', addFailed: 'Не удалось авторизовать пользователя.', removeFailed: 'Не удалось удалить авторизованного пользователя.' },
     broadcast: { usage: 'Ответьте на сообщение для рассылки.\n\nИспользование:\n/broadcast -chat : только группы\n/broadcast -user : только пользователи\n/broadcast -both : группы + пользователи (по умолчанию)\n/broadcast -copy : отправить копией', started: 'Рассылка началась.', ended: 'Рассылка завершена.\nГруппы: {groups}\nПользователи: {users}', stopped: 'Рассылка остановлена.\nГруппы: {groups}\nПользователи: {users}', stopRequested: 'Рассылка остановлена.', noneInProgress: 'Активной рассылки нет.', alreadyInProgress: 'Рассылка уже выполняется.', noTargets: 'Цели не найдены.', failed: 'Ошибка рассылки: {error}' },
   },
   ja: {
-    buttons: { resume: '▶️ 再開', mute: '🔇 ミュート', unmute: '🔊 ミュート解除', addToPlaylist: '➕ プレイリスト', close: '✖️ 閉じる' },
+    buttons: { resume: '▶️ 再開', mute: '🔇 ミュート', unmute: '🔊 ミュート解除', addToPlaylist: '➕ プレイリスト', close: '閉じる' },
     callbacks: { track: '曲', nowPlaying: '再生中', paused: '一時停止中', muted: 'ミュート中', noActivePlayback: '再生中のものはありません。', settingsIgnored: '設定コールバックは別に処理されます。', closingPanel: 'パネルを閉じます。', trackSkipped: '曲をスキップしました。', playbackStopped: '再生を停止しました。', playbackPaused: '再生を一時停止しました。', playbackResumed: '再生を再開しました。', playbackMuted: '再生をミュートしました。', playbackUnmuted: 'ミュートを解除しました。', actionFailed: '再生操作を処理できませんでした。', requestedBy: 'リクエスト: {user}', pausedBy: '{user} が一時停止しました', resumedBy: '{user} が再開しました', mutedBy: '{user} がミュートしました', unmutedBy: '{user} がミュート解除しました', defaultPlaylistName: 'マイプレイリスト (TgMusic)', addedToPlaylist: '曲「{song}」をプレイリスト「{playlist}」に追加しました。' },
     auth: { listTitle: '認証済みユーザー', none: '認証済みユーザーはいません。', groupOnly: 'このコマンドはグループでのみ使用できます。', adminOnly: 'このコマンドには管理者権限が必要です。', adminVerifyFailed: '管理者状態を確認できません。', targetRequired: 'ユーザーに返信するか数値のユーザーIDを指定してください。', already: 'このユーザーは既に認証済みです。', notAuthorized: 'このユーザーは認証されていません。', added: 'ユーザー {userId} を認証しました。', removed: 'ユーザー {userId} を認証リストから削除しました。', addFailed: 'ユーザーの認証に失敗しました。', removeFailed: '認証済みユーザーの削除に失敗しました。' },
     broadcast: { usage: '配信するメッセージに返信してください。\n\n使い方:\n/broadcast -chat : グループのみ\n/broadcast -user : ユーザーのみ\n/broadcast -both : グループ + ユーザー (既定)\n/broadcast -copy : コピーとして送信', started: '一斉配信を開始しました。', ended: '一斉配信が完了しました。\nグループ: {groups}\nユーザー: {users}', stopped: '一斉配信を停止しました。\nグループ: {groups}\nユーザー: {users}', stopRequested: '一斉配信を停止しました。', noneInProgress: '実行中の一斉配信はありません。', alreadyInProgress: '一斉配信は既に実行中です。', noTargets: '送信先が見つかりません。', failed: '一斉配信に失敗しました: {error}' },
   },
   hi: {
-    buttons: { resume: '▶️ फिर शुरू', mute: '🔇 म्यूट', unmute: '🔊 अनम्यूट', addToPlaylist: '➕ प्लेलिस्ट', close: '✖️ बंद' },
+    buttons: { resume: '▶️ फिर शुरू', mute: '🔇 म्यूट', unmute: '🔊 अनम्यूट', addToPlaylist: '➕ प्लेलिस्ट', close: 'बंद' },
     callbacks: { track: 'ट्रैक', nowPlaying: 'अभी चल रहा है', paused: 'रुका हुआ', muted: 'म्यूट', noActivePlayback: 'कोई सक्रिय प्लेबैक नहीं है।', settingsIgnored: 'सेटिंग callback अलग से संभाले जाते हैं।', closingPanel: 'पैनल बंद हो रहा है।', trackSkipped: 'ट्रैक छोड़ दिया गया।', playbackStopped: 'प्लेबैक रोक दिया गया।', playbackPaused: 'प्लेबैक रोक दिया गया।', playbackResumed: 'प्लेबैक फिर शुरू हुआ।', playbackMuted: 'प्लेबैक म्यूट हुआ।', playbackUnmuted: 'प्लेबैक अनम्यूट हुआ।', actionFailed: 'प्लेबैक कार्रवाई प्रोसेस नहीं हो सकी।', requestedBy: 'अनुरोधकर्ता: {user}', pausedBy: '{user} ने रोका', resumedBy: '{user} ने शुरू किया', mutedBy: '{user} ने म्यूट किया', unmutedBy: '{user} ने अनम्यूट किया', defaultPlaylistName: 'मेरी प्लेलिस्ट (TgMusic)', addedToPlaylist: 'ट्रैक "{song}" प्लेलिस्ट "{playlist}" में जोड़ा गया।' },
     auth: { listTitle: 'अधिकृत उपयोगकर्ता', none: 'कोई अधिकृत उपयोगकर्ता नहीं मिला।', groupOnly: 'यह कमांड केवल ग्रुप में इस्तेमाल हो सकता है।', adminOnly: 'इस कमांड के लिए admin होना जरूरी है।', adminVerifyFailed: 'Admin स्थिति सत्यापित नहीं हो सकी।', targetRequired: 'किसी user को reply करें या numeric user ID दें।', already: 'यह user पहले से authorized है।', notAuthorized: 'यह user authorized नहीं है।', added: 'User {userId} authorized हो गया।', removed: 'User {userId} authorization list से हटाया गया।', addFailed: 'User को authorize करने में विफल।', removeFailed: 'Authorized user हटाने में विफल।' },
     broadcast: { usage: 'Broadcast के लिए किसी message पर reply करें।\n\nUsage:\n/broadcast -chat : केवल groups\n/broadcast -user : केवल users\n/broadcast -both : groups + users (default)\n/broadcast -copy : copy के रूप में भेजें', started: 'Broadcast शुरू हुआ।', ended: 'Broadcast समाप्त।\nGroups: {groups}\nUsers: {users}', stopped: 'Broadcast रोका गया।\nGroups: {groups}\nUsers: {users}', stopRequested: 'Broadcast रोका गया।', noneInProgress: 'कोई broadcast चल नहीं रहा है।', alreadyInProgress: 'Broadcast पहले से चल रहा है।', noTargets: 'कोई target नहीं मिला।', failed: 'Broadcast विफल: {error}' },
   },
   it: {
-    buttons: { resume: '▶️ Riprendi', mute: '🔇 Muta', unmute: '🔊 Riattiva', addToPlaylist: '➕ Playlist', close: '✖️ Chiudi' },
+    buttons: { resume: '▶️ Riprendi', mute: '🔇 Muta', unmute: '🔊 Riattiva', addToPlaylist: '➕ Playlist', close: 'Chiudi' },
     callbacks: { track: 'Traccia', nowPlaying: 'In riproduzione', paused: 'In pausa', muted: 'Muto', noActivePlayback: 'Non c’è una riproduzione attiva.', settingsIgnored: 'I callback delle impostazioni sono gestiti separatamente.', closingPanel: 'Chiudo il pannello.', trackSkipped: 'Traccia saltata.', playbackStopped: 'Riproduzione fermata.', playbackPaused: 'Riproduzione in pausa.', playbackResumed: 'Riproduzione ripresa.', playbackMuted: 'Riproduzione mutata.', playbackUnmuted: 'Audio riattivato.', actionFailed: 'Impossibile eseguire l’azione di riproduzione.', requestedBy: 'Richiesto da: {user}', pausedBy: 'Messo in pausa da {user}', resumedBy: 'Ripreso da {user}', mutedBy: 'Mutato da {user}', unmutedBy: 'Riattivato da {user}', defaultPlaylistName: 'La mia playlist (TgMusic)', addedToPlaylist: 'Traccia "{song}" aggiunta alla playlist "{playlist}".' },
     auth: { listTitle: 'Utenti autorizzati', none: 'Nessun utente autorizzato trovato.', groupOnly: 'Questo comando può essere usato solo nei gruppi.', adminOnly: 'Devi essere amministratore per usare questo comando.', adminVerifyFailed: 'Impossibile verificare lo stato di amministratore.', targetRequired: 'Rispondi a un utente o fornisci un ID utente numerico.', already: 'Questo utente è già autorizzato.', notAuthorized: 'Questo utente non è autorizzato.', added: 'Utente {userId} autorizzato.', removed: 'Utente {userId} rimosso dalla lista autorizzati.', addFailed: 'Impossibile autorizzare l’utente.', removeFailed: 'Impossibile rimuovere l’utente autorizzato.' },
     broadcast: { usage: 'Rispondi a un messaggio da trasmettere.\n\nUso:\n/broadcast -chat : solo gruppi\n/broadcast -user : solo utenti\n/broadcast -both : gruppi + utenti (default)\n/broadcast -copy : invia come copia', started: 'Broadcast avviato.', ended: 'Broadcast terminato.\nGruppi: {groups}\nUtenti: {users}', stopped: 'Broadcast fermato.\nGruppi: {groups}\nUtenti: {users}', stopRequested: 'Broadcast fermato.', noneInProgress: 'Nessun broadcast in corso.', alreadyInProgress: 'Un broadcast è già in corso.', noTargets: 'Nessun destinatario trovato.', failed: 'Broadcast fallito: {error}' },
   },
   es: {
-    buttons: { resume: '▶️ Reanudar', mute: '🔇 Silenciar', unmute: '🔊 Activar sonido', addToPlaylist: '➕ Playlist', close: '✖️ Cerrar' },
+    buttons: { resume: '▶️ Reanudar', mute: '🔇 Silenciar', unmute: '🔊 Activar sonido', addToPlaylist: '➕ Playlist', close: 'Cerrar' },
     callbacks: { track: 'Pista', nowPlaying: 'Reproduciendo', paused: 'Pausado', muted: 'Silenciado', noActivePlayback: 'No hay reproducción activa.', settingsIgnored: 'Los callbacks de ajustes se manejan por separado.', closingPanel: 'Cerrando panel.', trackSkipped: 'Pista saltada.', playbackStopped: 'Reproducción detenida.', playbackPaused: 'Reproducción pausada.', playbackResumed: 'Reproducción reanudada.', playbackMuted: 'Reproducción silenciada.', playbackUnmuted: 'Sonido reactivado.', actionFailed: 'No se pudo procesar la acción de reproducción.', requestedBy: 'Pedido por: {user}', pausedBy: 'Pausado por {user}', resumedBy: 'Reanudado por {user}', mutedBy: 'Silenciado por {user}', unmutedBy: 'Sonido activado por {user}', defaultPlaylistName: 'Mi playlist (TgMusic)', addedToPlaylist: 'Pista "{song}" añadida a la playlist "{playlist}".' },
     auth: { listTitle: 'Usuarios autorizados', none: 'No se encontraron usuarios autorizados.', groupOnly: 'Este comando solo se puede usar en grupos.', adminOnly: 'Debes ser administrador para usar este comando.', adminVerifyFailed: 'No se pudo verificar el estado de administrador.', targetRequired: 'Responde a un usuario o proporciona un ID numérico.', already: 'Este usuario ya está autorizado.', notAuthorized: 'Este usuario no está autorizado.', added: 'Usuario {userId} autorizado.', removed: 'Usuario {userId} eliminado de la lista autorizada.', addFailed: 'No se pudo autorizar al usuario.', removeFailed: 'No se pudo eliminar al usuario autorizado.' },
     broadcast: { usage: 'Responde a un mensaje para difundirlo.\n\nUso:\n/broadcast -chat : solo grupos\n/broadcast -user : solo usuarios\n/broadcast -both : grupos + usuarios (default)\n/broadcast -copy : enviar como copia', started: 'Broadcast iniciado.', ended: 'Broadcast finalizado.\nGrupos: {groups}\nUsuarios: {users}', stopped: 'Broadcast detenido.\nGrupos: {groups}\nUsuarios: {users}', stopRequested: 'Broadcast detenido.', noneInProgress: 'No hay broadcast en curso.', alreadyInProgress: 'Ya hay un broadcast en curso.', noTargets: 'No se encontraron destinatarios.', failed: 'Broadcast fallido: {error}' },
   },
   fr: {
-    buttons: { resume: '▶️ Reprendre', mute: '🔇 Muet', unmute: '🔊 Réactiver', addToPlaylist: '➕ Playlist', close: '✖️ Fermer' },
+    buttons: { resume: '▶️ Reprendre', mute: '🔇 Muet', unmute: '🔊 Réactiver', addToPlaylist: '➕ Playlist', close: 'Fermer' },
     callbacks: { track: 'Piste', nowPlaying: 'En lecture', paused: 'En pause', muted: 'Muet', noActivePlayback: 'Aucune lecture active.', settingsIgnored: 'Les callbacks des paramètres sont gérés séparément.', closingPanel: 'Fermeture du panneau.', trackSkipped: 'Piste passée.', playbackStopped: 'Lecture arrêtée.', playbackPaused: 'Lecture mise en pause.', playbackResumed: 'Lecture reprise.', playbackMuted: 'Lecture mise en sourdine.', playbackUnmuted: 'Son réactivé.', actionFailed: 'Impossible de traiter l’action de lecture.', requestedBy: 'Demandé par : {user}', pausedBy: 'Mis en pause par {user}', resumedBy: 'Repris par {user}', mutedBy: 'Mis en sourdine par {user}', unmutedBy: 'Réactivé par {user}', defaultPlaylistName: 'Ma playlist (TgMusic)', addedToPlaylist: 'Piste "{song}" ajoutée à la playlist "{playlist}".' },
     auth: { listTitle: 'Utilisateurs autorisés', none: 'Aucun utilisateur autorisé trouvé.', groupOnly: 'Cette commande ne peut être utilisée que dans les groupes.', adminOnly: 'Vous devez être administrateur pour utiliser cette commande.', adminVerifyFailed: 'Impossible de vérifier le statut administrateur.', targetRequired: 'Répondez à un utilisateur ou fournissez un ID numérique.', already: 'Cet utilisateur est déjà autorisé.', notAuthorized: 'Cet utilisateur n’est pas autorisé.', added: 'Utilisateur {userId} autorisé.', removed: 'Utilisateur {userId} retiré de la liste autorisée.', addFailed: 'Impossible d’autoriser l’utilisateur.', removeFailed: 'Impossible de retirer l’utilisateur autorisé.' },
     broadcast: { usage: 'Répondez à un message pour le diffuser.\n\nUtilisation :\n/broadcast -chat : groupes uniquement\n/broadcast -user : utilisateurs uniquement\n/broadcast -both : groupes + utilisateurs (défaut)\n/broadcast -copy : envoyer comme copie', started: 'Diffusion commencée.', ended: 'Diffusion terminée.\nGroupes : {groups}\nUtilisateurs : {users}', stopped: 'Diffusion arrêtée.\nGroupes : {groups}\nUtilisateurs : {users}', stopRequested: 'Diffusion arrêtée.', noneInProgress: 'Aucune diffusion en cours.', alreadyInProgress: 'Une diffusion est déjà en cours.', noTargets: 'Aucune cible trouvée.', failed: 'Échec de la diffusion : {error}' },
   },
   de: {
-    buttons: { resume: '▶️ Fortsetzen', mute: '🔇 Stumm', unmute: '🔊 Ton an', addToPlaylist: '➕ Playlist', close: '✖️ Schließen' },
+    buttons: { resume: '▶️ Fortsetzen', mute: '🔇 Stumm', unmute: '🔊 Ton an', addToPlaylist: '➕ Playlist', close: 'Schließen' },
     callbacks: { track: 'Titel', nowPlaying: 'Läuft gerade', paused: 'Pausiert', muted: 'Stumm', noActivePlayback: 'Keine aktive Wiedergabe.', settingsIgnored: 'Einstellungs-Callbacks werden separat behandelt.', closingPanel: 'Panel wird geschlossen.', trackSkipped: 'Titel übersprungen.', playbackStopped: 'Wiedergabe gestoppt.', playbackPaused: 'Wiedergabe pausiert.', playbackResumed: 'Wiedergabe fortgesetzt.', playbackMuted: 'Wiedergabe stummgeschaltet.', playbackUnmuted: 'Ton wieder aktiviert.', actionFailed: 'Wiedergabeaktion konnte nicht verarbeitet werden.', requestedBy: 'Angefordert von: {user}', pausedBy: 'Pausiert von {user}', resumedBy: 'Fortgesetzt von {user}', mutedBy: 'Stummgeschaltet von {user}', unmutedBy: 'Ton aktiviert von {user}', defaultPlaylistName: 'Meine Playlist (TgMusic)', addedToPlaylist: 'Titel "{song}" zur Playlist "{playlist}" hinzugefügt.' },
     auth: { listTitle: 'Autorisierte Benutzer', none: 'Keine autorisierten Benutzer gefunden.', groupOnly: 'Dieser Befehl kann nur in Gruppen verwendet werden.', adminOnly: 'Du musst Administrator sein, um diesen Befehl zu verwenden.', adminVerifyFailed: 'Administratorstatus konnte nicht geprüft werden.', targetRequired: 'Antworte einem Benutzer oder gib eine numerische Benutzer-ID an.', already: 'Dieser Benutzer ist bereits autorisiert.', notAuthorized: 'Dieser Benutzer ist nicht autorisiert.', added: 'Benutzer {userId} wurde autorisiert.', removed: 'Benutzer {userId} wurde aus der Autorisierungsliste entfernt.', addFailed: 'Benutzer konnte nicht autorisiert werden.', removeFailed: 'Autorisierter Benutzer konnte nicht entfernt werden.' },
     broadcast: { usage: 'Antworte auf eine Nachricht, um sie zu senden.\n\nNutzung:\n/broadcast -chat : nur Gruppen\n/broadcast -user : nur Benutzer\n/broadcast -both : Gruppen + Benutzer (Standard)\n/broadcast -copy : als Kopie senden', started: 'Broadcast gestartet.', ended: 'Broadcast beendet.\nGruppen: {groups}\nBenutzer: {users}', stopped: 'Broadcast gestoppt.\nGruppen: {groups}\nBenutzer: {users}', stopRequested: 'Broadcast gestoppt.', noneInProgress: 'Kein Broadcast läuft.', alreadyInProgress: 'Ein Broadcast läuft bereits.', noTargets: 'Keine Ziele gefunden.', failed: 'Broadcast fehlgeschlagen: {error}' },
   },
   pt: {
-    buttons: { resume: '▶️ Retomar', mute: '🔇 Silenciar', unmute: '🔊 Reativar', addToPlaylist: '➕ Playlist', close: '✖️ Fechar' },
+    buttons: { resume: '▶️ Retomar', mute: '🔇 Silenciar', unmute: '🔊 Reativar', addToPlaylist: '➕ Playlist', close: 'Fechar' },
     callbacks: { track: 'Faixa', nowPlaying: 'Tocando agora', paused: 'Pausado', muted: 'Silenciado', noActivePlayback: 'Não há reprodução ativa.', settingsIgnored: 'Callbacks de configurações são tratados separadamente.', closingPanel: 'Fechando painel.', trackSkipped: 'Faixa pulada.', playbackStopped: 'Reprodução parada.', playbackPaused: 'Reprodução pausada.', playbackResumed: 'Reprodução retomada.', playbackMuted: 'Reprodução silenciada.', playbackUnmuted: 'Som reativado.', actionFailed: 'Não foi possível processar a ação de reprodução.', requestedBy: 'Pedido por: {user}', pausedBy: 'Pausado por {user}', resumedBy: 'Retomado por {user}', mutedBy: 'Silenciado por {user}', unmutedBy: 'Reativado por {user}', defaultPlaylistName: 'Minha playlist (TgMusic)', addedToPlaylist: 'Faixa "{song}" adicionada à playlist "{playlist}".' },
     auth: { listTitle: 'Usuários autorizados', none: 'Nenhum usuário autorizado encontrado.', groupOnly: 'Este comando só pode ser usado em grupos.', adminOnly: 'Você precisa ser administrador para usar este comando.', adminVerifyFailed: 'Não foi possível verificar o status de administrador.', targetRequired: 'Responda a um usuário ou forneça um ID numérico.', already: 'Este usuário já está autorizado.', notAuthorized: 'Este usuário não está autorizado.', added: 'Usuário {userId} autorizado.', removed: 'Usuário {userId} removido da lista autorizada.', addFailed: 'Falha ao autorizar o usuário.', removeFailed: 'Falha ao remover usuário autorizado.' },
     broadcast: { usage: 'Responda a uma mensagem para transmitir.\n\nUso:\n/broadcast -chat : apenas grupos\n/broadcast -user : apenas usuários\n/broadcast -both : grupos + usuários (padrão)\n/broadcast -copy : enviar como cópia', started: 'Broadcast iniciado.', ended: 'Broadcast finalizado.\nGrupos: {groups}\nUsuários: {users}', stopped: 'Broadcast parado.\nGrupos: {groups}\nUsuários: {users}', stopRequested: 'Broadcast parado.', noneInProgress: 'Nenhum broadcast em andamento.', alreadyInProgress: 'Já há um broadcast em andamento.', noTargets: 'Nenhum destino encontrado.', failed: 'Broadcast falhou: {error}' },
   },
   ar: {
-    buttons: { resume: '▶️ استئناف', mute: '🔇 كتم', unmute: '🔊 إلغاء الكتم', addToPlaylist: '➕ قائمة', close: '✖️ إغلاق' },
+    buttons: { resume: '▶️ استئناف', mute: '🔇 كتم', unmute: '🔊 إلغاء الكتم', addToPlaylist: '➕ قائمة', close: 'إغلاق' },
     callbacks: { track: 'المقطع', nowPlaying: 'قيد التشغيل', paused: 'متوقف مؤقتًا', muted: 'مكتوم', noActivePlayback: 'لا يوجد تشغيل نشط.', settingsIgnored: 'يتم التعامل مع أزرار الإعدادات بشكل منفصل.', closingPanel: 'جارٍ إغلاق اللوحة.', trackSkipped: 'تم تخطي المقطع.', playbackStopped: 'تم إيقاف التشغيل.', playbackPaused: 'تم إيقاف التشغيل مؤقتًا.', playbackResumed: 'تم استئناف التشغيل.', playbackMuted: 'تم كتم التشغيل.', playbackUnmuted: 'تم إلغاء كتم التشغيل.', actionFailed: 'تعذرت معالجة إجراء التشغيل.', requestedBy: 'طلب بواسطة: {user}', pausedBy: 'أوقفه مؤقتًا {user}', resumedBy: 'استأنفه {user}', mutedBy: 'كتمه {user}', unmutedBy: 'ألغى كتمه {user}', defaultPlaylistName: 'قائمتي (TgMusic)', addedToPlaylist: 'تمت إضافة المقطع "{song}" إلى القائمة "{playlist}".' },
     auth: { listTitle: 'المستخدمون المصرح لهم', none: 'لم يتم العثور على مستخدمين مصرح لهم.', groupOnly: 'لا يمكن استخدام هذا الأمر إلا في المجموعات.', adminOnly: 'يجب أن تكون مشرفًا لاستخدام هذا الأمر.', adminVerifyFailed: 'تعذر التحقق من حالة المشرف.', targetRequired: 'قم بالرد على مستخدم أو قدم معرف مستخدم رقمي.', already: 'هذا المستخدم مصرح له بالفعل.', notAuthorized: 'هذا المستخدم غير مصرح له.', added: 'تم التصريح للمستخدم {userId}.', removed: 'تمت إزالة المستخدم {userId} من قائمة التصريح.', addFailed: 'فشل التصريح للمستخدم.', removeFailed: 'فشلت إزالة المستخدم المصرح له.' },
     broadcast: { usage: 'قم بالرد على رسالة لبثها.\n\nالاستخدام:\n/broadcast -chat : المجموعات فقط\n/broadcast -user : المستخدمون فقط\n/broadcast -both : المجموعات + المستخدمون (افتراضي)\n/broadcast -copy : إرسال كنسخة', started: 'بدأ البث.', ended: 'انتهى البث.\nالمجموعات: {groups}\nالمستخدمون: {users}', stopped: 'تم إيقاف البث.\nالمجموعات: {groups}\nالمستخدمون: {users}', stopRequested: 'تم إيقاف البث.', noneInProgress: 'لا يوجد بث قيد التشغيل.', alreadyInProgress: 'يوجد بث قيد التشغيل بالفعل.', noTargets: 'لم يتم العثور على أهداف.', failed: 'فشل البث: {error}' },
   },
   tr: {
-    buttons: { resume: '▶️ Sürdür', mute: '🔇 Sustur', unmute: '🔊 Sesi aç', addToPlaylist: '➕ Playlist', close: '✖️ Kapat' },
+    buttons: { resume: '▶️ Sürdür', mute: '🔇 Sustur', unmute: '🔊 Sesi aç', addToPlaylist: '➕ Playlist', close: 'Kapat' },
     callbacks: { track: 'Parça', nowPlaying: 'Çalıyor', paused: 'Duraklatıldı', muted: 'Sessiz', noActivePlayback: 'Aktif oynatma yok.', settingsIgnored: 'Ayar callbackleri ayrı işlenir.', closingPanel: 'Panel kapatılıyor.', trackSkipped: 'Parça atlandı.', playbackStopped: 'Oynatma durduruldu.', playbackPaused: 'Oynatma duraklatıldı.', playbackResumed: 'Oynatma sürdürüldü.', playbackMuted: 'Oynatma susturuldu.', playbackUnmuted: 'Ses açıldı.', actionFailed: 'Oynatma eylemi işlenemedi.', requestedBy: 'İsteyen: {user}', pausedBy: '{user} duraklattı', resumedBy: '{user} sürdürdü', mutedBy: '{user} susturdu', unmutedBy: '{user} sesi açtı', defaultPlaylistName: 'Playlistim (TgMusic)', addedToPlaylist: '"{song}" parçası "{playlist}" playlistine eklendi.' },
     auth: { listTitle: 'Yetkili kullanıcılar', none: 'Yetkili kullanıcı bulunamadı.', groupOnly: 'Bu komut sadece gruplarda kullanılabilir.', adminOnly: 'Bu komutu kullanmak için yönetici olmalısın.', adminVerifyFailed: 'Yönetici durumu doğrulanamadı.', targetRequired: 'Bir kullanıcıya yanıt ver veya sayısal kullanıcı ID gir.', already: 'Bu kullanıcı zaten yetkili.', notAuthorized: 'Bu kullanıcı yetkili değil.', added: '{userId} kullanıcısı yetkilendirildi.', removed: '{userId} kullanıcısı yetki listesinden kaldırıldı.', addFailed: 'Kullanıcı yetkilendirilemedi.', removeFailed: 'Yetkili kullanıcı kaldırılamadı.' },
     broadcast: { usage: 'Yayınlamak için bir mesaja yanıt ver.\n\nKullanım:\n/broadcast -chat : sadece gruplar\n/broadcast -user : sadece kullanıcılar\n/broadcast -both : gruplar + kullanıcılar (varsayılan)\n/broadcast -copy : kopya olarak gönder', started: 'Broadcast başladı.', ended: 'Broadcast bitti.\nGruplar: {groups}\nKullanıcılar: {users}', stopped: 'Broadcast durduruldu.\nGruplar: {groups}\nKullanıcılar: {users}', stopRequested: 'Broadcast durduruldu.', noneInProgress: 'Devam eden broadcast yok.', alreadyInProgress: 'Zaten devam eden bir broadcast var.', noTargets: 'Hedef bulunamadı.', failed: 'Broadcast başarısız: {error}' },
   },
   ko: {
-    buttons: { resume: '▶️ 재개', mute: '🔇 음소거', unmute: '🔊 음소거 해제', addToPlaylist: '➕ 플레이리스트', close: '✖️ 닫기' },
+    buttons: { resume: '▶️ 재개', mute: '🔇 음소거', unmute: '🔊 음소거 해제', addToPlaylist: '➕ 플레이리스트', close: '닫기' },
     callbacks: { track: '트랙', nowPlaying: '재생 중', paused: '일시정지됨', muted: '음소거됨', noActivePlayback: '활성 재생이 없습니다.', settingsIgnored: '설정 콜백은 별도로 처리됩니다.', closingPanel: '패널을 닫습니다.', trackSkipped: '트랙을 건너뛰었습니다.', playbackStopped: '재생을 중지했습니다.', playbackPaused: '재생을 일시정지했습니다.', playbackResumed: '재생을 재개했습니다.', playbackMuted: '재생을 음소거했습니다.', playbackUnmuted: '음소거를 해제했습니다.', actionFailed: '재생 작업을 처리할 수 없습니다.', requestedBy: '요청자: {user}', pausedBy: '{user}님이 일시정지함', resumedBy: '{user}님이 재개함', mutedBy: '{user}님이 음소거함', unmutedBy: '{user}님이 음소거 해제함', defaultPlaylistName: '내 플레이리스트 (TgMusic)', addedToPlaylist: '트랙 "{song}"을(를) 플레이리스트 "{playlist}"에 추가했습니다.' },
     auth: { listTitle: '인증된 사용자', none: '인증된 사용자가 없습니다.', groupOnly: '이 명령은 그룹에서만 사용할 수 있습니다.', adminOnly: '이 명령을 사용하려면 관리자여야 합니다.', adminVerifyFailed: '관리자 상태를 확인할 수 없습니다.', targetRequired: '사용자에게 답장하거나 숫자 사용자 ID를 입력하세요.', already: '이 사용자는 이미 인증되었습니다.', notAuthorized: '이 사용자는 인증되지 않았습니다.', added: '사용자 {userId} 인증 완료.', removed: '사용자 {userId}을(를) 인증 목록에서 제거했습니다.', addFailed: '사용자 인증에 실패했습니다.', removeFailed: '인증된 사용자 제거에 실패했습니다.' },
     broadcast: { usage: '방송할 메시지에 답장하세요.\n\n사용법:\n/broadcast -chat : 그룹만\n/broadcast -user : 사용자만\n/broadcast -both : 그룹 + 사용자 (기본)\n/broadcast -copy : 복사본으로 전송', started: '방송을 시작했습니다.', ended: '방송이 종료되었습니다.\n그룹: {groups}\n사용자: {users}', stopped: '방송이 중지되었습니다.\n그룹: {groups}\n사용자: {users}', stopRequested: '방송이 중지되었습니다.', noneInProgress: '진행 중인 방송이 없습니다.', alreadyInProgress: '이미 방송이 진행 중입니다.', noTargets: '대상을 찾을 수 없습니다.', failed: '방송 실패: {error}' },
   },
   zh: {
-    buttons: { resume: '▶️ 继续', mute: '🔇 静音', unmute: '🔊 取消静音', addToPlaylist: '➕ 播放列表', close: '✖️ 关闭' },
+    buttons: { resume: '▶️ 继续', mute: '🔇 静音', unmute: '🔊 取消静音', addToPlaylist: '➕ 播放列表', close: '关闭' },
     callbacks: { track: '曲目', nowPlaying: '正在播放', paused: '已暂停', muted: '已静音', noActivePlayback: '当前没有播放。', settingsIgnored: '设置回调会单独处理。', closingPanel: '正在关闭面板。', trackSkipped: '已跳过曲目。', playbackStopped: '播放已停止。', playbackPaused: '播放已暂停。', playbackResumed: '播放已继续。', playbackMuted: '播放已静音。', playbackUnmuted: '已取消静音。', actionFailed: '无法处理播放操作。', requestedBy: '请求者：{user}', pausedBy: '{user} 已暂停', resumedBy: '{user} 已继续', mutedBy: '{user} 已静音', unmutedBy: '{user} 已取消静音', defaultPlaylistName: '我的播放列表 (TgMusic)', addedToPlaylist: '曲目“{song}”已添加到播放列表“{playlist}”。' },
     auth: { listTitle: '已授权用户', none: '未找到已授权用户。', groupOnly: '此命令只能在群组中使用。', adminOnly: '你必须是管理员才能使用此命令。', adminVerifyFailed: '无法验证管理员状态。', targetRequired: '请回复用户或提供数字用户 ID。', already: '此用户已被授权。', notAuthorized: '此用户未被授权。', added: '用户 {userId} 已授权。', removed: '用户 {userId} 已从授权列表移除。', addFailed: '授权用户失败。', removeFailed: '移除已授权用户失败。' },
     broadcast: { usage: '请回复一条消息进行广播。\n\n用法：\n/broadcast -chat : 仅群组\n/broadcast -user : 仅用户\n/broadcast -both : 群组 + 用户（默认）\n/broadcast -copy : 作为副本发送', started: '广播已开始。', ended: '广播已结束。\n群组：{groups}\n用户：{users}', stopped: '广播已停止。\n群组：{groups}\n用户：{users}', stopRequested: '广播已停止。', noneInProgress: '没有正在进行的广播。', alreadyInProgress: '已有广播正在进行。', noTargets: '未找到目标。', failed: '广播失败：{error}' },
@@ -1815,13 +1820,18 @@ const settingsTranslations = {
     settings: {
       private: { title: 'Pengaturan', description: 'Kelola preferensi bot pribadimu.' },
       group: { title: 'Pengaturan Grup', description: 'Kelola preferensi musik grup ini.' },
-      labels: { user: 'Pengguna', group: 'Grup', language: 'Bahasa', defaultService: 'Layanan default', audioPreset: 'Preset audio', djMode: 'DJ Mode', premium: 'Premium', queueLimit: 'Batas antrean' },
+      labels: { user: 'Pengguna', group: 'Grup', language: 'Bahasa', defaultService: 'Layanan default', userDefaultService: 'Layanan default kamu', audioPreset: 'Preset audio', djMode: 'DJ Mode', premium: 'Premium', queueLimit: 'Batas antrean' },
       chooseMenu: 'Pilih pengaturan di bawah:',
       service: { title: 'Layanan Default', description: 'Pilih platform yang digunakan pertama saat mencari musik.', current: 'Saat ini', unsupported: 'Layanan tidak didukung.', alreadySelected: '{service} sudah dipilih.', selected: '{service} dipilih.' },
       help: { title: 'Bantuan Pengaturan', content: '• Layanan Default menentukan platform pencarian utama.\n• Bahasa mengubah bahasa tampilan bot.\n• Di grup, Preset Audio dan DJ Mode dikelola dengan command premium/admin.' },
       preset: { title: 'Preset Audio', content: 'Gunakan command berikut untuk mengubah preset audio:', current: 'Preset saat ini' },
       djMode: { title: 'DJ Mode', content: 'Saat DJ Mode aktif, kontrol sensitif (skip, stop, seek, volume, shuffle, qmove) hanya bisa dipakai admin/auth/premium user.', current: 'Status saat ini' },
-      premium: { title: 'Info Premium', content: 'Gunakan /premiumfeatures dan /premiuminfo untuk mempelajari fitur premium.' },
+      premium: {
+        title: 'Info Premium',
+        content: 'Gunakan /premiumfeatures dan /premiuminfo untuk mempelajari fitur premium.',
+        status: 'Status: <b>{premium}</b>',
+        queueLimit: 'Batas antrean: <b>{queueLimit}</b>'
+      },
       groupOnly: 'Pengaturan ini hanya tersedia di grup.',
       closed: 'Ditutup.'
     }
@@ -1831,13 +1841,18 @@ const settingsTranslations = {
     settings: {
       private: { title: 'Настройки', description: 'Управление персональными настройками бота.' },
       group: { title: 'Настройки группы', description: 'Управление музыкальными настройками группы.' },
-      labels: { user: 'Пользователь', group: 'Группа', language: 'Язык', defaultService: 'Сервис по умолчанию', audioPreset: 'Аудио пресет', djMode: 'Режим DJ', premium: 'Премиум', queueLimit: 'Лимит очереди' },
+      labels: { user: 'Пользователь', group: 'Группа', language: 'Язык', defaultService: 'Сервис по умолчанию', userDefaultService: 'Ваш сервис по умолчанию', audioPreset: 'Аудио пресет', djMode: 'Режим DJ', premium: 'Премиум', queueLimit: 'Лимит очереди' },
       chooseMenu: 'Выберите настройку:',
       service: { title: 'Сервис по умолчанию', description: 'Выберите платформу для поиска музыки.', current: 'Текущий', unsupported: 'Сервис не поддерживается.', alreadySelected: '{service} уже выбран.', selected: '{service} выбран.' },
       help: { title: 'Помощь по настройкам', content: '• Сервис по умолчанию определяет основную поисковую платформу.\n• Язык меняет язык отображения бота.\n• В группах Аудио пресет и Режим DJ управляются командами премиум/админа.' },
       preset: { title: 'Аудио пресет', content: 'Используйте следующие команды для изменения аудио пресета:', current: 'Текущий пресет' },
       djMode: { title: 'Режим DJ', content: 'Когда режим DJ активен, чувствительные элементы управления (skip, stop, seek, volume, shuffle, qmove) доступны только админам/авторизованным/премиум пользователям.', current: 'Текущий статус' },
-      premium: { title: 'Инфо Premium', content: 'Используйте /premiumfeatures и /premiuminfo для получения информации о премиум-функциях.' },
+      premium: {
+        title: 'Инфо Premium',
+        content: 'Используйте /premiumfeatures и /premiuminfo для получения информации о премиум-функциях.',
+        status: 'Статус: <b>{premium}</b>',
+        queueLimit: 'Лимит очереди: <b>{queueLimit}</b>'
+      },
       groupOnly: 'Эта настройка доступна только в группах.',
       closed: 'Закрыто.'
     }
@@ -1847,13 +1862,18 @@ const settingsTranslations = {
     settings: {
       private: { title: '設定', description: '個人のボット設定を管理します。' },
       group: { title: 'グループ設定', description: 'このグループの音楽設定を管理します。' },
-      labels: { user: 'ユーザー', group: 'グループ', language: '言語', defaultService: 'デフォルトサービス', audioPreset: 'オーディオプリセット', djMode: 'DJ モード', premium: 'プレミアム', queueLimit: 'キュー上限' },
+      labels: { user: 'ユーザー', group: 'グループ', language: '言語', defaultService: 'デフォルトサービス', userDefaultService: 'あなたのデフォルトサービス', audioPreset: 'オーディオプリセット', djMode: 'DJ モード', premium: 'プレミアム', queueLimit: 'キュー上限' },
       chooseMenu: '設定を選択してください:',
       service: { title: 'デフォルトサービス', description: '音楽検索時に最初に使用するプラットフォームを選択します。', current: '現在', unsupported: 'サポートされていないサービスです。', alreadySelected: '{service} は既に選択されています。', selected: '{service} を選択しました。' },
-      help: { title: '設定ヘルプ', content: '• デフォルトサービスは主要な検索プラットフォームを決定します。\n• 言語はボットの表示言語を変更します。\n• グループでは、オーディオプリセットとDJモードはプレミアム/管理者コマンドで管理されます。' },
+      help: { title: '設定ヘルプ', content: '• デフォルトサービスは主要な検索プラットフォームを決定します.\n• 言語はボットの表示言語を変更します。\n• グループでは、オーディオプリセットとDJモードはプレミアム/管理者コマンドで管理されます。' },
       preset: { title: 'オーディオプリセット', content: '次のコマンドでオーディオプリセットを変更できます:', current: '現在のプリセット' },
       djMode: { title: 'DJ モード', content: 'DJ モードが有効な場合、操作（skip, stop, seek, volume, shuffle, qmove）は管理者/認証済み/プレミアムユーザーのみ使用できます。', current: '現在の状態' },
-      premium: { title: 'プレミアム情報', content: '/premiumfeatures と /premiuminfo でプレミアム機能の詳細をご確認ください。' },
+      premium: {
+        title: 'プレミアム情報',
+        content: '/premiumfeatures と /premiuminfo でプレミアム機能の詳細をご確認ください。',
+        status: 'ステータス: <b>{premium}</b>',
+        queueLimit: 'キュー上限: <b>{queueLimit}</b>'
+      },
       groupOnly: 'この設定はグループでのみ利用可能です。',
       closed: '閉じました。'
     }
@@ -1863,13 +1883,18 @@ const settingsTranslations = {
     settings: {
       private: { title: 'सेटिंग्स', description: 'अपनी व्यक्तिगत बॉट प्राथमिकताएँ प्रबंधित करें।' },
       group: { title: 'ग्रुप सेटिंग्स', description: 'इस ग्रुप की संगीत प्राथमिकताएँ प्रबंधित करें।' },
-      labels: { user: 'यूज़र', group: 'ग्रुप', language: 'भाषा', defaultService: 'डिफ़ॉल्ट सेवा', audioPreset: 'ऑडियो प्रीसेट', djMode: 'DJ मोड', premium: 'प्रीमियम', queueLimit: 'क्यू सीमा' },
+      labels: { user: 'यूज़र', group: 'ग्रुप', language: 'भाषा', defaultService: 'डिफ़ॉल्ट सेवा', userDefaultService: 'आपकी डिफ़ॉल्ट सेवा', audioPreset: 'ऑडियो प्रीसेट', djMode: 'DJ मोड', premium: 'प्रीमियम', queueLimit: 'क्यू सीमा' },
       chooseMenu: 'नीचे सेटिंग चुनें:',
       service: { title: 'डिफ़ॉल्ट सेवा', description: 'संगीत खोजते समय पहले कौन सा प्लेटफ़ॉर्म इस्तेमाल हो, चुनें।', current: 'वर्तमान', unsupported: 'असमर्थित सेवा।', alreadySelected: '{service} पहले से चुना हुआ है।', selected: '{service} चुना गया।' },
       help: { title: 'सेटिंग्स सहायता', content: '• डिफ़ॉल्ट सेवा प्राथमिक खोज प्लेटफ़ॉर्म निर्धारित करती है।\n• भाषा बॉट की प्रदर्शन भाषा बदलती है।\n• ग्रुप में, ऑडियो प्रीसेट और DJ मोड premium/admin commands से प्रबंधित होते हैं।' },
       preset: { title: 'ऑडियो प्रीसेट', content: 'ऑडियो प्रीसेट बदलने के लिए ये commands इस्तेमाल करें:', current: 'वर्तमान प्रीसेट' },
       djMode: { title: 'DJ मोड', content: 'जब DJ मोड सक्रिय हो, संवेदनशील नियंत्रण (skip, stop, seek, volume, shuffle, qmove) केवल admin/auth/premium users के लिए हैं।', current: 'वर्तमान स्थिति' },
-      premium: { title: 'प्रीमियम जानकारी', content: 'प्रीमियम सुविधाओं के बारे में जानने के लिए /premiumfeatures और /premiuminfo इस्तेमाल करें।' },
+      premium: {
+        title: 'प्रीमियम जानकारी',
+        content: 'प्रीमियम सुविधाओं के बारे में जानने के लिए /premiumfeatures and /premiuminfo इस्तेमाल करें।',
+        status: 'स्थिति: <b>{premium}</b>',
+        queueLimit: 'क्यू सीमा: <b>{queueLimit}</b>'
+      },
       groupOnly: 'यह सेटिंग केवल ग्रुप में उपलब्ध है।',
       closed: 'बंद।'
     }
@@ -1879,13 +1904,18 @@ const settingsTranslations = {
     settings: {
       private: { title: 'Impostazioni', description: 'Gestisci le tue preferenze personali del bot.' },
       group: { title: 'Impostazioni gruppo', description: 'Gestisci le preferenze musicali del gruppo.' },
-      labels: { user: 'Utente', group: 'Gruppo', language: 'Lingua', defaultService: 'Servizio predefinito', audioPreset: 'Preset audio', djMode: 'Modalità DJ', premium: 'Premium', queueLimit: 'Limite coda' },
+      labels: { user: 'Utente', group: 'Gruppo', language: 'Lingua', defaultService: 'Servizio predefinito', userDefaultService: 'Il tuo servizio predefinito', audioPreset: 'Preset audio', djMode: 'Modalità DJ', premium: 'Premium', queueLimit: 'Limite coda' },
       chooseMenu: 'Scegli un\'impostazione:',
       service: { title: 'Servizio predefinito', description: 'Scegli quale piattaforma usare per la ricerca musicale.', current: 'Attuale', unsupported: 'Servizio non supportato.', alreadySelected: '{service} è già selezionato.', selected: '{service} selezionato.' },
       help: { title: 'Aiuto impostazioni', content: '• Il servizio predefinito determina la piattaforma di ricerca principale.\n• La lingua cambia la lingua del bot.\n• Nei gruppi, Preset audio e Modalità DJ sono gestiti con comandi premium/admin.' },
       preset: { title: 'Preset audio', content: 'Usa i seguenti comandi per cambiare il preset audio:', current: 'Preset attuale' },
       djMode: { title: 'Modalità DJ', content: 'Quando la Modalità DJ è attiva, i controlli sensibili (skip, stop, seek, volume, shuffle, qmove) sono riservati a admin/autorizzati/premium.', current: 'Stato attuale' },
-      premium: { title: 'Info Premium', content: 'Usa /premiumfeatures e /premiuminfo per saperne di più sulle funzionalità premium.' },
+      premium: {
+        title: 'Info Premium',
+        content: 'Usa /premiumfeatures e /premiuminfo per saperne di più sulle funzionalità premium.',
+        status: 'Stato: <b>{premium}</b>',
+        queueLimit: 'Limite coda: <b>{queueLimit}</b>'
+      },
       groupOnly: 'Questa impostazione è disponibile solo nei gruppi.',
       closed: 'Chiuso.'
     }
@@ -1895,13 +1925,18 @@ const settingsTranslations = {
     settings: {
       private: { title: 'Configuración', description: 'Gestiona tus preferencias personales del bot.' },
       group: { title: 'Configuración del grupo', description: 'Gestiona las preferencias musicales de este grupo.' },
-      labels: { user: 'Usuario', group: 'Grupo', language: 'Idioma', defaultService: 'Servicio predeterminado', audioPreset: 'Preset de audio', djMode: 'Modo DJ', premium: 'Premium', queueLimit: 'Límite de cola' },
+      labels: { user: 'Usuario', group: 'Grupo', language: 'Idioma', defaultService: 'Servicio predeterminado', userDefaultService: 'Tu servicio predeterminado', audioPreset: 'Preset de audio', djMode: 'Modo DJ', premium: 'Premium', queueLimit: 'Límite de cola' },
       chooseMenu: 'Elige una opción:',
       service: { title: 'Servicio predeterminado', description: 'Elige qué plataforma usar primero al buscar música.', current: 'Actual', unsupported: 'Servicio no soportado.', alreadySelected: '{service} ya está seleccionado.', selected: '{service} seleccionado.' },
       help: { title: 'Ayuda de configuración', content: '• El servicio predeterminado determina la plataforma de búsqueda principal.\n• El idioma cambia el idioma del bot.\n• En grupos, Preset de audio y Modo DJ se gestionan con comandos premium/admin.' },
       preset: { title: 'Preset de audio', content: 'Usa los siguientes comandos para cambiar el preset de audio:', current: 'Preset actual' },
       djMode: { title: 'Modo DJ', content: 'Cuando el Modo DJ está activo, los controles sensibles (skip, stop, seek, volume, shuffle, qmove) solo están disponibles para admin/autorizados/premium.', current: 'Estado actual' },
-      premium: { title: 'Info Premium', content: 'Usa /premiumfeatures y /premiuminfo para saber más sobre las funciones premium.' },
+      premium: {
+        title: 'Info Premium',
+        content: 'Usa /premiumfeatures y /premiuminfo para saber más sobre las funciones premium.',
+        status: 'Estado: <b>{premium}</b>',
+        queueLimit: 'Límite de cola: <b>{queueLimit}</b>'
+      },
       groupOnly: 'Esta configuración solo está disponible en grupos.',
       closed: 'Cerrado.'
     }
@@ -1911,13 +1946,18 @@ const settingsTranslations = {
     settings: {
       private: { title: 'Paramètres', description: 'Gérez vos préférences personnelles du bot.' },
       group: { title: 'Paramètres du groupe', description: 'Gérez les préférences musicales de ce groupe.' },
-      labels: { user: 'Utilisateur', group: 'Groupe', language: 'Langue', defaultService: 'Service par défaut', audioPreset: 'Preset audio', djMode: 'Mode DJ', premium: 'Premium', queueLimit: 'Limite de file' },
+      labels: { user: 'Utilisateur', group: 'Groupe', language: 'Langue', defaultService: 'Service par défaut', userDefaultService: 'Votre service par défaut', audioPreset: 'Preset audio', djMode: 'Mode DJ', premium: 'Premium', queueLimit: 'Limite de file' },
       chooseMenu: 'Choisissez un paramètre :',
       service: { title: 'Service par défaut', description: 'Choisissez la plateforme utilisée en premier pour la recherche musicale.', current: 'Actuel', unsupported: 'Service non supporté.', alreadySelected: '{service} est déjà sélectionné.', selected: '{service} sélectionné.' },
       help: { title: 'Aide des paramètres', content: '• Le service par défaut détermine la plateforme de recherche principale.\n• La langue change la langue d\'affichage du bot.\n• Dans les groupes, Preset audio et Mode DJ sont gérés par les commandes premium/admin.' },
       preset: { title: 'Preset audio', content: 'Utilisez les commandes suivantes pour changer le preset audio :', current: 'Preset actuel' },
       djMode: { title: 'Mode DJ', content: 'Quand le Mode DJ est actif, les contrôles sensibles (skip, stop, seek, volume, shuffle, qmove) sont réservés aux admin/autorisés/premium.', current: 'État actuel' },
-      premium: { title: 'Info Premium', content: 'Utilisez /premiumfeatures et /premiuminfo pour en savoir plus sur les fonctionnalités premium.' },
+      premium: {
+        title: 'Info Premium',
+        content: 'Utilisez /premiumfeatures et /premiuminfo pour en savoir plus sur les fonctionnalités premium.',
+        status: 'Statut : <b>{premium}</b>',
+        queueLimit: 'Limite de file : <b>{queueLimit}</b>'
+      },
       groupOnly: 'Ce paramètre est uniquement disponible dans les groupes.',
       closed: 'Fermé.'
     }
@@ -1927,13 +1967,18 @@ const settingsTranslations = {
     settings: {
       private: { title: 'Einstellungen', description: 'Verwalte deine persönlichen Bot-Einstellungen.' },
       group: { title: 'Gruppeneinstellungen', description: 'Verwalte die Musikeinstellungen dieser Gruppe.' },
-      labels: { user: 'Benutzer', group: 'Gruppe', language: 'Sprache', defaultService: 'Standarddienst', audioPreset: 'Audio-Preset', djMode: 'DJ-Modus', premium: 'Premium', queueLimit: 'Warteschlangenlimit' },
+      labels: { user: 'Benutzer', group: 'Gruppe', language: 'Sprache', defaultService: 'Standarddienst', userDefaultService: 'Dein Standarddienst', audioPreset: 'Audio-Preset', djMode: 'DJ-Modus', premium: 'Premium', queueLimit: 'Warteschlangenlimit' },
       chooseMenu: 'Wähle eine Einstellung:',
       service: { title: 'Standarddienst', description: 'Wähle die Plattform, die zuerst für die Musiksuche verwendet wird.', current: 'Aktuell', unsupported: 'Nicht unterstützter Dienst.', alreadySelected: '{service} ist bereits ausgewählt.', selected: '{service} ausgewählt.' },
       help: { title: 'Einstellungshilfe', content: '• Der Standarddienst bestimmt die primäre Suchplattform.\n• Die Sprache ändert die Anzeigesprache des Bots.\n• In Gruppen werden Audio-Preset und DJ-Modus mit Premium/Admin-Befehlen verwaltet.' },
       preset: { title: 'Audio-Preset', content: 'Verwende folgende Befehle, um das Audio-Preset zu ändern:', current: 'Aktuelles Preset' },
       djMode: { title: 'DJ-Modus', content: 'Wenn der DJ-Modus aktiv ist, sind sensible Steuerungen (skip, stop, seek, volume, shuffle, qmove) nur für Admin/Autorisierte/Premium-Benutzer verfügbar.', current: 'Aktueller Status' },
-      premium: { title: 'Premium-Info', content: 'Verwende /premiumfeatures und /premiuminfo, um mehr über Premium-Funktionen zu erfahren.' },
+      premium: {
+        title: 'Premium-Info',
+        content: 'Verwende /premiumfeatures und /premiuminfo, um mehr über Premium-Funktionen zu erfahren.',
+        status: 'Status: <b>{premium}</b>',
+        queueLimit: 'Warteschlangenlimit: <b>{queueLimit}</b>'
+      },
       groupOnly: 'Diese Einstellung ist nur in Gruppen verfügbar.',
       closed: 'Geschlossen.'
     }
@@ -1943,13 +1988,18 @@ const settingsTranslations = {
     settings: {
       private: { title: 'Configurações', description: 'Gerencie suas preferências pessoais do bot.' },
       group: { title: 'Configurações do grupo', description: 'Gerencie as preferências musicais deste grupo.' },
-      labels: { user: 'Usuário', group: 'Grupo', language: 'Idioma', defaultService: 'Serviço padrão', audioPreset: 'Preset de áudio', djMode: 'Modo DJ', premium: 'Premium', queueLimit: 'Limite da fila' },
+      labels: { user: 'Usuário', group: 'Grupo', language: 'Idioma', defaultService: 'Serviço padrão', userDefaultService: 'Seu serviço padrão', audioPreset: 'Preset de áudio', djMode: 'Modo DJ', premium: 'Premium', queueLimit: 'Limite da fila' },
       chooseMenu: 'Escolha uma configuração:',
       service: { title: 'Serviço padrão', description: 'Escolha qual plataforma usar primeiro ao pesquisar música.', current: 'Atual', unsupported: 'Serviço não suportado.', alreadySelected: '{service} já está selecionado.', selected: '{service} selecionado.' },
       help: { title: 'Ajuda das configurações', content: '• O serviço padrão determina a plataforma de pesquisa principal.\n• O idioma altera o idioma de exibição do bot.\n• Em grupos, Preset de áudio e Modo DJ são gerenciados com comandos premium/admin.' },
       preset: { title: 'Preset de áudio', content: 'Use os seguintes comandos para alterar o preset de áudio:', current: 'Preset atual' },
       djMode: { title: 'Modo DJ', content: 'Quando o Modo DJ está ativo, controles sensíveis (skip, stop, seek, volume, shuffle, qmove) são restritos a admin/autorizados/premium.', current: 'Status atual' },
-      premium: { title: 'Info Premium', content: 'Use /premiumfeatures e /premiuminfo para saber mais sobre os recursos premium.' },
+      premium: {
+        title: 'Info Premium',
+        content: 'Use /premiumfeatures e /premiuminfo para saber mais sobre os recursos premium.',
+        status: 'Status: <b>{premium}</b>',
+        queueLimit: 'Limite da fila: <b>{queueLimit}</b>'
+      },
       groupOnly: 'Esta configuração está disponível apenas em grupos.',
       closed: 'Fechado.'
     }
@@ -1959,13 +2009,18 @@ const settingsTranslations = {
     settings: {
       private: { title: 'الإعدادات', description: 'إدارة تفضيلاتك الشخصية للبوت.' },
       group: { title: 'إعدادات المجموعة', description: 'إدارة تفضيلات الموسيقى لهذه المجموعة.' },
-      labels: { user: 'المستخدم', group: 'المجموعة', language: 'اللغة', defaultService: 'الخدمة الافتراضية', audioPreset: 'إعداد الصوت', djMode: 'وضع DJ', premium: 'بريميوم', queueLimit: 'حد قائمة الانتظار' },
+      labels: { user: 'المستخدم', group: 'المجموعة', language: 'اللغة', defaultService: 'الخدمة الافتراضية', userDefaultService: 'الخدمة الافتراضية الخاصة بك', audioPreset: 'إعداد الصوت', djMode: 'وضع DJ', premium: 'بريميوم', queueLimit: 'حد قائمة الانتظار' },
       chooseMenu: 'اختر إعدادًا:',
       service: { title: 'الخدمة الافتراضية', description: 'اختر المنصة المستخدمة أولاً عند البحث عن الموسيقى.', current: 'الحالي', unsupported: 'خدمة غير مدعومة.', alreadySelected: '{service} محدد بالفعل.', selected: 'تم تحديد {service}.' },
       help: { title: 'مساعدة الإعدادات', content: '• تحدد الخدمة الافتراضية منصة البحث الرئيسية.\n• تغير اللغة لغة عرض البوت.\n• في المجموعات، يتم إدارة إعداد الصوت ووضع DJ بأوامر premium/admin.' },
       preset: { title: 'إعداد الصوت', content: 'استخدم الأوامر التالية لتغيير إعداد الصوت:', current: 'الإعداد الحالي' },
       djMode: { title: 'وضع DJ', content: 'عندما يكون وضع DJ مفعلاً، تقتصر أدوات التحكم الحساسة (skip, stop, seek, volume, shuffle, qmove) على admin/المصرح لهم/premium.', current: 'الحالة الحالية' },
-      premium: { title: 'معلومات Premium', content: 'استخدم /premiumfeatures و /premiuminfo لمعرفة المزيد عن ميزات Premium.' },
+      premium: {
+        title: 'معلومات Premium',
+        content: 'استخدم /premiumfeatures و /premiuminfo لمعرفة المزيد عن ميزات Premium.',
+        status: 'الحالة: <b>{premium}</b>',
+        queueLimit: 'حد قائمة الانتظار: <b>{queueLimit}</b>'
+      },
       groupOnly: 'هذا الإعداد متاح فقط في المجموعات.',
       closed: 'تم الإغلاق.'
     }
@@ -1975,13 +2030,18 @@ const settingsTranslations = {
     settings: {
       private: { title: 'Ayarlar', description: 'Kişisel bot tercihlerini yönet.' },
       group: { title: 'Grup Ayarları', description: 'Bu grubun müzik tercihlerini yönet.' },
-      labels: { user: 'Kullanıcı', group: 'Grup', language: 'Dil', defaultService: 'Varsayılan servis', audioPreset: 'Ses ön ayarı', djMode: 'DJ Modu', premium: 'Premium', queueLimit: 'Kuyruk limiti' },
+      labels: { user: 'Kullanıcı', group: 'Grup', language: 'Dil', defaultService: 'Varsayılan servis', userDefaultService: 'Varsayılan servisiniz', audioPreset: 'Ses ön ayarı', djMode: 'DJ Modu', premium: 'Premium', queueLimit: 'Kuyruk limiti' },
       chooseMenu: 'Bir ayar seç:',
       service: { title: 'Varsayılan Servis', description: 'Müzik ararken ilk kullanılacak platformu seç.', current: 'Mevcut', unsupported: 'Desteklenmeyen servis.', alreadySelected: '{service} zaten seçili.', selected: '{service} seçildi.' },
       help: { title: 'Ayar Yardımı', content: '• Varsayılan Servis birincil arama platformunu belirler.\n• Dil, botun görüntüleme dilini değiştirir.\n• Gruplarda, Ses Ön Ayarı ve DJ Modu premium/admin komutlarıyla yönetilir.' },
       preset: { title: 'Ses Ön Ayarı', content: 'Ses ön ayarını değiştirmek için şu komutları kullan:', current: 'Mevcut ön ayar' },
       djMode: { title: 'DJ Modu', content: 'DJ Modu aktifken, hassas kontroller (skip, stop, seek, volume, shuffle, qmove) yalnızca admin/yetkili/premium kullanıcılara açıktır.', current: 'Mevcut durum' },
-      premium: { title: 'Premium Bilgi', content: 'Premium özellikler hakkında bilgi almak için /premiumfeatures ve /premiuminfo kullan.' },
+      premium: {
+        title: 'Premium Bilgi',
+        content: 'Premium özellikler hakkında bilgi almak için /premiumfeatures ve /premiuminfo kullan.',
+        status: 'Durum: <b>{premium}</b>',
+        queueLimit: 'Kuyruk limiti: <b>{queueLimit}</b>'
+      },
       groupOnly: 'Bu ayar yalnızca gruplarda kullanılabilir.',
       closed: 'Kapatıldı.'
     }
@@ -1991,13 +2051,18 @@ const settingsTranslations = {
     settings: {
       private: { title: '설정', description: '개인 봇 환경설정을 관리합니다.' },
       group: { title: '그룹 설정', description: '이 그룹의 음악 환경설정을 관리합니다.' },
-      labels: { user: '사용자', group: '그룹', language: '언어', defaultService: '기본 서비스', audioPreset: '오디오 프리셋', djMode: 'DJ 모드', premium: '프리미엄', queueLimit: '대기열 제한' },
+      labels: { user: '사용자', group: '그룹', language: '언어', defaultService: '기본 서비스', userDefaultService: '귀하의 기본 서비스', audioPreset: '오디오 프리셋', djMode: 'DJ 모드', premium: '프리미엄', queueLimit: '대기열 제한' },
       chooseMenu: '설정을 선택하세요:',
       service: { title: '기본 서비스', description: '음악 검색 시 먼저 사용할 플랫폼을 선택하세요.', current: '현재', unsupported: '지원되지 않는 서비스입니다.', alreadySelected: '{service}은(는) 이미 선택되었습니다.', selected: '{service} 선택됨.' },
       help: { title: '설정 도움말', content: '• 기본 서비스는 주 검색 플랫폼을 결정합니다.\n• 언어는 봇 표시 언어를 변경합니다.\n• 그룹에서는 오디오 프리셋과 DJ 모드가 프리미엄/관리자 명령으로 관리됩니다.' },
       preset: { title: '오디오 프리셋', content: '다음 명령으로 오디오 프리셋을 변경할 수 있습니다:', current: '현재 프리셋' },
       djMode: { title: 'DJ 모드', content: 'DJ 모드가 활성화되면 민감한 제어(skip, stop, seek, volume, shuffle, qmove)는 관리자/인증/프리미엄 사용자만 사용할 수 있습니다.', current: '현재 상태' },
-      premium: { title: '프리미엄 정보', content: '프리미엄 기능에 대해 자세히 알아보려면 /premiumfeatures 및 /premiuminfo를 사용하세요.' },
+      premium: {
+        title: '프리미엄 정보',
+        content: '프리미엄 기능에 대해 자세히 알아보려면 /premiumfeatures 및 /premiuminfo를 사용하세요.',
+        status: '상태: <b>{premium}</b>',
+        queueLimit: '대기열 제한: <b>{queueLimit}</b>'
+      },
       groupOnly: '이 설정은 그룹에서만 사용할 수 있습니다.',
       closed: '닫힘.'
     }
@@ -2007,19 +2072,23 @@ const settingsTranslations = {
     settings: {
       private: { title: '设置', description: '管理你的个人机器人偏好设置。' },
       group: { title: '群组设置', description: '管理此群组的音乐偏好设置。' },
-      labels: { user: '用户', group: '群组', language: '语言', defaultService: '默认服务', audioPreset: '音频预设', djMode: 'DJ 模式', premium: '高级版', queueLimit: '队列上限' },
+      labels: { user: '用户', group: '群组', language: '语言', defaultService: '默认服务', userDefaultService: '你的默认服务', audioPreset: '音频预设', djMode: 'DJ 模式', premium: '高级版', queueLimit: '队列上限' },
       chooseMenu: '请选择设置项：',
       service: { title: '默认服务', description: '选择搜索音乐时优先使用的平台。', current: '当前', unsupported: '不支持的服务。', alreadySelected: '{service} 已被选中。', selected: '已选择 {service}。' },
-      help: { title: '设置帮助', content: '• 默认服务决定主要搜索平台。\n• 语言更改机器人显示语言。\n• 在群组中，音频预设和 DJ 模式通过高级版/管理员命令管理。' },
+      help: { title: '设置帮助', content: '• 默认服务决定主要搜索平台.\n• 语言更改机器人显示语言。\n• 在群组中，音频预设和 DJ 模式通过高级版/管理员命令管理。' },
       preset: { title: '音频预设', content: '使用以下命令更改音频预设：', current: '当前预设' },
       djMode: { title: 'DJ 模式', content: 'DJ 模式启用时，敏感控制（skip、stop、seek、volume、shuffle、qmove）仅限管理员/授权/高级版用户使用。', current: '当前状态' },
-      premium: { title: '高级版信息', content: '使用 /premiumfeatures 和 /premiuminfo 了解更多高级版功能。' },
+      premium: {
+        title: '高级版信息',
+        content: '使用 /premiumfeatures 和 /premiuminfo 了解更多高级版功能。',
+        status: '状态: <b>{premium}</b>',
+        queueLimit: '队列上限: <b>{queueLimit}</b>'
+      },
       groupOnly: '此设置仅在群组中可用。',
       closed: '已关闭。'
     }
-  },
+  }
 };
-
 for (const [code, override] of Object.entries(settingsTranslations)) {
   translations[code] = mergeDeep(translations[code], override);
 }
