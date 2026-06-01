@@ -8,7 +8,7 @@ import { t } from '../i18n/index.js';
 import { voicePlayer } from '../core/player/player.js';
 import { getLyricsEnabled, setLyricsEnabled, getLyricsProvider } from '../core/db/chat-settings.js';
 import { startLyricsForChat, stopLyricsForChat, getLyricsStatus } from '../core/lyrics/lyrics-runner.js';
-import { getLyrics, prefetchLyrics } from '../core/lyrics/lrclib.js';
+import { getLyrics, prefetchLyrics } from '../core/lyrics/lyrics-service.js';
 import { getCachedLyrics, getLyricsCacheInfo, clearLyricsCacheForTrack, lyricsCacheKey } from '../core/lyrics/lyrics-cache.js';
 import { normalizeLyricsMetadata } from '../core/lyrics/track-metadata.js';
 import { config } from '../config/index.js';
@@ -79,7 +79,7 @@ export async function buildLyricsPanelText(ctx, language) {
 
   const enabled = await getLyricsEnabled(chatId);
   const provider = await getLyricsProvider(chatId);
-  const cacheInfo = getLyricsCacheInfo(activeTrack);
+  const cacheInfo = await getLyricsCacheInfo(activeTrack);
   const title = htmlEscape(activeTrack.title || activeTrack.name || 'Unknown Track');
 
   let cacheText = t(language, 'lyrics.unknown');
@@ -280,17 +280,18 @@ export async function lyricsHandler(ctx) {
     const result = await startLyricsForChat(chatId, ctx, activeTrack);
 
     if (result.success) {
-      await ctx.api.editMessageText(chatId, infoMsg.message_id, `${t(language, 'lyrics.enabled')}\n${t(language, 'lyrics.started')}`);
+      const providerText = result.provider ? `\n\n💡 ${t(language, 'lyrics.foundFromProvider', { provider: result.provider })}` : '';
+      await ctx.api.editMessageText(chatId, infoMsg.message_id, `${t(language, 'lyrics.enabled')}\n${t(language, 'lyrics.started')}${providerText}`);
     } else {
       let errorMsg = t(language, 'lyrics.notFound');
       if (result.message === 'plainOnly') {
-        errorMsg = t(language, 'lyrics.plainOnly');
+        errorMsg = t(language, 'lyrics.plainOnlyNoSync');
+      } else if (result.message === 'rateLimited') {
+        errorMsg = t(language, 'lyrics.providerRateLimited');
+      } else if (result.message === 'timeout') {
+        errorMsg = t(language, 'lyrics.providerTimeout');
       } else if (result.message === 'error') {
-        if (result.error === 'timeout') {
-          errorMsg = t(language, 'lyrics.providerTimeout');
-        } else {
-          errorMsg = t(language, 'lyrics.providerError');
-        }
+        errorMsg = t(language, 'lyrics.providerError');
       }
       await ctx.api.editMessageText(chatId, infoMsg.message_id, `${t(language, 'lyrics.enabled')}\n\n⚠️ ${errorMsg}`);
     }
@@ -322,7 +323,7 @@ export async function lyricsHandler(ctx) {
     if (activeTrack) {
       currentTrackText = activeTrack.title || activeTrack.name || 'Unknown Track';
 
-      const cacheInfo = getLyricsCacheInfo(activeTrack);
+      const cacheInfo = await getLyricsCacheInfo(activeTrack);
       if (cacheInfo && !cacheInfo.isExpired) {
         const item = cacheInfo.item;
         if (item.status === 'synced') {
@@ -391,7 +392,7 @@ export async function lyricsHandler(ctx) {
 
     const testMsg = await ctx.reply(`🔍 [Test] Mengambil lirik untuk: <b>${htmlEscape(activeTrack.title || activeTrack.name)}</b>`, { parse_mode: 'HTML' });
     try {
-      const cacheBefore = getLyricsCacheInfo(activeTrack);
+      const cacheBefore = await getLyricsCacheInfo(activeTrack);
       const cacheStatusBefore = cacheBefore && !cacheBefore.isExpired ? 'HIT' : 'MISS';
 
       const lyricsResult = await getLyrics(activeTrack);
@@ -460,7 +461,7 @@ export async function lyricsHandler(ctx) {
       return;
     }
 
-    const cleared = clearLyricsCacheForTrack(activeTrack);
+    const cleared = await clearLyricsCacheForTrack(activeTrack);
     if (cleared) {
       await ctx.reply(t(language, 'lyrics.cacheCleared'));
     } else {
@@ -483,7 +484,7 @@ export async function lyricsHandler(ctx) {
 
     const infoMsg = await ctx.reply(t(language, 'lyrics.refreshing'));
 
-    clearLyricsCacheForTrack(activeTrack);
+    await clearLyricsCacheForTrack(activeTrack);
 
     try {
       const result = await getLyrics(activeTrack);
@@ -529,7 +530,7 @@ export async function lyricsOnCallbackHandler(ctx) {
   await setLyricsEnabled(chatId, true);
 
   if (activeTrack) {
-    const cacheInfo = getLyricsCacheInfo(activeTrack);
+    const cacheInfo = await getLyricsCacheInfo(activeTrack);
     if (cacheInfo && !cacheInfo.isExpired && cacheInfo.item.synced) {
       await startLyricsForChat(chatId, ctx, activeTrack);
     }
@@ -590,7 +591,7 @@ export async function lyricsRefreshCallbackHandler(ctx) {
   const keyboard = lyricsPanelKeyboard(language, { hasActiveTrack: true });
   await editLyricsPanel(ctx, refreshingText, keyboard);
 
-  clearLyricsCacheForTrack(activeTrack);
+  await clearLyricsCacheForTrack(activeTrack);
 
   try {
     const result = await getLyrics(activeTrack);
@@ -630,7 +631,7 @@ export async function lyricsClearCacheCallbackHandler(ctx) {
     return;
   }
 
-  clearLyricsCacheForTrack(activeTrack);
+  await clearLyricsCacheForTrack(activeTrack);
 
   await safeAnswerCallback(ctx, t(language, 'lyrics.cacheCleared'));
 
@@ -666,7 +667,7 @@ export async function lyricsClearRefreshCallbackHandler(ctx) {
   const keyboard = lyricsPanelKeyboard(language, { hasActiveTrack: true });
   await editLyricsPanel(ctx, refreshingText, keyboard);
 
-  clearLyricsCacheForTrack(activeTrack);
+  await clearLyricsCacheForTrack(activeTrack);
 
   try {
     const result = await getLyrics(activeTrack);

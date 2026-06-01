@@ -19,7 +19,7 @@ import { playMode, isUserAdminOrAuth, enforceDjModeControl } from './filters.js'
 import { isAuthUser } from '../core/db/auth.js';
 import { getLyricsEnabled } from '../core/db/chat-settings.js';
 import { startLyricsForChatIfEnabled, stopLyricsForChat, resyncLyricsForChat, sameTrackLoose } from '../core/lyrics/lyrics-runner.js';
-import { prefetchLyrics } from '../core/lyrics/lrclib.js';
+import { prefetchLyrics } from '../core/lyrics/lyrics-service.js';
 
 const MAX_QUEUE = 10;
 const ASSISTANT_INVITE_EXPIRE_SECONDS = 60 * 60;

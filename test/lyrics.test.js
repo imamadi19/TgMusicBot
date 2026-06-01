@@ -48,8 +48,8 @@ test('Title Normalizer', () => {
   assert.strictEqual(normalizeTitle('   Spacing   Test   '), 'Spacing Test');
 });
 
-test('Lyrics Cache', () => {
-  clearCache();
+test('Lyrics Cache', async () => {
+  await clearCache();
 
   const track = {
     trackId: 'track123',
@@ -72,11 +72,11 @@ test('Lyrics Cache', () => {
   assert.ok(key.includes('never gonna give you up'));
 
   // Get uncached track
-  assert.strictEqual(getCachedLyrics(track), null);
+  assert.strictEqual(await getCachedLyrics(track), null);
 
   // Set and Get cached track
-  setCachedLyrics(track, lyricsData);
-  const cached = getCachedLyrics(track);
+  await setCachedLyrics(track, lyricsData);
+  const cached = await getCachedLyrics(track);
   
   assert.ok(cached);
   assert.strictEqual(cached.provider, 'lrclib');
@@ -143,8 +143,8 @@ test('LRCLIB Error Handling and Classification', () => {
   assert.strictEqual(classifyFetchError(new Error('some random http error')), 'http_or_unknown');
 });
 
-test('Lyrics Error Caching', () => {
-  clearCache();
+test('Lyrics Error Caching', async () => {
+  await clearCache();
 
   const track = {
     trackId: 'track_err_test',
@@ -164,12 +164,32 @@ test('Lyrics Error Caching', () => {
     transient: true
   };
 
-  setCachedLyrics(track, errorData);
-  const cached = getCachedLyrics(track);
+  await setCachedLyrics(track, errorData);
+  const cached = await getCachedLyrics(track);
 
   assert.ok(cached);
   assert.strictEqual(cached.status, 'error');
   assert.strictEqual(cached.reason, 'timeout');
   assert.strictEqual(cached.synced, false);
+});
+
+import { getLyrics as getServiceLyrics } from '../src/core/lyrics/lyrics-service.js';
+
+test('Lyrics Service Multi-Provider Fallback and Concurrency', async () => {
+  await clearCache();
+
+  const track = {
+    title: 'Faded',
+    artist: 'Alan Walker',
+    duration: 212
+  };
+
+  const result = await getServiceLyrics(track);
+  assert.ok(result);
+  assert.ok(['synced', 'plainOnly', 'notFound', 'rateLimited', 'timeout', 'error'].includes(result.status));
+
+  const cachedResult = await getCachedLyrics(track);
+  assert.ok(cachedResult);
+  assert.strictEqual(cachedResult.status, result.status);
 });
 

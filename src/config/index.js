@@ -83,6 +83,10 @@ export const config = {
   lyricsStrictTrackMatch: toBool(process.env.LYRICS_STRICT_TRACK_MATCH, false),
   lyricsPrefetchOnlyWhenEnabled: toBool(process.env.LYRICS_PREFETCH_ONLY_WHEN_ENABLED, false),
   lyricsCacheTtlHours: finiteNumber(process.env.LYRICS_CACHE_TTL_HOURS, 24),
+  lyricsCacheSyncedDays: finiteNumber(process.env.LYRICS_CACHE_SYNCED_DAYS, 30),
+  lyricsCachePlainDays: finiteNumber(process.env.LYRICS_CACHE_PLAIN_DAYS, 7),
+  lyricsNotFoundCacheTtlMinutes: finiteNumber(process.env.LYRICS_NOT_FOUND_CACHE_TTL_MINUTES, 15),
+  lyricsErrorCacheTtlMinutes: finiteNumber(process.env.LYRICS_ERROR_CACHE_TTL_MINUTES, 1),
   lyricsFetchTimeoutMs: finiteNumber(process.env.LYRICS_FETCH_TIMEOUT_MS, 12000),
   lyricsFetchRetries: finiteNumber(process.env.LYRICS_FETCH_RETRIES, 1),
   lyricsSearchMaxQueries: finiteNumber(process.env.LYRICS_SEARCH_MAX_QUERIES, 3),
@@ -96,7 +100,11 @@ export const config = {
   lyricsStartGraceSeconds: finiteNumber(process.env.LYRICS_START_GRACE_SECONDS, 1.5),
   lyricsSkipOldLineThresholdSeconds: finiteNumber(process.env.LYRICS_SKIP_OLD_LINE_THRESHOLD_SECONDS, 3),
   lyricsDebug: toBool(process.env.LYRICS_DEBUG, false),
-  lyricsNotFoundCacheTtlMinutes: finiteNumber(process.env.LYRICS_NOT_FOUND_CACHE_TTL_MINUTES, 5),
+  lyricsEnableNetease: toBool(process.env.LYRICS_ENABLE_NETEASE, true),
+  lyricsNeteaseTimeoutMs: finiteNumber(process.env.LYRICS_NETEASE_TIMEOUT_MS, 8000),
+  lyricsEnableScrapeFallback: toBool(process.env.LYRICS_ENABLE_SCRAPE_FALLBACK, false),
+  lyricsScrapeTimeoutMs: finiteNumber(process.env.LYRICS_SCRAPE_TIMEOUT_MS, 8000),
+  lyricsScrapeMaxBytes: finiteNumber(process.env.LYRICS_SCRAPE_MAX_BYTES, 1000000),
 };
 
 export function validateConfig() {

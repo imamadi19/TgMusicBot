@@ -8,7 +8,7 @@
 import { config } from '../../config/index.js';
 import { voicePlayer } from '../player/player.js';
 import { chatCache } from '../cache/chat-cache.js';
-import { getLyrics } from './lrclib.js';
+import { getLyrics } from './lyrics-service.js';
 import { getCachedLyrics } from './lyrics-cache.js';
 
 const activeRunners = new Map();
@@ -297,7 +297,7 @@ export async function startLyricsForChat(chatId, ctxOrApi, track, options = {}) 
     const bypassNotFound = Boolean(options.force || options.bypassNotFoundCache);
 
     if (preferCache) {
-      lyricsResult = getCachedLyrics(track);
+      lyricsResult = await getCachedLyrics(track);
       if (!lyricsResult || (lyricsResult.status === 'notFound' && bypassNotFound)) {
         debugLog('no cache or notFound bypass, fetching for', track.title || track.name);
         lyricsResult = await getLyrics(track, { bypassNotFoundCache: bypassNotFound });
@@ -307,13 +307,17 @@ export async function startLyricsForChat(chatId, ctxOrApi, track, options = {}) 
     }
 
     if (!lyricsResult || !lyricsResult.synced || lyricsResult.lines.length === 0) {
-      const isPlainOnly = lyricsResult?.plainLyrics || lyricsResult?.status === 'plainOnly';
-      let msg = isPlainOnly ? 'plainOnly' : 'notFound';
-      let errReason = undefined;
-      if (lyricsResult?.status === 'error') {
+      let msg = 'notFound';
+      if (lyricsResult?.status === 'plainOnly') {
+        msg = 'plainOnly';
+      } else if (lyricsResult?.status === 'rateLimited') {
+        msg = 'rateLimited';
+      } else if (lyricsResult?.status === 'timeout') {
+        msg = 'timeout';
+      } else if (lyricsResult?.status === 'error') {
         msg = 'error';
-        errReason = lyricsResult.reason;
       }
+      let errReason = lyricsResult?.reason;
       const result = { success: false, message: msg, error: errReason };
       lastStartResult.set(key, result);
       if (silent) {
@@ -383,7 +387,7 @@ export async function startLyricsForChat(chatId, ctxOrApi, track, options = {}) 
       runTick(key).catch(err => console.error(`Error in lyrics tick for chat ${key}:`, err));
     }, tickInterval);
 
-    const result = { success: true };
+    const result = { success: true, provider: runner.provider };
     lastStartResult.set(key, result);
     return result;
   } catch (error) {
