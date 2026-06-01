@@ -1,78 +1,146 @@
-import { InlineKeyboard } from 'grammy';
 import { config } from '../config/index.js';
 import { languages, t } from '../i18n/index.js';
 import { SUPPORTED_DEFAULT_SERVICES, normalizeDefaultService } from '../core/db/user-settings.js';
 
+function styledCallbackButton(text, callbackData, style) {
+  return {
+    text,
+    callback_data: callbackData,
+    style,
+  };
+}
+
+function styledUrlButton(text, url, style) {
+  return {
+    text,
+    url,
+    style,
+  };
+}
+
+function rawKeyboard(rows) {
+  return {
+    inline_keyboard: rows,
+  };
+}
+
 export function supportKeyboard(language = 'en') {
-  const keyboard = new InlineKeyboard();
-  if (config.supportGroup) keyboard.url(t(language, 'buttons.support'), config.supportGroup);
-  if (config.supportChannel) keyboard.url(t(language, 'buttons.channel'), config.supportChannel);
-  return keyboard;
+  const row = [];
+  if (config.supportGroup) {
+    row.push(styledUrlButton(t(language, 'buttons.support'), config.supportGroup, 'primary'));
+  }
+  if (config.supportChannel) {
+    row.push(styledUrlButton(t(language, 'buttons.channel'), config.supportChannel, 'primary'));
+  }
+  return rawKeyboard(row.length ? [row] : []);
 }
 
 // Legacy keyboard; do not use for active /start flow.
 export function mainKeyboard(language = 'en') {
   const botUsername = String(config.botUsername || 'TgMusikGlobalBot').replace(/^@+/, '');
   const addToGroupUrl = `https://t.me/${botUsername}?startgroup=true`;
-  const sourceUrl = config.sourceUrl || 'https://github.com/';
-  return new InlineKeyboard()
-    .url(`➕ ${t(language, 'buttons.addToGroup')}`, addToGroupUrl)
-    .row()
-    .text(`${t(language, 'buttons.help')}`, 'help_all')
-    .row()
-    .url(`${t(language, 'buttons.support')}`, config.supportGroup || 'https://t.me')
-    .url(`${t(language, 'buttons.channel')}`, config.supportChannel || 'https://t.me')
-    .row()
-    .text(t(language, 'buttons.language'), 'language_menu')
-    .text(t(language, 'buttons.settings'), 'settings_menu');
+  return rawKeyboard([
+    [
+      styledUrlButton(`➕ ${t(language, 'buttons.addToGroup')}`, addToGroupUrl, 'success')
+    ],
+    [
+      styledCallbackButton(`${t(language, 'buttons.help')}`, 'help_all', 'primary')
+    ],
+    [
+      styledUrlButton(`${t(language, 'buttons.support')}`, config.supportGroup || 'https://t.me', 'primary'),
+      styledUrlButton(`${t(language, 'buttons.channel')}`, config.supportChannel || 'https://t.me', 'primary')
+    ],
+    [
+      styledCallbackButton(t(language, 'buttons.language'), 'language_menu', 'primary'),
+      styledCallbackButton(t(language, 'buttons.settings'), 'settings_menu', 'primary')
+    ]
+  ]);
 }
 
 export function helpKeyboard(language = 'en') {
-  return new InlineKeyboard()
-    .text(t(language, 'buttons.user'), 'help_user').text(t(language, 'buttons.admin'), 'help_admin').row()
-    .text(t(language, 'buttons.playlist'), 'help_playlist').text(t(language, 'buttons.owner'), 'help_owner').row()
-    .text(t(language, 'buttons.developer'), 'help_devs').row()
-    .text(t(language, 'buttons.language'), 'language_menu')
-    .row()
-    .text(t(language, 'buttons.back'), 'start_home')
-    .text(`❌ ${t(language, 'buttons.close')}`, 'start_close');
+  return rawKeyboard([
+    [
+      styledCallbackButton(t(language, 'buttons.user'), 'help_user', 'primary'),
+      styledCallbackButton(t(language, 'buttons.admin'), 'help_admin', 'primary')
+    ],
+    [
+      styledCallbackButton(t(language, 'buttons.playlist'), 'help_playlist', 'primary'),
+      styledCallbackButton(t(language, 'buttons.owner'), 'help_owner', 'primary')
+    ],
+    [
+      styledCallbackButton(t(language, 'buttons.developer'), 'help_devs', 'primary')
+    ],
+    [
+      styledCallbackButton(t(language, 'buttons.language'), 'language_menu', 'primary')
+    ],
+    [
+      styledCallbackButton(t(language, 'buttons.back'), 'start_home', 'primary'),
+      styledCallbackButton(`❌ ${t(language, 'buttons.close')}`, 'start_close', 'danger')
+    ]
+  ]);
 }
 
 export function backKeyboard(language = 'en') {
-  return new InlineKeyboard().text(t(language, 'buttons.back'), 'help_all');
+  return rawKeyboard([
+    [
+      styledCallbackButton(t(language, 'buttons.back'), 'help_all', 'primary')
+    ]
+  ]);
 }
-
 
 export function serviceSettingsKeyboard(currentService, language = 'en') {
   const activeService = normalizeDefaultService(currentService) || SUPPORTED_DEFAULT_SERVICES.youtube;
-  const keyboard = new InlineKeyboard()
-    .text(`${activeService === SUPPORTED_DEFAULT_SERVICES.youtube ? '✅ ' : ''}${SUPPORTED_DEFAULT_SERVICES.youtube}`, 'service_youtube')
-    .row()
-    .text(`${activeService === SUPPORTED_DEFAULT_SERVICES.spotify ? '✅ ' : ''}${SUPPORTED_DEFAULT_SERVICES.spotify}`, 'service_spotify')
-    .text(`${activeService === SUPPORTED_DEFAULT_SERVICES.apple_music ? '✅ ' : ''}${SUPPORTED_DEFAULT_SERVICES.apple_music}`, 'service_apple_music')
-    .row()
-    .text(`${activeService === SUPPORTED_DEFAULT_SERVICES.soundcloud ? '✅ ' : ''}${SUPPORTED_DEFAULT_SERVICES.soundcloud}`, 'service_soundcloud')
-    .row()
-    .text(`⬅️ ${t(language, 'buttons.back')}`, 'settings_home')
-    .text(`❌ ${t(language, 'buttons.close')}`, 'settings_close');
+  
+  const ytStyle = activeService === SUPPORTED_DEFAULT_SERVICES.youtube ? 'success' : 'primary';
+  const spotStyle = activeService === SUPPORTED_DEFAULT_SERVICES.spotify ? 'success' : 'primary';
+  const appleStyle = activeService === SUPPORTED_DEFAULT_SERVICES.apple_music ? 'success' : 'primary';
+  const scStyle = activeService === SUPPORTED_DEFAULT_SERVICES.soundcloud ? 'success' : 'primary';
 
-  return keyboard;
+  return rawKeyboard([
+    [
+      styledCallbackButton(`${activeService === SUPPORTED_DEFAULT_SERVICES.youtube ? '✅ ' : ''}${SUPPORTED_DEFAULT_SERVICES.youtube}`, 'service_youtube', ytStyle)
+    ],
+    [
+      styledCallbackButton(`${activeService === SUPPORTED_DEFAULT_SERVICES.spotify ? '✅ ' : ''}${SUPPORTED_DEFAULT_SERVICES.spotify}`, 'service_spotify', spotStyle),
+      styledCallbackButton(`${activeService === SUPPORTED_DEFAULT_SERVICES.apple_music ? '✅ ' : ''}${SUPPORTED_DEFAULT_SERVICES.apple_music}`, 'service_apple_music', appleStyle)
+    ],
+    [
+      styledCallbackButton(`${activeService === SUPPORTED_DEFAULT_SERVICES.soundcloud ? '✅ ' : ''}${SUPPORTED_DEFAULT_SERVICES.soundcloud}`, 'service_soundcloud', scStyle)
+    ],
+    [
+      styledCallbackButton(`⬅️ ${t(language, 'buttons.back')}`, 'settings_home', 'primary'),
+      styledCallbackButton(`❌ ${t(language, 'buttons.close')}`, 'settings_close', 'danger')
+    ]
+  ]);
 }
 
 export function languageKeyboard(language = 'en', options = {}) {
   const prefix = options.prefix || 'lang_';
-  const keyboard = new InlineKeyboard();
+  const rows = [];
+  let currentRow = [];
+  
   languages.forEach((lang, index) => {
-    keyboard.text(`${lang.flag} ${lang.nativeName}`, `${prefix}${lang.code}`);
-    if (index % 2 === 1) keyboard.row();
+    currentRow.push(styledCallbackButton(`${lang.flag} ${lang.nativeName}`, `${prefix}${lang.code}`, 'primary'));
+    if (index % 2 === 1) {
+      rows.push(currentRow);
+      currentRow = [];
+    }
   });
+  
+  if (currentRow.length > 0) {
+    rows.push(currentRow);
+  }
+  
   if (options && options.includeBack) {
     const backCb = options.backCallback || 'start_home';
     const closeCb = options.closeCallback || 'start_close';
-    keyboard.text(`⬅️ ${t(language, 'buttons.back')}`, backCb)
-            .text(`❌ ${t(language, 'buttons.close')}`, closeCb);
+    rows.push([
+      styledCallbackButton(`⬅️ ${t(language, 'buttons.back')}`, backCb, 'primary'),
+      styledCallbackButton(`❌ ${t(language, 'buttons.close')}`, closeCb, 'danger')
+    ]);
   }
-  return keyboard;
+  
+  return rawKeyboard(rows);
 }
 
 function clock(totalSeconds = 0) {
@@ -105,17 +173,11 @@ export function progressLabel(track = {}) {
 }
 
 export function progressKeyboard(track = {}, style = 'primary') {
-  return {
-    inline_keyboard: [
-      [
-        {
-          text: progressLabel(track),
-          callback_data: 'play_progress',
-          style,
-        },
-      ],
-    ],
-  };
+  return rawKeyboard([
+    [
+      styledCallbackButton(progressLabel(track), 'play_progress', style)
+    ]
+  ]);
 }
 
 export function completedProgressKeyboard(track = {}) {
@@ -125,44 +187,40 @@ export function completedProgressKeyboard(track = {}) {
 }
 
 export function controlKeyboard(language = 'en', state = '', track = {}) {
-  return {
-    inline_keyboard: [
-      [
-        {
-          text: progressLabel(track),
-          callback_data: 'play_progress',
-          style: 'primary',
-        },
-      ],
-      [
-        { text: '▷', callback_data: 'play_resume' },
-        { text: 'Ⅱ', callback_data: 'play_pause' },
-        { text: '↻', callback_data: 'play_replay' },
-        { text: '▸▸', callback_data: 'play_skip' },
-        { text: '▢', callback_data: 'play_stop' },
-      ],
+  return rawKeyboard([
+    [
+      styledCallbackButton(progressLabel(track), 'play_progress', 'primary')
     ],
-  };
+    [
+      styledCallbackButton('▷', 'play_resume', 'success'),
+      styledCallbackButton('Ⅱ', 'play_pause', 'primary'),
+      styledCallbackButton('↻', 'play_replay', 'success'),
+      styledCallbackButton('▸▸', 'play_skip', 'danger'),
+      styledCallbackButton('▢', 'play_stop', 'danger')
+    ]
+  ]);
 }
 
-
 export function searchSelectionKeyboard(messageId, tracks, index = 0) {
-  const keyboard = new InlineKeyboard();
   const total = Math.max(1, tracks.length);
   const safeIndex = Math.max(0, Math.min(index, total - 1));
+  const rows = [];
 
   if (total > 1) {
     const previous = safeIndex === 0 ? total - 1 : safeIndex - 1;
     const next = safeIndex === total - 1 ? 0 : safeIndex + 1;
-    keyboard
-      .text('⬅️ Prev', `searchpage:${messageId}:${previous}`)
-      .text('Next ➡️', `searchpage:${messageId}:${next}`)
-      .row();
+    rows.push([
+      styledCallbackButton('⬅️ Prev', `searchpage:${messageId}:${previous}`, 'primary'),
+      styledCallbackButton('Next ➡️', `searchpage:${messageId}:${next}`, 'primary')
+    ]);
   }
 
-  return keyboard
-    .text('✅ Select', `searchpick:${messageId}:${safeIndex}`)
-    .text('❌ Cancel', `searchcancel:${messageId}`);
+  rows.push([
+    styledCallbackButton('✅ Select', `searchpick:${messageId}:${safeIndex}`, 'success'),
+    styledCallbackButton('❌ Cancel', `searchcancel:${messageId}`, 'danger')
+  ]);
+
+  return rawKeyboard(rows);
 }
 
 export const youtubeSelectionKeyboard = searchSelectionKeyboard;
@@ -171,91 +229,121 @@ export function privateStartKeyboard(language = 'en') {
   const botUsername = String(config.botUsername || 'TgMusikGlobalBot').replace(/^@+/, '');
   const addToGroupUrl = `https://t.me/${botUsername}?startgroup=true`;
 
-  const keyboard = new InlineKeyboard()
-    .url(t(language, 'buttons.addToGroup'), addToGroupUrl)
-    .row()
-    .text(t(language, 'buttons.setupGuide'), 'start_setup')
-    .text(t(language, 'buttons.musicFeatures'), 'start_features')
-    .row()
-    .text(t(language, 'buttons.myPlaylists'), 'start_playlist')
-    .text(t(language, 'buttons.premium'), 'start_premium')
-    .row()
-    .text(`🌐 ${t(language, 'buttons.chooseLanguage')}`, 'language_menu')
-    .text(`⚙️ ${t(language, 'buttons.settings')}`, 'settings_menu');
+  const rows = [
+    [
+      styledUrlButton(t(language, 'buttons.addToGroup'), addToGroupUrl, 'success')
+    ],
+    [
+      styledCallbackButton(t(language, 'buttons.setupGuide'), 'start_setup', 'primary'),
+      styledCallbackButton(t(language, 'buttons.musicFeatures'), 'start_features', 'primary')
+    ],
+    [
+      styledCallbackButton(t(language, 'buttons.myPlaylists'), 'start_playlist', 'primary'),
+      styledCallbackButton(t(language, 'buttons.premium'), 'start_premium', 'success')
+    ],
+    [
+      styledCallbackButton(`🌐 ${t(language, 'buttons.chooseLanguage')}`, 'language_menu', 'primary'),
+      styledCallbackButton(`⚙️ ${t(language, 'buttons.settings')}`, 'settings_menu', 'primary')
+    ]
+  ];
 
   const supportUrl = config.supportGroup;
   const channelUrl = config.supportChannel;
   if (supportUrl || channelUrl) {
-    keyboard.row();
+    const urlRow = [];
     if (supportUrl) {
-      keyboard.url(t(language, 'buttons.support'), supportUrl);
+      urlRow.push(styledUrlButton(t(language, 'buttons.support'), supportUrl, 'primary'));
     }
     if (channelUrl) {
-      keyboard.url(t(language, 'buttons.channel'), channelUrl);
+      urlRow.push(styledUrlButton(t(language, 'buttons.channel'), channelUrl, 'primary'));
     }
+    rows.push(urlRow);
   }
 
-  keyboard.row().text(`❌ ${t(language, 'buttons.close')}`, 'start_close');
+  rows.push([
+    styledCallbackButton(`❌ ${t(language, 'buttons.close')}`, 'start_close', 'danger')
+  ]);
 
-  return keyboard;
+  return rawKeyboard(rows);
 }
 
 export function groupStartKeyboard(language = 'en') {
-  return new InlineKeyboard()
-    .text(t(language, 'buttons.playMusic'), 'group_play_hint')
-    .text(t(language, 'buttons.playVideo'), 'group_vplay_hint')
-    .row()
-    .text(t(language, 'buttons.queue'), 'group_queue_hint')
-    .text(t(language, 'buttons.skip'), 'group_skip_hint')
-    .row()
-    .text(`⚙️ ${t(language, 'buttons.groupSettings')}`, 'settings_menu')
-    .text(t(language, 'buttons.djMode'), 'group_djmode_hint')
-    .row()
-    .text(t(language, 'buttons.help'), 'help_all')
-    .text(t(language, 'buttons.premium'), 'start_premium')
-    .row()
-    .text(`❌ ${t(language, 'buttons.close')}`, 'start_close');
+  return rawKeyboard([
+    [
+      styledCallbackButton(t(language, 'buttons.playMusic'), 'group_play_hint', 'success'),
+      styledCallbackButton(t(language, 'buttons.playVideo'), 'group_vplay_hint', 'success')
+    ],
+    [
+      styledCallbackButton(t(language, 'buttons.queue'), 'group_queue_hint', 'primary'),
+      styledCallbackButton(t(language, 'buttons.skip'), 'group_skip_hint', 'danger')
+    ],
+    [
+      styledCallbackButton(`⚙️ ${t(language, 'buttons.groupSettings')}`, 'settings_menu', 'primary'),
+      styledCallbackButton(t(language, 'buttons.djMode'), 'group_djmode_hint', 'primary')
+    ],
+    [
+      styledCallbackButton(t(language, 'buttons.help'), 'help_all', 'primary'),
+      styledCallbackButton(t(language, 'buttons.premium'), 'start_premium', 'success')
+    ],
+    [
+      styledCallbackButton(`❌ ${t(language, 'buttons.close')}`, 'start_close', 'danger')
+    ]
+  ]);
 }
 
 export function backToStartKeyboard(language = 'en') {
-  return new InlineKeyboard()
-    .text(`⬅️ ${t(language, 'buttons.back')}`, 'start_home')
-    .text(`❌ ${t(language, 'buttons.close')}`, 'start_close');
+  return rawKeyboard([
+    [
+      styledCallbackButton(`⬅️ ${t(language, 'buttons.back')}`, 'start_home', 'primary'),
+      styledCallbackButton(`❌ ${t(language, 'buttons.close')}`, 'start_close', 'danger')
+    ]
+  ]);
 }
 
 export function settingsDashboardKeyboard(language = 'en', chatType = 'private') {
   const isPrivate = chatType === 'private';
-  const keyboard = new InlineKeyboard()
-    .text(`🎧 ${t(language, 'buttons.defaultService')}`, 'settings_service')
-    .row();
+  const rows = [
+    [
+      styledCallbackButton(`🎧 ${t(language, 'buttons.defaultService')}`, 'settings_service', 'primary')
+    ]
+  ];
 
   if (!isPrivate) {
-    keyboard
-      .text(`🎚 ${t(language, 'buttons.audioPreset')}`, 'settings_preset')
-      .text(`🎧 ${t(language, 'buttons.djMode')}`, 'settings_djmode')
-      .row();
+    rows.push([
+      styledCallbackButton(`🎚 ${t(language, 'buttons.audioPreset')}`, 'settings_preset', 'primary'),
+      styledCallbackButton(`🎧 ${t(language, 'buttons.djMode')}`, 'settings_djmode', 'primary')
+    ]);
   }
 
-  keyboard
-    .text(`🌐 ${t(language, 'buttons.chooseLanguage')}`, 'settings_language');
-
   if (!isPrivate) {
-    keyboard.text(`⭐ ${t(language, 'buttons.premiumInfo')}`, 'settings_premium');
+    rows.push([
+      styledCallbackButton(`🌐 ${t(language, 'buttons.chooseLanguage')}`, 'settings_language', 'primary'),
+      styledCallbackButton(`⭐ ${t(language, 'buttons.premiumInfo')}`, 'settings_premium', 'success')
+    ]);
   } else {
-    keyboard.text(`📖 ${t(language, 'buttons.help')}`, 'settings_help');
-    keyboard.row().text(`⭐ ${t(language, 'buttons.premiumInfo')}`, 'settings_premium');
+    rows.push([
+      styledCallbackButton(`🌐 ${t(language, 'buttons.chooseLanguage')}`, 'settings_language', 'primary'),
+      styledCallbackButton(`📖 ${t(language, 'buttons.help')}`, 'settings_help', 'primary')
+    ]);
+    rows.push([
+      styledCallbackButton(`⭐ ${t(language, 'buttons.premiumInfo')}`, 'settings_premium', 'success')
+    ]);
   }
 
-  keyboard.row()
-    .text(`❌ ${t(language, 'buttons.close')}`, 'settings_close');
+  rows.push([
+    styledCallbackButton(`❌ ${t(language, 'buttons.close')}`, 'settings_close', 'danger')
+  ]);
 
-  return keyboard;
+  return rawKeyboard(rows);
 }
 
 export function settingsBackKeyboard(language = 'en') {
-  return new InlineKeyboard()
-    .text(`⬅️ ${t(language, 'buttons.back')}`, 'settings_home')
-    .text(`❌ ${t(language, 'buttons.close')}`, 'settings_close');
+  return rawKeyboard([
+    [
+      styledCallbackButton(`⬅️ ${t(language, 'buttons.back')}`, 'settings_home', 'primary'),
+      styledCallbackButton(`❌ ${t(language, 'buttons.close')}`, 'settings_close', 'danger')
+    ]
+  ]);
 }
 
 export function settingsLanguageKeyboard(language = 'en') {
@@ -266,4 +354,3 @@ export function settingsLanguageKeyboard(language = 'en') {
     prefix: 'settings_lang_',
   });
 }
-

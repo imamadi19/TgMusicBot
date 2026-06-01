@@ -683,3 +683,57 @@ test('scheduled cleanup removes old downloads and keeps cookie file', async () =
     await fs.rm(tempRoot, { recursive: true, force: true });
   }
 });
+
+test('keyboard styles are mapped correctly', async () => {
+  const {
+    supportKeyboard,
+    helpKeyboard,
+    backKeyboard,
+    serviceSettingsKeyboard,
+    searchSelectionKeyboard,
+    privateStartKeyboard,
+    groupStartKeyboard,
+    settingsDashboardKeyboard,
+  } = await import('../src/handlers/keyboards.js');
+
+  const supKb = supportKeyboard('en').inline_keyboard;
+  if (supKb.length > 0 && supKb[0].length > 0) {
+    assert.equal(supKb[0][0].style, 'primary');
+  }
+
+  const helpKb = helpKeyboard('en').inline_keyboard;
+  assert.equal(helpKb[0][0].style, 'primary'); // user button
+  assert.equal(helpKb[4][0].style, 'primary'); // back button
+  assert.equal(helpKb[4][1].style, 'danger');  // close button
+
+  const backKb = backKeyboard('en').inline_keyboard;
+  assert.equal(backKb[0][0].style, 'primary');
+
+  const svcKb = serviceSettingsKeyboard('youtube', 'en').inline_keyboard;
+  assert.equal(svcKb[0][0].style, 'success'); // youtube (active)
+  assert.equal(svcKb[1][0].style, 'primary'); // spotify (inactive)
+  assert.equal(svcKb[3][0].style, 'primary'); // back
+  assert.equal(svcKb[3][1].style, 'danger');  // close
+
+  const searchKb = searchSelectionKeyboard('msgId', [1, 2], 0).inline_keyboard;
+  assert.equal(searchKb[0][0].style, 'primary'); // Prev
+  assert.equal(searchKb[0][1].style, 'primary'); // Next
+  assert.equal(searchKb[1][0].style, 'success'); // Select
+  assert.equal(searchKb[1][1].style, 'danger');  // Cancel
+
+  const pStartKb = privateStartKeyboard('en').inline_keyboard;
+  assert.equal(pStartKb[0][0].style, 'success'); // addToGroup
+  assert.equal(pStartKb[1][0].style, 'primary'); // setupGuide
+  assert.equal(pStartKb[2][1].style, 'success'); // premium
+  assert.equal(pStartKb[pStartKb.length - 1][0].style, 'danger'); // close
+
+  const gStartKb = groupStartKeyboard('en').inline_keyboard;
+  assert.equal(gStartKb[0][0].style, 'success'); // playMusic
+  assert.equal(gStartKb[1][1].style, 'danger');  // skip
+  assert.equal(gStartKb[gStartKb.length - 1][0].style, 'danger'); // close
+
+  const sDashKb = settingsDashboardKeyboard('en', 'private').inline_keyboard;
+  assert.equal(sDashKb[0][0].style, 'primary'); // defaultService
+  assert.equal(sDashKb[sDashKb.length - 1][0].style, 'danger'); // close
+});
+
