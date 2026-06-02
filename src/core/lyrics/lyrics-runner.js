@@ -203,7 +203,11 @@ async function runTick(chatId) {
   const runner = activeRunners.get(key);
   if (!runner) return;
 
-  // 1. Check if the track is still active in player
+  if (runner.isTickRunning) return;
+  runner.isTickRunning = true;
+
+  try {
+    // 1. Check if the track is still active in player
   const activeTrack = voicePlayer.activeTrack(chatId);
   if (!activeTrack) {
     debugLog('no active track, stopping runner for', key);
@@ -288,6 +292,11 @@ async function runTick(chatId) {
       runner.lastSentIndex = nextIndex;
       runner.lastSentTimeMs = now;
       runner.lastSentText = text;
+    }
+  }
+  } finally {
+    if (activeRunners.get(key) === runner) {
+      runner.isTickRunning = false;
     }
   }
 }
@@ -405,7 +414,8 @@ export async function startLyricsForChat(chatId, ctxOrApi, track, options = {}) 
       provider: lyricsResult.provider || 'lrclib',
       sourceId: lyricsResult.sourceId || '',
       startedAt: Date.now(),
-      timer: null
+      timer: null,
+      isTickRunning: false
     };
 
     activeRunners.set(key, runner);
