@@ -14,6 +14,7 @@ import { validateLyricsMatch } from './match-validator.js';
 
 const activeRunners = new Map();
 const lastStartResult = new Map();
+const unsupportedBackoff = new Map();
 let globalBotApi = null;
 
 function debugLog(...args) {
@@ -164,18 +165,84 @@ function getLyricTextAndNextIndex(lines, startIndex) {
 }
 
 async function sendLyricsMessage(runner, text) {
-  const delivery = config.lyricsDelivery || 'assistant';
+  const delivery = config.lyricsDelivery || 'voice_chat_message';
 
-  if (delivery === 'assistant') {
-    const sentByAssistant = await voicePlayer.sendAssistantMessage(runner.chatId, text, {
+  if (delivery === 'voice_chat_message') {
+    if (unsupportedBackoff.has(runner.chatId) && Date.now() < unsupportedBackoff.get(runner.chatId)) {
+      runner.lastDeliveryMethod = 'voiceChatMessageUnsupported (backoff)';
+      return false; // silently skip if in backoff
+    }
+
+    const result = await voicePlayer.sendVoiceChatMessage(runner.chatId, text, {
+      parseMode: 'HTML',
+    }).catch((error) => {
+      console.warn(`Lyrics runner voice_chat_message delivery failed for chat ${runner.chatId}: ${error.message}`);
+      return false;
+    });
+
+    if (result && result.acknowledged) {
+      let payloadObj;
+      try {
+        payloadObj = JSON.parse(result.payload);
+      } catch(e) {
+        payloadObj = { ok: false, error: 'jsonParseError' };
+      }
+
+      if (payloadObj.ok) {
+        runner.lastDeliveryMethod = payloadObj.delivery || 'voice_chat_message';
+        return true;
+      }
+
+      if (payloadObj.error === 'floodWait') {
+        const retryAfterMs = (payloadObj.retry_after || 5) * 1000;
+        unsupportedBackoff.set(runner.chatId, Date.now() + retryAfterMs);
+        return false;
+      }
+
+      if (payloadObj.unsupported) {
+        runner.lastDeliveryMethod = 'voiceChatMessageUnsupported';
+        runner.lastAdapterChecked = payloadObj.capabilities || payloadObj.checked;
+        runner.lastUnsupportedReason = payloadObj.reason;
+        unsupportedBackoff.set(runner.chatId, Date.now() + config.lyricsVoiceChatUnsupportedBackoffMs);
+
+        if (!config.lyricsRequireVoiceChatMessage && config.lyricsAllowGroupFallback) {
+          // Fallthrough to fallback flow
+        } else {
+          return false;
+        }
+      } else {
+        // Some other error
+        runner.lastDeliveryMethod = `error: ${payloadObj.error}`;
+        return false;
+      }
+    }
+  }
+
+  // Fallback / legacy assistant flow
+  if (delivery === 'assistant' || (!config.lyricsRequireVoiceChatMessage && config.lyricsAllowGroupFallback)) {
+    const tryVoiceChatMessage = config.lyricsTryVoiceChatMessage || false;
+    const fallbackToGroup = config.lyricsAssistantFallbackToGroup;
+
+    const result = await voicePlayer.sendAssistantMessage(runner.chatId, text, {
       parseMode: 'HTML',
       disableWebPagePreview: true,
+      tryVoiceChatMessage,
+      fallbackToGroup
     }).catch((error) => {
       console.warn(`Lyrics runner assistant delivery failed for chat ${runner.chatId}: ${error.message}`);
       return false;
     });
 
-    if (sentByAssistant) return true;
+    if (result && result.acknowledged) {
+      if (result.payload) {
+        runner.lastDeliveryMethod = result.payload;
+        if (result.payload === 'voiceChatMessageUnsupported') {
+          if (!fallbackToGroup) return false;
+        }
+      }
+      return true;
+    }
+
     if (!config.lyricsAssistantFallbackToBot) {
       debugLog(`assistant lyrics delivery unavailable for chat ${runner.chatId}; bot fallback disabled`);
       return false;
@@ -568,7 +635,9 @@ export function getLyricsStatus(chatId) {
       syncOffsetMs: config.lyricsSyncOffsetMs ?? 0,
       apiAvailable,
       lastResult,
-      trackMatchLoose: activeTrack ? sameTrackLoose(activeTrack, runner.track) : false
+      trackMatchLoose: activeTrack ? sameTrackLoose(activeTrack, runner.track) : false,
+      lastDeliveryMethod: runner.lastDeliveryMethod || null,
+      lastAdapterChecked: runner.lastAdapterChecked || null
     };
   }
   return {
@@ -584,6 +653,8 @@ export function getLyricsStatus(chatId) {
     syncOffsetMs: config.lyricsSyncOffsetMs ?? 0,
     apiAvailable,
     lastResult,
-    trackMatchLoose: false
+    trackMatchLoose: false,
+    lastDeliveryMethod: null,
+    lastAdapterChecked: null
   };
 }

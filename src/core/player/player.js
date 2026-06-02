@@ -140,14 +140,16 @@ function waitForAdapterAck(active, commandId, timeoutMs = CONTROL_ACK_TIMEOUT_MS
       output += String(chunk);
       if (output.includes(okPattern)) {
         cleanup();
-        resolve(true);
+        const idx = output.indexOf(okPattern);
+        const rest = output.slice(idx + okPattern.length).split(/\r?\n/, 1)[0] || '';
+        resolve({ acknowledged: true, payload: rest.trim() });
         return;
       }
       const errorIndex = output.indexOf(errorPattern);
       if (errorIndex !== -1) {
         cleanup();
         const message = output.slice(errorIndex + errorPattern.length).split(/\r?\n/, 1)[0] || 'adapter command failed';
-        reject(new Error(message));
+        reject(new Error(message.trim()));
       }
     };
     const onExit = () => {
@@ -171,9 +173,12 @@ async function sendAdapterCommand(active, command) {
   const ack = waitForAdapterAck(active, commandId);
   try {
     active.process.stdin.write(`${JSON.stringify({ id: commandId, ...command })}\n`);
-    await ack;
-    return true;
+    return await ack;
   } catch (error) {
+    // Suppress log spam for unsupported voice chat messages if the old python adapter still throws it
+    if (error.message.includes('voiceChatMessageUnsupported')) {
+      return { acknowledged: true, payload: JSON.stringify({ ok: false, error: 'voiceChatMessageUnsupported', unsupported: true }) };
+    }
     console.warn(`Voice adapter control command failed: ${error.message}`);
     return false;
   }
@@ -774,6 +779,16 @@ export class VoicePlayer {
     return this.#active.get(String(chatId));
   }
 
+  async sendVoiceChatMessage(chatId, text, options = {}) {
+    const active = this.#active.get(String(chatId));
+    if (!active) return false;
+    return sendAdapterCommand(active, {
+      action: 'voice_chat_message',
+      text: String(text ?? ''),
+      parse_mode: options.parseMode || options.parse_mode || 'HTML',
+    });
+  }
+
   async sendAssistantMessage(chatId, text, options = {}) {
     const active = this.#active.get(String(chatId));
     if (!active) return false;
@@ -782,6 +797,8 @@ export class VoicePlayer {
       text: String(text ?? ''),
       parse_mode: options.parseMode || options.parse_mode || 'HTML',
       disable_web_page_preview: Boolean(options.disableWebPagePreview || options.disable_web_page_preview),
+      try_voice_chat_message: Boolean(options.tryVoiceChatMessage),
+      fallback_to_group: Boolean(options.fallbackToGroup),
     });
   }
 

@@ -362,11 +362,50 @@ export async function lyricsHandler(ctx) {
       ? `\n• Last Result: <code>success=${runnerStatus.lastResult.success} message=${runnerStatus.lastResult.message || ''}${runnerStatus.lastResult.error ? ' error=' + runnerStatus.lastResult.error : ''}</code>`
       : '';
 
+    const deliveryMethod = config.lyricsDelivery || 'voice_chat_message';
+    let vcApiStatus = 'unknown';
+    if (runnerStatus.active && runnerStatus.lastDeliveryMethod) {
+      if (runnerStatus.lastDeliveryMethod === 'voice_chat_message') vcApiStatus = 'supported';
+      else if (runnerStatus.lastDeliveryMethod.includes('voiceChatMessageUnsupported')) vcApiStatus = 'unsupported';
+    }
+
+    let deliveryInfo = `• Delivery: <b>${deliveryMethod}</b>\n`;
+    if (deliveryMethod === 'voice_chat_message') {
+      deliveryInfo += `• Voice chat message API: <b>${vcApiStatus}</b>\n`;
+      deliveryInfo += `• Require VC message: <b>${config.lyricsRequireVoiceChatMessage}</b>\n`;
+      deliveryInfo += `• Fallback: <b>${config.lyricsRequireVoiceChatMessage ? 'disabled' : (config.lyricsAllowGroupFallback ? 'group send_message' : 'disabled')}</b>\n`;
+      if (runnerStatus.lastUnsupportedReason) {
+        deliveryInfo += `• Last unsupported reason: <code>${htmlEscape(runnerStatus.lastUnsupportedReason)}</code>\n`;
+      }
+      if (runnerStatus.lastAdapterChecked) {
+        const caps = runnerStatus.lastAdapterChecked;
+        deliveryInfo += `• Pyrogram version: <code>${caps.pyrogram_version || caps.pyrogram || 'unknown'}</code>\n`;
+        deliveryInfo += `• PyTgCalls version: <code>${caps.pytgcalls_version || caps.pytgcalls || 'unknown'}</code>\n`;
+        if (caps.candidate_methods) {
+          deliveryInfo += `• Candidate raw methods: <code>${htmlEscape(JSON.stringify(caps.candidate_methods))}</code>\n`;
+        } else if (caps.availableMethods) {
+          deliveryInfo += `• Candidate raw methods: <code>${htmlEscape(JSON.stringify(caps.availableMethods))}</code>\n`;
+        }
+      }
+    } else {
+      const tryVoice = config.lyricsTryVoiceChatMessage;
+      const fallbackGroup = config.lyricsAssistantFallbackToGroup;
+      if (tryVoice) {
+        deliveryInfo += `• Voice chat message API: <b>${vcApiStatus}</b>\n`;
+      } else {
+        deliveryInfo += `• Voice chat message API: <b>disabled</b>\n`;
+      }
+      if (fallbackGroup) {
+        deliveryInfo += `• Fallback: <b>group send_message</b>\n`;
+      }
+    }
+
     const response = `<b>ℹ️ ${t(language, 'lyrics.status')}</b>\n` +
       `• Lyrics Enabled: <b>${isEnabled ? 'true' : 'false'}</b>\n` +
       `• Lyrics Auto-Start: <b>${config.lyricsAutoStart ? 'true' : 'false'}</b>\n` +
       `• Strict Track Match: <b>${config.lyricsStrictTrackMatch ? 'true' : 'false'}</b>\n` +
       `• Bot API Available: <b>${runnerStatus.apiAvailable ? 'true' : 'false'}</b>\n` +
+      `${deliveryInfo}` +
       `• Runner Active: <b>${runnerStatus.active ? 'true' : 'false'}</b>\n` +
       `• Active Track: <i>${htmlEscape(currentTrackText)}</i>\n` +
       `• Track Match Loose: <b>${activeTrack && runnerStatus.track ? (runnerStatus.trackMatchLoose ? 'true' : 'false') : 'N/A'}</b>` +

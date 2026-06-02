@@ -412,7 +412,7 @@ async def send_group_call_message_async(text: str, parse_mode):
     return bool(result)
 
 
-async def send_assistant_message_async(text: str, parse_mode: str = "HTML", disable_web_page_preview: bool = False):
+async def send_assistant_message_async(text: str, parse_mode: str = "HTML", disable_web_page_preview: bool = False, try_voice_chat_message: bool = False, fallback_to_group: bool = True):
     """Send a lyrics/message payload through the assistant account.
 
     The current PyrogramMod MTProto layer includes the official raw
@@ -428,30 +428,79 @@ async def send_assistant_message_async(text: str, parse_mode: str = "HTML", disa
         raise RuntimeError("text kosong")
 
     normalized_parse_mode = normalize_pyrogram_parse_mode(parse_mode)
-    try:
-        if await send_group_call_message_async(normalized_text, normalized_parse_mode):
-            print("TGMB_ASSISTANT_DELIVERY group_call_message", flush=True)
-            return True
-    except Exception as exc:  # noqa: BLE001 - fallback must keep lyrics delivery alive.
-        print(
-            f"VOICE_ADAPTER_WARN: pesan khusus obrolan suara tidak didukung/gagal, fallback send_message: {exc}",
-            file=sys.stderr,
-            flush=True,
+    
+    if try_voice_chat_message:
+        try:
+            if await send_group_call_message_async(normalized_text, normalized_parse_mode):
+                print("TGMB_ASSISTANT_DELIVERY group_call_message", flush=True)
+                return True, "voice_chat_message"
+        except Exception as exc:  # noqa: BLE001 - fallback must keep lyrics delivery alive.
+            print(
+                f"VOICE_ADAPTER_WARN: pesan khusus obrolan suara tidak didukung/gagal, fallback send_message: {exc}",
+                file=sys.stderr,
+                flush=True,
+            )
+            
+        if not fallback_to_group:
+            print("TGMB_ASSISTANT_DELIVERY voiceChatMessageUnsupported", flush=True)
+            return False, "voiceChatMessageUnsupported"
+
+    if fallback_to_group or not try_voice_chat_message:
+        send_message = getattr(client, "send_message", None)
+        if not callable(send_message):
+            raise RuntimeError("Pyrogram Client.send_message tidak tersedia untuk assistant")
+
+        await call_method(
+            send_message,
+            chat_id,
+            normalized_text,
+            parse_mode=normalized_parse_mode,
+            disable_web_page_preview=disable_web_page_preview,
         )
+        print("TGMB_ASSISTANT_DELIVERY chat_message", flush=True)
+        if try_voice_chat_message:
+            return True, "voiceChatMessageUnsupported"
+        return True, "assistant"
 
-    send_message = getattr(client, "send_message", None)
-    if not callable(send_message):
-        raise RuntimeError("Pyrogram Client.send_message tidak tersedia untuk assistant")
+    return False, "voiceChatMessageUnsupported"
 
-    await call_method(
-        send_message,
-        chat_id,
-        normalized_text,
-        parse_mode=normalized_parse_mode,
-        disable_web_page_preview=disable_web_page_preview,
-    )
-    print("TGMB_ASSISTANT_DELIVERY chat_message", flush=True)
-    return True
+
+def get_voice_chat_message_capabilities():
+    try:
+        import pyrogram
+        pyro_ver = getattr(pyrogram, "__version__", "unknown")
+    except ImportError:
+        pyro_ver = "unknown"
+
+    try:
+        import pytgcalls
+        pytg_ver = getattr(pytgcalls, "__version__", "unknown")
+    except ImportError:
+        pytg_ver = "unknown"
+
+    keywords = ["groupcall", "group_call", "call", "discussion", "comment", "send", "message", "broadcast", "live", "voice", "video"]
+
+    def get_funcs(mod):
+        if mod is None: return []
+        res = []
+        for name in dir(mod):
+            if not name.startswith("_") and any(k in name.lower() for k in keywords):
+                res.append(name)
+        return res
+
+    phone_funcs = get_funcs(getattr(functions, "phone", None))
+    msg_funcs = get_funcs(getattr(functions, "messages", None))
+    chan_funcs = get_funcs(getattr(functions, "channels", None))
+    candidates = list(set(phone_funcs + msg_funcs + chan_funcs))
+
+    return {
+        "ok": True,
+        "pyrogram_version": pyro_ver,
+        "pytgcalls_version": pytg_ver,
+        "available_phone_functions": phone_funcs,
+        "available_message_functions": msg_funcs,
+        "candidate_methods": candidates
+    }
 
 
 
@@ -570,12 +619,99 @@ async def handle_stdin_command(command: dict):
 
     # 9. Penanganan aksi kirim pesan melalui assistant/userbot
     if action in {"send_message", "lyrics_message"}:
-        await send_assistant_message_async(
+        try_voice_chat_message = bool_value(command.get("try_voice_chat_message", False))
+        fallback_to_group = bool_value(command.get("fallback_to_group", True))
+        
+        success, reason = await send_assistant_message_async(
             str(command.get("text", "")),
             str(command.get("parse_mode", "HTML") or "HTML"),
             bool_value(command.get("disable_web_page_preview")),
+            try_voice_chat_message,
+            fallback_to_group
         )
-        print(f"TGMB_CONTROL_OK {command_id} send_message", flush=True)
+        if success:
+            print(f"TGMB_CONTROL_OK {command_id} send_message {reason}", flush=True)
+        else:
+            print(f"TGMB_CONTROL_ERROR {command_id} {reason}", flush=True)
+        return
+
+    if action == "voice_chat_message_capabilities":
+        try:
+            caps = get_voice_chat_message_capabilities()
+            print(f"TGMB_CONTROL_OK {command_id} {json.dumps(caps)}", flush=True)
+        except Exception as e:
+            res = {"ok": False, "error": str(e)}
+            print(f"TGMB_CONTROL_OK {command_id} {json.dumps(res)}", flush=True)
+        return
+
+    if action == "voice_chat_message":
+        try:
+            from pyrogram.errors import FloodWait
+            
+            send_group_call_message = getattr(functions.messages, "SendGroupCallMessage", None)
+            if send_group_call_message is None:
+                caps = get_voice_chat_message_capabilities()
+                res = {
+                    "ok": False,
+                    "error": "voiceChatMessageUnsupported",
+                    "unsupported": True,
+                    "reason": "no_raw_method_found",
+                    "capabilities": caps
+                }
+                print(f"TGMB_CONTROL_OK {command_id} {json.dumps(res)}", flush=True)
+                return
+
+            input_call = await resolve_active_group_call()
+            if input_call is None:
+                caps = get_voice_chat_message_capabilities()
+                res = {
+                    "ok": False,
+                    "error": "voiceChatMessageUnsupported",
+                    "unsupported": True,
+                    "reason": "no_raw_method_found",
+                    "capabilities": caps
+                }
+                print(f"TGMB_CONTROL_OK {command_id} {json.dumps(res)}", flush=True)
+                return
+
+
+            try:
+                normalized_parse_mode = normalize_pyrogram_parse_mode(command.get("parse_mode", "HTML"))
+                parsed = await client.parser.parse(str(command.get("text", "")), normalized_parse_mode)
+                message_text = parsed.get("message", str(command.get("text", "")))
+                entities = parsed.get("entities")
+                text_with_entities = getattr(types, "TextWithEntities", None)
+                random_id = (
+                    client.rnd_id()
+                    if callable(getattr(client, "rnd_id", None))
+                    else int.from_bytes(os.urandom(8), "little", signed=True)
+                )
+
+                result = await call_method(
+                    client.invoke,
+                    send_group_call_message(
+                        call=input_call,
+                        random_id=random_id,
+                        message=text_with_entities(text=message_text, entities=entities or []),
+                    ),
+                )
+                if result:
+                    res = {"ok": True, "delivery": "voice_chat_message"}
+                    print(f"TGMB_CONTROL_OK {command_id} {json.dumps(res)}", flush=True)
+                else:
+                    res = {"ok": False, "error": "voiceChatMessageFailed"}
+                    print(f"TGMB_CONTROL_OK {command_id} {json.dumps(res)}", flush=True)
+
+            except FloodWait as e:
+                res = {"ok": False, "error": "floodWait", "retry_after": e.value}
+                print(f"TGMB_CONTROL_OK {command_id} {json.dumps(res)}", flush=True)
+            except Exception as e:
+                res = {"ok": False, "error": str(e)}
+                print(f"TGMB_CONTROL_OK {command_id} {json.dumps(res)}", flush=True)
+                
+        except Exception as e:
+            res = {"ok": False, "error": str(e)}
+            print(f"TGMB_CONTROL_OK {command_id} {json.dumps(res)}", flush=True)
         return
 
     # 10. Penanganan aksi menghentikan pemutaran ("stop")
