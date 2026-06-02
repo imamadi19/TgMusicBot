@@ -14,7 +14,6 @@ import { validateLyricsMatch } from './match-validator.js';
 
 const activeRunners = new Map();
 const lastStartResult = new Map();
-const unsupportedBackoff = new Map();
 let globalBotApi = null;
 
 function debugLog(...args) {
@@ -165,97 +164,34 @@ function getLyricTextAndNextIndex(lines, startIndex) {
 }
 
 async function sendLyricsMessage(runner, text) {
-  const delivery = config.lyricsDelivery || 'voice_chat_message';
-
-  if (delivery === 'voice_chat_message') {
-    if (unsupportedBackoff.has(runner.chatId) && Date.now() < unsupportedBackoff.get(runner.chatId)) {
-      runner.lastDeliveryMethod = 'voiceChatMessageUnsupported (backoff)';
-      return false; // silently skip if in backoff
-    }
-
-    const result = await voicePlayer.sendVoiceChatMessage(runner.chatId, text, {
-      parseMode: 'HTML',
-    }).catch((error) => {
-      console.warn(`Lyrics runner voice_chat_message delivery failed for chat ${runner.chatId}: ${error.message}`);
-      return false;
-    });
-
-    if (result && result.acknowledged) {
-      let payloadObj;
-      try {
-        payloadObj = JSON.parse(result.payload);
-      } catch(e) {
-        payloadObj = { ok: false, error: 'jsonParseError' };
-      }
-
-      if (payloadObj.ok) {
-        runner.lastDeliveryMethod = payloadObj.delivery || 'voice_chat_message';
-        return true;
-      }
-
-      if (payloadObj.error === 'floodWait') {
-        const retryAfterMs = (payloadObj.retry_after || 5) * 1000;
-        unsupportedBackoff.set(runner.chatId, Date.now() + retryAfterMs);
-        return false;
-      }
-
-      if (payloadObj.unsupported) {
-        runner.lastDeliveryMethod = 'voiceChatMessageUnsupported';
-        runner.lastAdapterChecked = payloadObj.capabilities || payloadObj.checked;
-        runner.lastUnsupportedReason = payloadObj.reason;
-        unsupportedBackoff.set(runner.chatId, Date.now() + config.lyricsVoiceChatUnsupportedBackoffMs);
-
-        if (!config.lyricsRequireVoiceChatMessage && config.lyricsAllowGroupFallback) {
-          // Fallthrough to fallback flow
-        } else {
-          return false;
-        }
-      } else {
-        // Some other error
-        runner.lastDeliveryMethod = `error: ${payloadObj.error}`;
-        return false;
-      }
-    }
-  }
-
-  // Fallback / legacy assistant flow
-  if (delivery === 'assistant' || (!config.lyricsRequireVoiceChatMessage && config.lyricsAllowGroupFallback)) {
-    const tryVoiceChatMessage = config.lyricsTryVoiceChatMessage || false;
-    const fallbackToGroup = config.lyricsAssistantFallbackToGroup;
-
-    const result = await voicePlayer.sendAssistantMessage(runner.chatId, text, {
-      parseMode: 'HTML',
-      disableWebPagePreview: true,
-      tryVoiceChatMessage,
-      fallbackToGroup
-    }).catch((error) => {
-      console.warn(`Lyrics runner assistant delivery failed for chat ${runner.chatId}: ${error.message}`);
-      return false;
-    });
-
-    if (result && result.acknowledged) {
-      if (result.payload) {
-        runner.lastDeliveryMethod = result.payload;
-        if (result.payload === 'voiceChatMessageUnsupported') {
-          if (!fallbackToGroup) return false;
-        }
-      }
-      return true;
-    }
-
-    if (!config.lyricsAssistantFallbackToBot) {
-      debugLog(`assistant lyrics delivery unavailable for chat ${runner.chatId}; bot fallback disabled`);
-      return false;
-    }
-  }
-
   if (!runner.api?.sendMessage) {
     console.warn(`[lyrics-runner] Bot API sendMessage is not available for chat ${runner.chatId}`);
     return false;
   }
 
-  await runner.api.sendMessage(runner.chatId, text, { parse_mode: 'HTML' });
-  return true;
+  try {
+    await runner.api.sendMessage(runner.chatId, text, { parse_mode: 'HTML' });
+    return true;
+  } catch (error) {
+    const retryAfter = error?.response?.parameters?.retry_after || error?.parameters?.retry_after;
+    if (retryAfter) {
+      runner.lastSentTimeMs = Date.now() + retryAfter * 1000;
+      return false;
+    }
+
+    const desc = String(error?.description || error?.message || '').toLowerCase();
+    if (
+      desc.includes('chat not found') ||
+      desc.includes('forbidden') ||
+      desc.includes('bot was blocked')
+    ) {
+      stopLyricsForChat(runner.chatId, 'send-message-error');
+      return false;
+    }
+
+    console.warn(`Lyrics runner failed to send message to chat ${runner.chatId}: ${error.message}`);
+    return false;
+  }
 }
 
 /**
@@ -338,11 +274,6 @@ async function runTick(chatId) {
 
     const { text, nextIndex } = getLyricTextAndNextIndex(runner.lines, targetIndex);
     
-    // Update state before calling network API to prevent race condition on slow network
-    runner.lastSentIndex = nextIndex;
-    runner.lastSentTimeMs = now;
-    runner.lastSentText = text;
-
     if (!text.trim()) {
       return;
     }
@@ -352,15 +283,12 @@ async function runTick(chatId) {
 
     debugLog(`[${key}] sending line ${targetIndex} at ${elapsedSeconds.toFixed(1)}s: "${text.slice(0, 50)}..."`);
 
-    sendLyricsMessage(runner, messageText)
-      .catch((error) => {
-        console.warn(`Lyrics runner failed to send message to chat ${chatId}: ${error.message}`);
-        // Terminate runner only when the configured delivery path reports an inaccessible chat.
-        const lowered = String(error.message || '').toLowerCase();
-        if (lowered.includes('chat not found') || lowered.includes('forbidden')) {
-          stopLyricsForChat(chatId, 'send-message-error');
-        }
-      });
+    const success = await sendLyricsMessage(runner, messageText);
+    if (success) {
+      runner.lastSentIndex = nextIndex;
+      runner.lastSentTimeMs = now;
+      runner.lastSentText = text;
+    }
   }
 }
 
@@ -382,7 +310,7 @@ export async function startLyricsForChat(chatId, ctxOrApi, track, options = {}) 
   stopLyricsForChat(key, 'restart');
 
   const api = ctxOrApi?.api || ctxOrApi || globalBotApi;
-  if (!api && (config.lyricsDelivery !== 'assistant' || config.lyricsAssistantFallbackToBot)) {
+  if (!api) {
     console.warn(`[lyrics-runner] Bot API instance is not available for chat ${chatId} (globalBotApi is not set)`);
     const result = { success: false, message: 'apiUnavailable' };
     lastStartResult.set(key, result);
@@ -542,7 +470,7 @@ export async function startLyricsForChatIfEnabled(chatId, ctxOrApi, track, optio
       console.log(`[lyrics-runner] api available check: chat=${chatId} available=${apiAvailable}`);
     }
 
-    if (!api && (config.lyricsDelivery !== 'assistant' || config.lyricsAssistantFallbackToBot)) {
+    if (!api) {
       console.warn(`[lyrics-runner] Bot API instance is not available for auto-start in chat ${chatId}`);
       const result = { success: false, message: 'apiUnavailable' };
       lastStartResult.set(key, result);
@@ -635,9 +563,7 @@ export function getLyricsStatus(chatId) {
       syncOffsetMs: config.lyricsSyncOffsetMs ?? 0,
       apiAvailable,
       lastResult,
-      trackMatchLoose: activeTrack ? sameTrackLoose(activeTrack, runner.track) : false,
-      lastDeliveryMethod: runner.lastDeliveryMethod || null,
-      lastAdapterChecked: runner.lastAdapterChecked || null
+      trackMatchLoose: activeTrack ? sameTrackLoose(activeTrack, runner.track) : false
     };
   }
   return {
@@ -653,8 +579,6 @@ export function getLyricsStatus(chatId) {
     syncOffsetMs: config.lyricsSyncOffsetMs ?? 0,
     apiAvailable,
     lastResult,
-    trackMatchLoose: false,
-    lastDeliveryMethod: null,
-    lastAdapterChecked: null
+    trackMatchLoose: false
   };
 }

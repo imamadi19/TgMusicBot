@@ -175,10 +175,6 @@ async function sendAdapterCommand(active, command) {
     active.process.stdin.write(`${JSON.stringify({ id: commandId, ...command })}\n`);
     return await ack;
   } catch (error) {
-    // Suppress log spam for unsupported voice chat messages if the old python adapter still throws it
-    if (error.message.includes('voiceChatMessageUnsupported')) {
-      return { acknowledged: true, payload: JSON.stringify({ ok: false, error: 'voiceChatMessageUnsupported', unsupported: true }) };
-    }
     console.warn(`Voice adapter control command failed: ${error.message}`);
     return false;
   }
@@ -777,29 +773,6 @@ export class VoicePlayer {
 
   activeTrack(chatId) {
     return this.#active.get(String(chatId));
-  }
-
-  async sendVoiceChatMessage(chatId, text, options = {}) {
-    const active = this.#active.get(String(chatId));
-    if (!active) return false;
-    return sendAdapterCommand(active, {
-      action: 'voice_chat_message',
-      text: String(text ?? ''),
-      parse_mode: options.parseMode || options.parse_mode || 'HTML',
-    });
-  }
-
-  async sendAssistantMessage(chatId, text, options = {}) {
-    const active = this.#active.get(String(chatId));
-    if (!active) return false;
-    return sendAdapterCommand(active, {
-      action: 'send_message',
-      text: String(text ?? ''),
-      parse_mode: options.parseMode || options.parse_mode || 'HTML',
-      disable_web_page_preview: Boolean(options.disableWebPagePreview || options.disable_web_page_preview),
-      try_voice_chat_message: Boolean(options.tryVoiceChatMessage),
-      fallback_to_group: Boolean(options.fallbackToGroup),
-    });
   }
 
   activeCalls() {
