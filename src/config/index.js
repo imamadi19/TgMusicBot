@@ -78,6 +78,8 @@ export const config = {
   autoLeave: toBool(process.env.AUTO_LEAVE, true),
   streamDirect: toBool(process.env.STREAM_DIRECT, false),
   lyricsProvider: process.env.LYRICS_PROVIDER ?? 'lrclib',
+  lyricsDelivery: String(process.env.LYRICS_DELIVERY ?? 'assistant').trim().toLowerCase(),
+  lyricsAssistantFallbackToBot: toBool(process.env.LYRICS_ASSISTANT_FALLBACK_TO_BOT, false),
   lyricsEnabledDefault: toBool(process.env.LYRICS_ENABLED_DEFAULT, false),
   lyricsAutoStart: toBool(process.env.LYRICS_AUTO_START, true),
   lyricsStrictTrackMatch: toBool(process.env.LYRICS_STRICT_TRACK_MATCH, false),

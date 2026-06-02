@@ -46,8 +46,8 @@ async def maybe_await(value):
     return value
 
 
-async def call_method(method, *args):
-    return await maybe_await(method(*args))
+async def call_method(method, *args, **kwargs):
+    return await maybe_await(method(*args, **kwargs))
 
 
 async def call_method_with_optional_chat(method):
@@ -330,6 +330,131 @@ async def play_file_async(file_path: str, is_video: bool = False, seek_seconds: 
 
 
 
+def normalize_pyrogram_parse_mode(parse_mode: str = "HTML"):
+    normalized_parse_mode = parse_mode or None
+    if isinstance(normalized_parse_mode, str):
+        try:
+            from pyrogram import enums
+
+            normalized_parse_mode = getattr(
+                enums.ParseMode,
+                normalized_parse_mode.strip().upper(),
+                normalized_parse_mode,
+            )
+        except Exception:  # noqa: BLE001 - leave the original value for Pyrogram to validate.
+            pass
+    return normalized_parse_mode
+
+
+async def resolve_active_group_call():
+    """Resolve the active group-call input object for the target chat."""
+    if client is None or chat_id is None:
+        return None
+
+    resolve_peer = getattr(client, "resolve_peer", None)
+    invoke = getattr(client, "invoke", None)
+    if not callable(resolve_peer) or not callable(invoke):
+        return None
+
+    peer = await call_method(resolve_peer, chat_id)
+    input_peer_channel = getattr(types, "InputPeerChannel", None)
+    input_peer_chat = getattr(types, "InputPeerChat", None)
+
+    if input_peer_channel is not None and isinstance(peer, input_peer_channel):
+        full_chat = await call_method(
+            invoke,
+            functions.channels.GetFullChannel(
+                channel=types.InputChannel(
+                    channel_id=peer.channel_id,
+                    access_hash=peer.access_hash,
+                ),
+            ),
+        )
+    elif input_peer_chat is not None and isinstance(peer, input_peer_chat):
+        full_chat = await call_method(
+            invoke,
+            functions.messages.GetFullChat(chat_id=peer.chat_id),
+        )
+    else:
+        return None
+
+    return getattr(getattr(full_chat, "full_chat", None), "call", None)
+
+
+async def send_group_call_message_async(text: str, parse_mode):
+    """Send text to Telegram's group-call message surface when MTProto supports it."""
+    send_group_call_message = getattr(functions.messages, "SendGroupCallMessage", None)
+    text_with_entities = getattr(types, "TextWithEntities", None)
+    if send_group_call_message is None or text_with_entities is None:
+        return False
+
+    input_call = await resolve_active_group_call()
+    if input_call is None:
+        return False
+
+    parsed = await client.parser.parse(text, parse_mode)
+    message_text = parsed.get("message", text)
+    entities = parsed.get("entities")
+    random_id = (
+        client.rnd_id()
+        if callable(getattr(client, "rnd_id", None))
+        else int.from_bytes(os.urandom(8), "little", signed=True)
+    )
+
+    result = await call_method(
+        client.invoke,
+        send_group_call_message(
+            call=input_call,
+            random_id=random_id,
+            message=text_with_entities(text=message_text, entities=entities or []),
+        ),
+    )
+    return bool(result)
+
+
+async def send_assistant_message_async(text: str, parse_mode: str = "HTML", disable_web_page_preview: bool = False):
+    """Send a lyrics/message payload through the assistant account.
+
+    The current PyrogramMod MTProto layer includes the official raw
+    messages.SendGroupCallMessage request. Use it for the group-call/voice-chat
+    message surface when the active call can be resolved; otherwise fall back to
+    the assistant user's normal Pyrogram Client.send_message().
+    """
+    if client is None or chat_id is None:
+        raise RuntimeError("assistant client belum aktif")
+
+    normalized_text = str(text or "").strip()
+    if not normalized_text:
+        raise RuntimeError("text kosong")
+
+    normalized_parse_mode = normalize_pyrogram_parse_mode(parse_mode)
+    try:
+        if await send_group_call_message_async(normalized_text, normalized_parse_mode):
+            print("TGMB_ASSISTANT_DELIVERY group_call_message", flush=True)
+            return True
+    except Exception as exc:  # noqa: BLE001 - fallback must keep lyrics delivery alive.
+        print(
+            f"VOICE_ADAPTER_WARN: pesan khusus obrolan suara tidak didukung/gagal, fallback send_message: {exc}",
+            file=sys.stderr,
+            flush=True,
+        )
+
+    send_message = getattr(client, "send_message", None)
+    if not callable(send_message):
+        raise RuntimeError("Pyrogram Client.send_message tidak tersedia untuk assistant")
+
+    await call_method(
+        send_message,
+        chat_id,
+        normalized_text,
+        parse_mode=normalized_parse_mode,
+        disable_web_page_preview=disable_web_page_preview,
+    )
+    print("TGMB_ASSISTANT_DELIVERY chat_message", flush=True)
+    return True
+
+
+
 async def handle_stdin_command(command: dict):
     # Mengambil jenis aksi (action) dari dictionary perintah dan mengubahnya menjadi huruf kecil tanpa spasi tambahan
     action = str(command.get("action", "")).strip().lower()
@@ -443,7 +568,17 @@ async def handle_stdin_command(command: dict):
         print(f"TGMB_CONTROL_OK {command_id} seek", flush=True)
         return
 
-    # 9. Penanganan aksi menghentikan pemutaran ("stop")
+    # 9. Penanganan aksi kirim pesan melalui assistant/userbot
+    if action in {"send_message", "lyrics_message"}:
+        await send_assistant_message_async(
+            str(command.get("text", "")),
+            str(command.get("parse_mode", "HTML") or "HTML"),
+            bool_value(command.get("disable_web_page_preview")),
+        )
+        print(f"TGMB_CONTROL_OK {command_id} send_message", flush=True)
+        return
+
+    # 10. Penanganan aksi menghentikan pemutaran ("stop")
     if action == "stop":
         # Menjalankan pembersihan/cleaup (memutuskan koneksi dan keluar dari voice call)
         cleanup()

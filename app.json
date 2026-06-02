@@ -123,6 +123,16 @@
       "required": false,
       "value": "python3 scripts/pytgcalls_adapter.py"
     },
+    "LYRICS_DELIVERY": {
+      "description": "Lyrics delivery path: assistant sends lyrics through the userbot when possible; bot uses the main Bot API.",
+      "required": false,
+      "value": "assistant"
+    },
+    "LYRICS_ASSISTANT_FALLBACK_TO_BOT": {
+      "description": "Allow the main bot to send lyrics if assistant/userbot delivery is unavailable.",
+      "required": false,
+      "value": "false"
+    },
     "VOICE_VIDEO_QUALITY": {
       "description": "Video quality for /vplay streams. Use hd_720p by default for smoother Telegram video chats.",
       "required": false,

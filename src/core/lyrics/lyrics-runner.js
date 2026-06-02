@@ -163,6 +163,34 @@ function getLyricTextAndNextIndex(lines, startIndex) {
   return { text, nextIndex };
 }
 
+async function sendLyricsMessage(runner, text) {
+  const delivery = config.lyricsDelivery || 'assistant';
+
+  if (delivery === 'assistant') {
+    const sentByAssistant = await voicePlayer.sendAssistantMessage(runner.chatId, text, {
+      parseMode: 'HTML',
+      disableWebPagePreview: true,
+    }).catch((error) => {
+      console.warn(`Lyrics runner assistant delivery failed for chat ${runner.chatId}: ${error.message}`);
+      return false;
+    });
+
+    if (sentByAssistant) return true;
+    if (!config.lyricsAssistantFallbackToBot) {
+      debugLog(`assistant lyrics delivery unavailable for chat ${runner.chatId}; bot fallback disabled`);
+      return false;
+    }
+  }
+
+  if (!runner.api?.sendMessage) {
+    console.warn(`[lyrics-runner] Bot API sendMessage is not available for chat ${runner.chatId}`);
+    return false;
+  }
+
+  await runner.api.sendMessage(runner.chatId, text, { parse_mode: 'HTML' });
+  return true;
+}
+
 /**
  * The periodic tick handler for a chat's lyrics runner.
  * @param {string} chatId
@@ -257,11 +285,12 @@ async function runTick(chatId) {
 
     debugLog(`[${key}] sending line ${targetIndex} at ${elapsedSeconds.toFixed(1)}s: "${text.slice(0, 50)}..."`);
 
-    runner.api.sendMessage(chatId, messageText, { parse_mode: 'HTML' })
+    sendLyricsMessage(runner, messageText)
       .catch((error) => {
         console.warn(`Lyrics runner failed to send message to chat ${chatId}: ${error.message}`);
-        // Terminate runner if chat is inaccessible or bot is kicked
-        if (error.message.includes('chat not found') || error.message.includes('forbidden')) {
+        // Terminate runner only when the configured delivery path reports an inaccessible chat.
+        const lowered = String(error.message || '').toLowerCase();
+        if (lowered.includes('chat not found') || lowered.includes('forbidden')) {
           stopLyricsForChat(chatId, 'send-message-error');
         }
       });
@@ -286,7 +315,7 @@ export async function startLyricsForChat(chatId, ctxOrApi, track, options = {}) 
   stopLyricsForChat(key, 'restart');
 
   const api = ctxOrApi?.api || ctxOrApi || globalBotApi;
-  if (!api) {
+  if (!api && (config.lyricsDelivery !== 'assistant' || config.lyricsAssistantFallbackToBot)) {
     console.warn(`[lyrics-runner] Bot API instance is not available for chat ${chatId} (globalBotApi is not set)`);
     const result = { success: false, message: 'apiUnavailable' };
     lastStartResult.set(key, result);
@@ -446,7 +475,7 @@ export async function startLyricsForChatIfEnabled(chatId, ctxOrApi, track, optio
       console.log(`[lyrics-runner] api available check: chat=${chatId} available=${apiAvailable}`);
     }
 
-    if (!api) {
+    if (!api && (config.lyricsDelivery !== 'assistant' || config.lyricsAssistantFallbackToBot)) {
       console.warn(`[lyrics-runner] Bot API instance is not available for auto-start in chat ${chatId}`);
       const result = { success: false, message: 'apiUnavailable' };
       lastStartResult.set(key, result);

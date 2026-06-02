@@ -774,6 +774,17 @@ export class VoicePlayer {
     return this.#active.get(String(chatId));
   }
 
+  async sendAssistantMessage(chatId, text, options = {}) {
+    const active = this.#active.get(String(chatId));
+    if (!active) return false;
+    return sendAdapterCommand(active, {
+      action: 'send_message',
+      text: String(text ?? ''),
+      parse_mode: options.parseMode || options.parse_mode || 'HTML',
+      disable_web_page_preview: Boolean(options.disableWebPagePreview || options.disable_web_page_preview),
+    });
+  }
+
   activeCalls() {
     return [...this.#active.entries()].map(([chatId, track]) => ({ chatId, track }));
   }
