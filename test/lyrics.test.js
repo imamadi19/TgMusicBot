@@ -4,6 +4,7 @@ import { parseLrc } from '../src/core/lyrics/lrc-parser.js';
 import { normalizeTitle, classifyFetchError, isAbortError } from '../src/core/lyrics/lrclib.js';
 import { getCacheKey, getCachedLyrics, setCachedLyrics, clearCache } from '../src/core/lyrics/lyrics-cache.js';
 import { normalizeLyricsMetadata } from '../src/core/lyrics/track-metadata.js';
+import { validateLyricsMatch } from '../src/core/lyrics/match-validator.js';
 
 test('LRC Parser', () => {
   const lrcText = `
@@ -191,5 +192,42 @@ test('Lyrics Service Multi-Provider Fallback and Concurrency', async () => {
   const cachedResult = await getCachedLyrics(track);
   assert.ok(cachedResult);
   assert.strictEqual(cachedResult.status, result.status);
+});
+
+test('Lyrics Match Validator', () => {
+  // Test case 1: Perfect match
+  const track1 = { title: 'Faded', artist: 'Alan Walker', duration: 212 };
+  const res1 = { matchedTitle: 'Faded', matchedArtist: 'Alan Walker', matchedDuration: 212, provider: 'lrclib', confidence: 1.0 };
+  const val1 = validateLyricsMatch(track1, res1);
+  assert.strictEqual(val1.ok, true);
+  assert.strictEqual(val1.reason, 'matchAccepted');
+
+  // Test case 2: Mismatched artist (rejected)
+  const track2 = { title: 'Faded', artist: 'Alan Walker', duration: 212 };
+  const res2 = { matchedTitle: 'Faded', matchedArtist: 'Billie Eilish', matchedDuration: 212, provider: 'netease', confidence: 0.8 };
+  const val2 = validateLyricsMatch(track2, res2);
+  assert.strictEqual(val2.ok, false);
+  assert.strictEqual(val2.reason, 'artistMismatch');
+
+  // Test case 3: Duration mismatch (rejected)
+  const track3 = { title: 'Faded', artist: 'Alan Walker', duration: 212 };
+  const res3 = { matchedTitle: 'Faded (Remix)', matchedArtist: 'Alan Walker', matchedDuration: 150, provider: 'lrclib', confidence: 0.9 };
+  const val3 = validateLyricsMatch(track3, res3);
+  assert.strictEqual(val3.ok, false);
+  assert.strictEqual(val3.reason, 'durationMismatch');
+
+  // Test case 4: Title mismatch (rejected)
+  const track4 = { title: 'Faded', artist: 'Alan Walker', duration: 212 };
+  const res4 = { matchedTitle: 'Spectre', matchedArtist: 'Alan Walker', matchedDuration: 212, provider: 'lrclib', confidence: 0.9 };
+  const val4 = validateLyricsMatch(track4, res4);
+  assert.strictEqual(val4.ok, false);
+  assert.strictEqual(val4.reason, 'lowConfidenceTitle');
+
+  // Test case 5: Track with no artist, but strong title and correct duration (accepted)
+  const track5 = { title: 'Alan Walker - Faded', artist: '', duration: 212 };
+  const res5 = { matchedTitle: 'Faded', matchedArtist: 'Alan Walker', matchedDuration: 212, provider: 'netease', confidence: 0.8 };
+  const val5 = validateLyricsMatch(track5, res5);
+  assert.strictEqual(val5.ok, true);
+  assert.strictEqual(val5.reason, 'matchAccepted');
 });
 

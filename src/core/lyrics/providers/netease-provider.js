@@ -338,6 +338,10 @@ export async function getLyrics(track, options = {}) {
   }
 
   const confidence = Math.min(1.0, best.score / 350);
+  const matchedTitle = best.song.name || '';
+  const matchedArtist = (best.song.artists || []).map(a => a.name).filter(Boolean).join(', ');
+  const matchedAlbum = best.song.album?.name || '';
+  const matchedDuration = best.song.duration ? best.song.duration / 1000 : null;
 
   return {
     provider: 'netease',
@@ -349,6 +353,11 @@ export async function getLyrics(track, options = {}) {
     confidence,
     reason: `netease-match (score: ${best.score})`,
     transient: false,
+    matchedTitle,
+    matchedArtist,
+    matchedAlbum,
+    matchedDuration,
+    matchScore: best.score,
     debug: {
       score: best.score,
       songId

@@ -200,6 +200,34 @@ function parseGeniusLyrics(html) {
   return lyrics.trim();
 }
 
+function extractMetadataFromHtml(html, source) {
+  if (!html) return { matchedTitle: '', matchedArtist: '' };
+  try {
+    const $ = cheerio.load(html);
+    const titleText = $('title').text().trim();
+    if (source === 'azlyrics') {
+      const match = titleText.match(/^(.*?)\s*-\s*(.*?)\s*Lyrics\s*\|\s*AZLyrics\.com/i);
+      if (match) {
+        return {
+          matchedArtist: match[1].trim(),
+          matchedTitle: match[2].trim()
+        };
+      }
+    } else if (source === 'genius') {
+      const match = titleText.match(/^(.*?)\s*[–-—]\s*(.*?)\s*Lyrics\s*\|\s*Genius\s*Lyrics/i);
+      if (match) {
+        return {
+          matchedArtist: match[1].trim(),
+          matchedTitle: match[2].trim()
+        };
+      }
+    }
+  } catch (e) {
+    // ignore
+  }
+  return { matchedTitle: '', matchedArtist: '' };
+}
+
 /**
  * Fetch lyrics using Scrape provider.
  */
@@ -297,6 +325,10 @@ export async function getLyrics(track, options = {}) {
         if (config.lyricsDebug) {
           console.log(`[lyrics] successfully scraped lyrics from ${task.source}`);
         }
+        const metaInfo = extractMetadataFromHtml(res.html, task.source);
+        const hasMeta = Boolean(metaInfo.matchedTitle);
+        const confidence = hasMeta ? 0.6 : 0.3;
+
         return {
           provider: 'scrape',
           status: 'plainOnly',
@@ -304,9 +336,14 @@ export async function getLyrics(track, options = {}) {
           lines: [],
           plainLyrics,
           sourceId: task.source,
-          confidence: 0.6,
+          confidence,
           reason: `scraped-${task.source}`,
           transient: false,
+          matchedTitle: metaInfo.matchedTitle,
+          matchedArtist: metaInfo.matchedArtist,
+          matchedAlbum: '',
+          matchedDuration: null,
+          matchScore: hasMeta ? 60 : 20,
           debug: { source: task.source, url: task.url }
         };
       }

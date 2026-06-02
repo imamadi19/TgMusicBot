@@ -10,6 +10,7 @@ import { voicePlayer } from '../player/player.js';
 import { chatCache } from '../cache/chat-cache.js';
 import { getLyrics } from './lyrics-service.js';
 import { getCachedLyrics } from './lyrics-cache.js';
+import { validateLyricsMatch } from './match-validator.js';
 
 const activeRunners = new Map();
 const lastStartResult = new Map();
@@ -324,6 +325,13 @@ export async function startLyricsForChat(chatId, ctxOrApi, track, options = {}) 
         debugLog('no synced lyrics (silent mode), skipping for', track.title || track.name);
         return result;
       }
+      return result;
+    }
+
+    const validation = validateLyricsMatch(track, lyricsResult);
+    if (!validation.ok) {
+      const result = { success: false, message: 'lyricsMismatch', reason: validation.reason };
+      lastStartResult.set(key, result);
       return result;
     }
 

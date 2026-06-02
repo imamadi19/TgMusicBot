@@ -403,18 +403,20 @@ export async function lyricsHandler(ctx) {
 
       const meta = normalizeLyricsMetadata(activeTrack);
 
-      const summary = `<b>ℹ️ ${t(language, 'lyrics.debugTitle')}</b>\n` +
-        `• Raw Title: <code>${htmlEscape(meta.rawTitle)}</code>\n` +
-        `• Normalized Title: <code>${htmlEscape(meta.title)}</code>\n` +
-        `• Artist: <code>${htmlEscape(meta.artist)}</code>\n` +
-        `• Duration: <code>${meta.durationSeconds}s</code>\n` +
+      const summary = `<b>ℹ️ [Lyrics Test Debug]</b>\n` +
+        `• Current Track: <b>${htmlEscape(meta.rawTitle)}</b>\n` +
+        `• Track Artist: <code>${htmlEscape(meta.artist || 'None')}</code>\n` +
+        `• Track Duration: <code>${meta.durationSeconds}s</code>\n` +
+        `• Provider: <b>${lyricsResult.provider || 'None'}</b>\n` +
+        `• Matched Title: <code>${htmlEscape(lyricsResult.matchedTitle || 'None')}</code>\n` +
+        `• Matched Artist: <code>${htmlEscape(lyricsResult.matchedArtist || 'None')}</code>\n` +
+        `• Matched Duration: <code>${lyricsResult.matchedDuration !== null && lyricsResult.matchedDuration !== undefined ? lyricsResult.matchedDuration + 's' : 'None'}</code>\n` +
+        `• Confidence: <code>${lyricsResult.confidence !== undefined ? lyricsResult.confidence.toFixed(2) : 'None'}</code>\n` +
+        `• Match Validation Reason: <i>${htmlEscape(lyricsResult.matchValidation?.reason || lyricsResult.reason || 'None')}</i>\n` +
         `• Cache Key: <code>${htmlEscape(cacheBefore?.key || lyricsCacheKey(activeTrack))}</code>\n` +
         `• Cache Status: <b>${cacheStatusBefore}</b>\n` +
         `• Status: <b>${lyricsResult.status}</b>\n` +
-        `• Synced: <b>${lyricsResult.synced}</b>\n` +
-        `• Lines Loaded: <b>${lyricsResult.lines?.length || 0}</b>\n` +
-        `• Source ID: <code>${lyricsResult.sourceId}</code>\n` +
-        `• Reason: <i>${htmlEscape(lyricsResult.reason || 'None')}</i>`;
+        `• Synced: <b>${lyricsResult.synced}</b>`;
 
       await ctx.api.editMessageText(chatId, testMsg.message_id, summary, { parse_mode: 'HTML' });
 
@@ -427,6 +429,17 @@ export async function lyricsHandler(ctx) {
         details += `\nTried Queries:\n`;
         lyricsResult.debug.triedUrls.forEach((u, idx) => {
           details += `${idx + 1}. [${u.type}] ${u.url}\n`;
+        });
+      }
+
+      if (lyricsResult.debug?.transientErrors && lyricsResult.debug.transientErrors.length > 0) {
+        details += `\nRejected/Error Results:\n`;
+        lyricsResult.debug.transientErrors.forEach((err, idx) => {
+          details += `${idx + 1}. [${err.provider}] status: ${err.status} | reason: ${err.reason}`;
+          if (err.details) {
+            details += ` | details: ${JSON.stringify(err.details)}`;
+          }
+          details += `\n`;
         });
       }
 

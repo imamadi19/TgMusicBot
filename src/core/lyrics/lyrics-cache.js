@@ -6,6 +6,8 @@
 
 import { config } from '../../config/index.js';
 import { isDatabaseConnected, db } from '../db/mongo.js';
+import { validateLyricsMatch } from './match-validator.js';
+import { normalizeForMatch } from './track-metadata.js';
 
 // In-memory cache fallback map
 const memoryCache = new Map();
@@ -78,21 +80,34 @@ export function lyricsCacheKey(track) {
     }
   }
 
-  const title = (track.title || track.name || '').trim().toLowerCase();
-  const artist = (track.artist || '').trim().toLowerCase();
-  let duration = '';
+  const normalizedTitle = normalizeForMatch(track.title || track.name || '');
+  if (!normalizedTitle) return ''; // jangan cache jika title kosong
+
+  const normalizedArtist = normalizeForMatch(track.artist || '');
+
+  let roundedDuration = '0';
   if (track.duration) {
-    if (typeof track.duration === 'number') {
-      duration = String(Math.round(track.duration));
-    } else {
-      duration = String(track.duration).trim();
-    }
+    roundedDuration = String(Math.round(Number(track.duration)));
   }
 
-  return `key:${id}_${title}_${artist}_${duration}`;
+  const safeId = String(id || 'notrackid').replace(/:/g, '_');
+
+  return `lyrics:v2:${safeId}:${normalizedTitle}:${normalizedArtist}:${roundedDuration}`;
 }
 
 export const getCacheKey = lyricsCacheKey;
+
+async function deleteCacheKey(key) {
+  memoryCache.delete(key);
+  const col = getCollection();
+  if (col) {
+    try {
+      await col.deleteOne({ key });
+    } catch (e) {
+      // ignore
+    }
+  }
+}
 
 /**
  * Gets cached lyrics for a track.
@@ -103,6 +118,7 @@ export async function getCachedLyrics(track) {
 
   const now = Date.now();
   const col = getCollection();
+  let item = null;
 
   if (col) {
     try {
@@ -110,9 +126,9 @@ export async function getCachedLyrics(track) {
       if (doc) {
         if (doc.expireAt && now > doc.expireAt) {
           await col.deleteOne({ key });
-          return null;
+        } else {
+          item = doc.value;
         }
-        return doc.value;
       }
     } catch (e) {
       if (config.lyricsDebug) {
@@ -121,14 +137,56 @@ export async function getCachedLyrics(track) {
     }
   }
 
-  // Memory fallback
-  const item = memoryCache.get(key);
+  if (!item) {
+    // Memory fallback
+    const memItem = memoryCache.get(key);
+    if (memItem) {
+      const ttl = getTtlMs(memItem.status, memItem.synced, memItem.lines?.length || 0, memItem.plainLyrics);
+      if (now - memItem.fetchedAt > ttl) {
+        memoryCache.delete(key);
+      } else {
+        item = memItem;
+      }
+    }
+  }
+
   if (!item) return null;
 
-  const ttl = getTtlMs(item.status, item.synced, item.lines?.length || 0, item.plainLyrics);
-  if (now - item.fetchedAt > ttl) {
-    memoryCache.delete(key);
-    return null;
+  // Track fingerprint validation (jauh beda check)
+  if (item.trackFingerprint) {
+    const fp = item.trackFingerprint;
+    const normCurrentTitle = normalizeForMatch(track.title || track.name || '');
+    const normFpTitle = normalizeForMatch(fp.title || '');
+    const titleChanged = normCurrentTitle !== normFpTitle && 
+                         !normCurrentTitle.includes(normFpTitle) && 
+                         !normFpTitle.includes(normCurrentTitle);
+
+    let durationDiff = null;
+    if (track.duration && fp.duration) {
+      const tDur = typeof track.duration === 'number' ? track.duration : parseInt(track.duration, 10);
+      const fpDur = typeof fp.duration === 'number' ? fp.duration : parseInt(fp.duration, 10);
+      if (tDur && fpDur) durationDiff = Math.abs(tDur - fpDur);
+    }
+
+    if (titleChanged || (durationDiff !== null && durationDiff > 60)) {
+      if (config.lyricsDebug) {
+        console.log(`[lyrics-cache] track fingerprint mismatch for key: ${key}. Deleting cache.`);
+      }
+      await deleteCacheKey(key);
+      return null;
+    }
+  }
+
+  // Exact validator check if matchedTitle is available
+  if (item.matchedTitle) {
+    const validation = validateLyricsMatch(track, item);
+    if (!validation.ok) {
+      if (config.lyricsDebug) {
+        console.log(`[lyrics-cache] validateLyricsMatch failed for cached item of key: ${key}. Reason: ${validation.reason}. Deleting cache.`);
+      }
+      await deleteCacheKey(key);
+      return null;
+    }
   }
 
   return item;
@@ -154,20 +212,39 @@ export async function setCachedLyrics(track, lyricsData) {
     }
   }
 
+  const isLowConfidence = status === 'lowConfidence' || (lyricsData.matchValidation && !lyricsData.matchValidation.ok);
+  const synced = isLowConfidence ? false : Boolean(lyricsData.synced);
+  const finalStatus = isLowConfidence ? 'lowConfidence' : status;
+
   const now = Date.now();
   const linesCount = lyricsData.lines?.length || 0;
-  const ttl = getTtlMs(status, Boolean(lyricsData.synced), linesCount, lyricsData.plainLyrics);
+  const ttl = getTtlMs(finalStatus, synced, linesCount, lyricsData.plainLyrics);
 
   const value = {
     provider: lyricsData.provider || 'unknown',
-    synced: Boolean(lyricsData.synced),
+    synced,
     lines: lyricsData.lines || [],
     plainLyrics: lyricsData.plainLyrics || '',
     sourceId: String(lyricsData.sourceId || ''),
     fetchedAt: now,
-    status,
+    status: finalStatus,
     reason: lyricsData.reason || '',
-    debug: lyricsData.debug || null
+    debug: lyricsData.debug || null,
+
+    // Fingerprint fields
+    trackFingerprint: {
+      key,
+      title: track.title || track.name || '',
+      artist: track.artist || '',
+      duration: track.duration || '',
+      trackId: track.trackId || '',
+      url: track.url || track.sourceUrl || ''
+    },
+    matchedTitle: lyricsData.matchedTitle || '',
+    matchedArtist: lyricsData.matchedArtist || '',
+    matchedDuration: lyricsData.matchedDuration !== undefined ? lyricsData.matchedDuration : null,
+    confidence: lyricsData.confidence !== undefined ? lyricsData.confidence : 0.0,
+    matchValidation: lyricsData.matchValidation || null
   };
 
   const col = getCollection();

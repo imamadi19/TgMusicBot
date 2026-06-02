@@ -8,6 +8,7 @@ import { getCachedLyrics, setCachedLyrics, lyricsCacheKey, clearLyricsCacheForTr
 import { getLyrics as lrclibGetLyrics } from './providers/lrclib-provider.js';
 import { getLyrics as neteaseGetLyrics } from './providers/netease-provider.js';
 import { getLyrics as scrapeGetLyrics } from './providers/scrape-provider.js';
+import { validateLyricsMatch } from './match-validator.js';
 
 /** Global in-flight request deduplication map: cacheKey -> Promise */
 const inFlightRequests = new Map();
@@ -138,10 +139,25 @@ async function fetchLyricsChain(track, options = {}) {
       allNotFounds = false;
 
       if (result.status === 'synced' && result.synced) {
+        const validation = validateLyricsMatch(track, result);
+
+        if (!validation.ok) {
+          console.warn(`[lyrics] rejected provider=${provider.name} reason=${validation.reason} track="${track.title || track.name}" matched="${result.matchedArtist} - ${result.matchedTitle}"`);
+          transientErrors.push({
+            provider: provider.name,
+            status: 'rejected',
+            reason: validation.reason,
+            details: validation.details
+          });
+          continue;
+        }
+
         console.log(`[lyrics] provider=${provider.name} status=synced lines=${result.lines?.length || 0}`);
         
         const finalResult = {
           ...result,
+          confidence: validation.confidence,
+          matchValidation: validation,
           fetchedAt: Date.now(),
           debug: {
             ...result.debug,
@@ -154,11 +170,32 @@ async function fetchLyricsChain(track, options = {}) {
       }
 
       if (result.status === 'plainOnly') {
+        const validation = validateLyricsMatch(track, result);
+        const isPlainValid = validation.ok || (
+          validation.details.titleSimilarity >= 0.40 &&
+          !(track.artist && track.artist.trim() && validation.details.artistSimilarity < 0.25)
+        );
+
+        if (!isPlainValid) {
+          console.warn(`[lyrics] rejected plain provider=${provider.name} reason=${validation.reason} track="${track.title || track.name}" matched="${result.matchedArtist} - ${result.matchedTitle}"`);
+          transientErrors.push({
+            provider: provider.name,
+            status: 'rejectedPlain',
+            reason: validation.reason,
+            details: validation.details
+          });
+          continue;
+        }
+
         console.log(`[lyrics] provider=${provider.name} status=plainOnly source=${result.sourceId || 'unknown'}`);
         
         // Save the best plain lyrics fallback
-        if (!bestPlainFallback || (result.confidence && result.confidence > (bestPlainFallback.confidence || 0))) {
-          bestPlainFallback = result;
+        if (!bestPlainFallback || (validation.confidence && validation.confidence > (bestPlainFallback.confidence || 0))) {
+          bestPlainFallback = {
+            ...result,
+            confidence: validation.confidence,
+            matchValidation: validation
+          };
         }
         // Continue search to see if other providers have synced lyrics
       }

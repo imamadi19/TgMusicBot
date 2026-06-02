@@ -308,6 +308,11 @@ export async function getLyrics(track, options = {}) {
           confidence: 1.0,
           reason: `exact-match-synced (${task.candidate.reason})`,
           transient: false,
+          matchedTitle: result.trackName || '',
+          matchedArtist: result.artistName || '',
+          matchedAlbum: result.albumName || '',
+          matchedDuration: result.duration !== undefined ? result.duration : null,
+          matchScore: 500,
           debug: {
             triedUrls: triedUrls.map(u => ({ type: u.type, url: u.url })),
             reason: `exact-match-synced (${task.candidate.reason})`
@@ -324,6 +329,11 @@ export async function getLyrics(track, options = {}) {
           confidence: 1.0,
           reason: `exact-match-instrumental (${task.candidate.reason})`,
           transient: false,
+          matchedTitle: result.trackName || '',
+          matchedArtist: result.artistName || '',
+          matchedAlbum: result.albumName || '',
+          matchedDuration: result.duration !== undefined ? result.duration : null,
+          matchScore: 500,
           debug: {
             triedUrls: triedUrls.map(u => ({ type: u.type, url: u.url })),
             reason: `exact-match-instrumental (${task.candidate.reason})`
@@ -523,6 +533,13 @@ export async function getLyrics(track, options = {}) {
     };
   }
 
+  const matchedTitle = chosenResult.trackName || '';
+  const matchedArtist = chosenResult.artistName || '';
+  const matchedAlbum = chosenResult.albumName || '';
+  const matchedDuration = chosenResult.duration !== undefined ? chosenResult.duration : null;
+  const matchScoreObj = scoredResults.find(sr => sr.result.id === chosenResult.id);
+  const matchScore = matchScoreObj ? matchScoreObj.score : (bestPlainFallback && chosenResult.id === bestPlainFallback.result.id ? 450 : 0);
+
   if (chosenResult.instrumental) {
     return {
       provider: 'lrclib',
@@ -534,6 +551,11 @@ export async function getLyrics(track, options = {}) {
       confidence: finalConfidence,
       reason: selectionReason + ' (instrumental)',
       transient: false,
+      matchedTitle,
+      matchedArtist,
+      matchedAlbum,
+      matchedDuration,
+      matchScore,
       debug: {
         triedUrls: triedUrls.map(u => ({ type: u.type, url: u.url })),
         reason: selectionReason
@@ -547,8 +569,6 @@ export async function getLyrics(track, options = {}) {
 
   let status = 'plainOnly';
   if (hasSynced && parsedLines.length > 0) {
-    status = isLowConfidence ? 'lowConfidence' : 'synced'; // wait! standard status requested: synced, plainOnly, notFound, rateLimited, timeout, error
-    // If it's lowConfidence in lrclib, the status should map to 'synced' but with lower confidence.
     status = 'synced';
   }
 
@@ -562,6 +582,11 @@ export async function getLyrics(track, options = {}) {
     confidence: finalConfidence,
     reason: selectionReason,
     transient: false,
+    matchedTitle,
+    matchedArtist,
+    matchedAlbum,
+    matchedDuration,
+    matchScore,
     debug: {
       triedUrls: triedUrls.map(u => ({ type: u.type, url: u.url })),
       reason: selectionReason
