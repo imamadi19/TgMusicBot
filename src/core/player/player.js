@@ -389,14 +389,23 @@ export class VoicePlayer {
 
     let stdout = '';
     let stderr = '';
-    child.stdout.on('data', (chunk) => { stdout += chunk; logAdapterOutput(`[voice:${chatId}]`, chunk, process.stdout); });
-    child.stderr.on('data', (chunk) => { stderr += chunk; logAdapterOutput(`[voice:${chatId}]`, chunk, process.stderr); });
+    child.stdout.on('data', (chunk) => { 
+      stdout += chunk; 
+      if (stdout.length > 5000) stdout = stdout.slice(-5000);
+      logAdapterOutput(`[voice:${chatId}]`, chunk, process.stdout); 
+    });
+    child.stderr.on('data', (chunk) => { 
+      stderr += chunk; 
+      if (stderr.length > 5000) stderr = stderr.slice(-5000);
+      logAdapterOutput(`[voice:${chatId}]`, chunk, process.stderr); 
+    });
 
     if (!waitReady) return child;
 
     await new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         signalProcess(child, 'SIGTERM');
+        setTimeout(() => signalProcess(child, 'SIGKILL'), 3000).unref?.();
         reject(new Error('Assistant timeout saat join obrolan video. Pastikan obrolan video aktif dan assistant sudah ada di grup.'));
       }, START_TIMEOUT_MS);
       timer.unref?.();

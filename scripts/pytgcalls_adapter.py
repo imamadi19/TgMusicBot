@@ -908,10 +908,10 @@ if __name__ == "__main__":
     if hasattr(signal, "SIGUSR2"):
         signal.signal(signal.SIGUSR2, resume)
     try:
-        raise SystemExit(main())
+        os._exit(main())
     except Exception as exc:  # noqa: BLE001 - surface adapter failures to Node.
         message, include_traceback = describe_adapter_error(exc)
         print(f"VOICE_ADAPTER_ERROR: {message}", file=sys.stderr, flush=True)
         if include_traceback:
             traceback.print_exc(file=sys.stderr)
-        raise SystemExit(1)
+        os._exit(1)

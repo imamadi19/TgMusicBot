@@ -161,7 +161,7 @@ export async function buildGroupStartText(ctx, language) {
   const chatId = ctx.chat?.id;
   let chatPremium = false;
   let premiumStatus = 'inactive';
-  let queueLimit = 10;
+  let queueLimit = 50;
   let djMode = 'OFF';
   let audioPreset = 'normal';
 
@@ -169,7 +169,7 @@ export async function buildGroupStartText(ctx, language) {
     try {
       chatPremium = await isPremiumActive('chat', chatId);
       premiumStatus = chatPremium ? 'Active' : 'inactive';
-      queueLimit = chatPremium ? config.premiumQueueLimit : 10;
+      queueLimit = chatPremium ? config.premiumQueueLimit : 50;
 
       const settings = await getPremiumSettings(chatId);
       djMode = settings.djMode ? 'ON' : 'OFF';
@@ -178,7 +178,7 @@ export async function buildGroupStartText(ctx, language) {
       console.error('Failed to get group status for start text builder:', error);
       // Fallback
       premiumStatus = 'inactive';
-      queueLimit = 10;
+      queueLimit = 50;
       djMode = 'OFF';
       audioPreset = 'normal';
     }

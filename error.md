@@ -81,3 +81,11 @@
 | **RENDAH** | #3 MAX_QUEUE display | Minor UI issue |
 | **RENDAH** | #8 htmlEscape duplikat | Inkonsistensi |
 | **RENDAH** | #9 Dead code | Code hygiene |
+
+### 12. Bot Hang / Tidak Merespon karena GROUPCALL_FORBIDDEN (Memory Leak & Process Zombie)
+- **File:** `scripts/pytgcalls_adapter.py` dan `src/core/player/player.js`
+- **Masalah:** Telegram sering menolak assistant (misal: "GROUPCALL_FORBIDDEN"). Saat ini terjadi berulang kali, script Python PyTgCalls menolak untuk exit dengan sendirinya (zombie thread). Node.js menunggu lewat `child.stdout.on` tanpa batasan buffer. Ini menyebabkan memory Node.js membengkak (OOM) dan process Python yang menggantung menghabiskan resource OS.
+- **Fix:**
+  1. Batasi ukuran akumulasi `stdout` dan `stderr` di `player.js` menjadi 5000 karakter (`.slice(-5000)`).
+  2. Tambahkan `SIGKILL` paksa setelah 3 detik jika `SIGTERM` gagal mematikan Python process (di blok `START_TIMEOUT_MS`).
+  3. Ganti `raise SystemExit(1)` menjadi `os._exit(1)` di `pytgcalls_adapter.py` untuk mengakhiri program tanpa terhambat zombie threads C-extension.

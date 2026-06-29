@@ -3,7 +3,7 @@ import path from 'node:path';
 import { config } from '../../config/index.js';
 import { Downloader } from './downloader.js';
 
-const downloadPromises = new WeakMap();
+const downloadPromises = new Map();
 const COOKIE_FILE_NAME = 'yt-dlp-cookies.txt';
 
 function trackLabel(track) {

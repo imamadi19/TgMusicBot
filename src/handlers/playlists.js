@@ -64,7 +64,7 @@ export async function playlistInfoHandler(ctx) {
     return;
   }
   const playlist = await getPlaylist(playlistId);
-  if (!playlist) {
+  if (!playlist || playlist.ownerId !== ctx.from.id) {
     await ctx.reply(t(language, 'playlist.notFound'));
     return;
   }

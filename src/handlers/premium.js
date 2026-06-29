@@ -34,13 +34,13 @@ export async function getQueueLimitForContext(ctx) {
     isPremiumActive('chat', chatId),
     isPremiumActive('user', userId),
   ]);
-  return chatPremium || userPremium ? config.premiumQueueLimit : 10;
+  return chatPremium || userPremium ? config.premiumQueueLimit : 50;
 }
 
 export async function premiumFeaturesHandler(ctx) {
   const text = `🌟 <b>Fitur Premium TgMusicBot</b> 🌟\n\n` +
     `1. <b>Premium Queue Limit</b>\n` +
-    `   Meningkatkan batas antrean lagu dari 10 menjadi ${config.premiumQueueLimit} lagu.\n\n` +
+    `   Meningkatkan batas antrean lagu dari 50 menjadi ${config.premiumQueueLimit} lagu.\n\n` +
     `2. <b>Premium Queue Move</b> (<code>/qmove &lt;dari&gt; &lt;ke&gt;</code>)\n` +
     `   Memindahkan urutan lagu dalam antrean secara instan (posisi &gt;= 2).\n\n` +
     `3. <b>Premium Audio Preset</b> (<code>/setpreset &lt;nama&gt;</code>)\n` +
@@ -58,7 +58,8 @@ export async function premiumGrantHandler(ctx) {
   if (!isOwner(ctx.from?.id, config)) return ctx.reply(t(language, 'premium.ownerOnly'));
   const { scope, id, days } = parseArgs(ctx);
   if (!['user', 'chat'].includes(scope) || !Number.isFinite(id)) return ctx.reply(t(language, 'premium.grantUsage'));
-  const result = await upsertPremium({ scope, scopeId: id, grantedBy: ctx.from.id, days: Number.isFinite(days) ? days : 30 });
+  const validDays = Number.isFinite(days) && days > 0 ? days : 30;
+  const result = await upsertPremium({ scope, scopeId: id, grantedBy: ctx.from.id, days: validDays });
   await ctx.reply(t(language, 'premium.granted', { scope, id: String(id), expires: formatDate(result.expiresAt) }));
 }
 

@@ -1342,15 +1342,7 @@ export async function playHandler(ctx, isVideo = false) {
   const language = await getUserLanguage(ctx.from?.id);
   if (!(await playMode(ctx))) return;
   const chatId = ctx.chat.id;
-  const premiumSettings = await getPremiumSettings(chatId);
-  if (premiumSettings.djMode) {
-    const isOwner = Number(ctx.from?.id) === Number(config.ownerId) || config.devs.includes(Number(ctx.from?.id));
-    const auth = await isAuthUser(chatId, ctx.from?.id);
-    if (!isOwner && !auth) {
-      await ctx.reply('DJ mode is enabled: only owner/dev/auth users can add tracks.');
-      return;
-    }
-  }
+  if (!(await checkDjMode(ctx))) return;
   const premiumRequester = await isPremiumRequester(ctx);
   if (!premiumRequester) {
     const cooldownLeft = getPlayCooldownLeft(chatId, ctx.from?.id);
@@ -1389,7 +1381,7 @@ export async function queueHandler(ctx) {
     return;
   }
 
-  const previewTracks = queue.slice(0, MAX_QUEUE);
+  const previewTracks = queue.slice(0, Math.max(MAX_QUEUE_DISPLAY, queue.length));
   const hiddenCount = Math.max(0, queue.length - previewTracks.length);
   const lines = previewTracks.map((track, index) => {
     const title = htmlEscape(track.name);
@@ -1826,3 +1818,24 @@ export async function searchSelectionCancelHandler(ctx) {
 
 
 export const __appleTestHooks = { formatSearchSelection, formatYouTubeSearchResult, formatAppleMusicSearchResult, formatSpotifySearchResult, formatSoundCloudSearchResult, formatTrack };
+
+// Periodic cleanup to prevent Map memory leaks
+setInterval(() => {
+  const now = Date.now();
+  // Cleanup panel edits
+  for (const [key, lastAt] of panelEditLastAt.entries()) {
+    if (now - lastAt > 60000) panelEditLastAt.delete(key);
+  }
+  // Cleanup play cooldowns
+  for (const [key, lastAt] of recentPlayRequests.entries()) {
+    if (now - lastAt > FREE_PLAY_COOLDOWN_MS) recentPlayRequests.delete(key);
+  }
+  // Cleanup progress pauses
+  for (const [key, until] of progressPauseUntil.entries()) {
+    if (now > until) progressPauseUntil.delete(key);
+  }
+  // Cleanup lyrics state
+  for (const [key, state] of lyricsRetryState.entries()) {
+    if (now - (state.timestamp || now) > 60000) lyricsRetryState.delete(key); // basic expiration
+  }
+}, 300000).unref?.();

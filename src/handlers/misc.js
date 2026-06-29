@@ -165,7 +165,7 @@ async function buildGroupSettingsText(ctx, language) {
   const langDisplay = languageName(language);
 
   let premiumStatus = 'inactive';
-  let queueLimit = 10;
+  let queueLimit = 50;
   let djMode = 'OFF';
   let audioPreset = 'normal';
 
@@ -173,14 +173,14 @@ async function buildGroupSettingsText(ctx, language) {
     try {
       const chatPremium = await isPremiumActive('chat', chatId);
       premiumStatus = chatPremium ? 'Active' : 'inactive';
-      queueLimit = chatPremium ? config.premiumQueueLimit : 10;
+      queueLimit = chatPremium ? config.premiumQueueLimit : 50;
 
       const settings = await getPremiumSettings(chatId);
       djMode = settings.djMode ? 'ON' : 'OFF';
       audioPreset = settings.audioPreset || 'normal';
     } catch {
       premiumStatus = 'inactive';
-      queueLimit = 10;
+      queueLimit = 50;
       djMode = 'OFF';
       audioPreset = 'normal';
     }
@@ -467,12 +467,12 @@ export async function settingsPremiumInfoHandler(ctx) {
   }
 
   let premiumStatus = 'inactive';
-  let queueLimit = 10;
+  let queueLimit = 50;
 
   try {
     const chatPremium = await isPremiumActive('chat', ctx.chat?.id);
     premiumStatus = chatPremium ? 'Active' : 'inactive';
-    queueLimit = chatPremium ? config.premiumQueueLimit : 10;
+    queueLimit = chatPremium ? config.premiumQueueLimit : 50;
   } catch {}
 
   const text = [

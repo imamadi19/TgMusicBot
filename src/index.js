@@ -7,8 +7,8 @@ import { getLoggerStatus } from './core/db/system.js';
 import { loadHandlers } from './handlers/index.js';
 import { scheduleDownloadCleanup } from './core/dl/download-cleanup.js';
 import { handleHealthRequest } from './core/health/health.js';
-
-import { setGlobalBotApi } from './core/lyrics/lyrics-runner.js';
+import { setGlobalBotApi, stopAllLyrics } from './core/lyrics/lyrics-runner.js';
+import { voicePlayer } from './core/player/player.js';
 
 function startHealthServer() {
   const server = http.createServer(handleHealthRequest);
@@ -24,7 +24,6 @@ async function main() {
   const stopDownloadCleanup = scheduleDownloadCleanup();
 
   const bot = new Bot(config.token);
-  setGlobalBotApi(bot.api);
   bot.api.config.use((prev, method, payload, signal) => {
     if (payload && typeof payload === 'object' && !('parse_mode' in payload)) {
       payload.parse_mode = 'HTML';
@@ -51,8 +50,10 @@ async function main() {
     console.log('The bot is shutting down...');
     server.close();
     stopDownloadCleanup();
-    await closeDatabase();
+    stopAllLyrics();
+    voicePlayer.stopAll();
     await bot.stop();
+    await closeDatabase();
   };
   process.once('SIGINT', stop);
   process.once('SIGTERM', stop);

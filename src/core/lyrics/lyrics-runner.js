@@ -11,6 +11,7 @@ import { chatCache } from '../cache/chat-cache.js';
 import { getLyrics } from './lyrics-service.js';
 import { getCachedLyrics } from './lyrics-cache.js';
 import { validateLyricsMatch } from './match-validator.js';
+import { htmlEscape } from '../../utils/telegram.js';
 
 const activeRunners = new Map();
 const lastStartResult = new Map();
@@ -33,15 +34,7 @@ export function setGlobalBotApi(api) {
  * @param {string} str
  * @returns {string}
  */
-export function htmlEscape(str) {
-  if (!str) return '';
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
-}
+
 
 /**
  * Normalizes track title/name text for loose comparison.
@@ -591,4 +584,11 @@ export function getLyricsStatus(chatId) {
     lastResult,
     trackMatchLoose: false
   };
+}
+
+export function stopAllLyrics() {
+  for (const [key, runner] of activeRunners.entries()) {
+    if (runner.timer) clearInterval(runner.timer);
+    activeRunners.delete(key);
+  }
 }

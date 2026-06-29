@@ -9,10 +9,8 @@ import { addToPlaylistHandler, createPlaylistHandler, deletePlaylistHandler, myP
 import { premiumDjModeHandler, premiumFeaturesHandler, premiumGrantHandler, premiumInfoHandler, premiumProfileHandler, premiumQueueMoveHandler, premiumRevokeHandler, premiumSetPresetHandler } from './premium.js';
 import { noopHandler, pingHandler, privacyHandler, serviceSelectHandler, settingsHandler, settingsCloseHandler, settingsServiceHandler, settingsLanguageHandler, settingsLanguageSelectHandler, settingsHelpHandler, settingsPresetHintHandler, settingsDjModeHintHandler, settingsPremiumInfoHandler, shellHandler, statsHandler } from './misc.js';
 import { lyricsHandler, lyricsOnCallbackHandler, lyricsOffCallbackHandler, lyricsRefreshCallbackHandler, lyricsClearCacheCallbackHandler, lyricsClearRefreshCallbackHandler, lyricsCloseCallbackHandler } from './lyrics.js';
-import { setGlobalBotApi } from '../core/lyrics/lyrics-runner.js';
 
 export function loadHandlers(bot) {
-  setGlobalBotApi(bot.api);
   bot.command('lyrics', lyricsHandler);
   bot.command('start', startHandler);
   bot.command('help', async (ctx) => {
