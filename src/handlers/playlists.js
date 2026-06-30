@@ -4,6 +4,8 @@ import { Downloader } from '../core/dl/downloader.js';
 import { t } from '../i18n/index.js';
 import { commandArgs, htmlEscape } from '../utils/telegram.js';
 
+import { isPremiumActive } from '../core/db/premium.js';
+
 export async function createPlaylistHandler(ctx) {
   const language = await getUserLanguage(ctx.from?.id);
   const name = commandArgs(ctx);
@@ -11,6 +13,16 @@ export async function createPlaylistHandler(ctx) {
     await ctx.reply(t(language, 'playlist.createUsage'));
     return;
   }
+  
+  const isPremium = await isPremiumActive('user', ctx.from?.id);
+  const maxPlaylists = isPremium ? 10 : 2;
+  const userPlaylists = await listPlaylists(ctx.from?.id);
+  
+  if (userPlaylists.length >= maxPlaylists) {
+    await ctx.reply(`❌ Anda telah mencapai batas maksimal pembuatan playlist (${maxPlaylists} playlist).\n\n${isPremium ? '' : '🌟 Dapatkan Premium untuk meningkatkan batas ini menjadi 10 playlist!'}`, { parse_mode: 'HTML' });
+    return;
+  }
+
   const playlist = await createPlaylist(ctx.from.id, name);
   await ctx.reply(t(language, 'playlist.created', { name: playlist.name, id: playlist.playlistId }), { parse_mode: 'HTML' });
 }
@@ -41,6 +53,21 @@ export async function addToPlaylistHandler(ctx) {
     await ctx.reply(t(language, 'playlist.noTrack'));
     return;
   }
+
+  const targetPlaylist = await getPlaylist(playlistId);
+  if (!targetPlaylist || targetPlaylist.ownerId !== ctx.from.id) {
+    await ctx.reply(t(language, 'playlist.notFound'));
+    return;
+  }
+
+  const isPremium = await isPremiumActive('user', ctx.from?.id);
+  const maxSongs = isPremium ? 100 : 20;
+
+  if (targetPlaylist.songs && targetPlaylist.songs.length >= maxSongs) {
+    await ctx.reply(`❌ Playlist ini sudah penuh (maksimal ${maxSongs} lagu).\n\n${isPremium ? '' : '🌟 Dapatkan Premium untuk meningkatkan batas ini menjadi 100 lagu per playlist!'}`, { parse_mode: 'HTML' });
+    return;
+  }
+
   const playlist = await addSongToPlaylist(ctx.from.id, playlistId, song);
   await ctx.reply(playlist ? t(language, 'playlist.added', { song: song.name, playlist: playlist.name }) : t(language, 'playlist.notFound'));
 }
